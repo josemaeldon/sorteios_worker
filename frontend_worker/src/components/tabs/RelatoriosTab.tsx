@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useApi } from '@/hooks/useApi';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import {
   exportVendasPDF,
@@ -15,7 +16,6 @@ import {
   exportAtribuicoesExcel,
   exportVendedoresPDF,
   exportVendedoresExcel,
-  exportRelatorioCompletoPDF,
   exportRelatorioVendedorPDF,
   exportRelatorioVendedorExcel,
 } from '@/lib/utils/exportUtils';
@@ -23,7 +23,9 @@ import {
 const RelatoriosTab: React.FC = () => {
   const { sorteioAtivo, vendedores, cartelas, atribuicoes, vendas } = useBingo();
   const { toast } = useToast();
+  const { callApi } = useApi();
   const [selectedVendedorId, setSelectedVendedorId] = useState<string>('todos');
+  const [isGeneratingCompletePdf, setIsGeneratingCompletePdf] = useState(false);
 
   if (!sorteioAtivo) {
     return (
@@ -104,7 +106,37 @@ const RelatoriosTab: React.FC = () => {
           break;
         }
         case 'completo':
-          await exportRelatorioCompletoPDF(sorteioAtivo, vendedores, cartelas, atribuicoes, vendas);
+          if (isGeneratingCompletePdf) {
+            return;
+          }
+          setIsGeneratingCompletePdf(true);
+          try {
+            const response = await callApi('generateRelatorioCompletoPdfLink', {
+              sorteio_id: sorteioAtivo.id,
+            }) as {
+              download_url?: string;
+              download_link?: string;
+            };
+
+            const resolvedUrl = response.download_link || response.download_url;
+            if (!resolvedUrl) {
+              throw new Error('Link de download não retornado pelo servidor.');
+            }
+
+            const href = resolvedUrl.startsWith('http')
+              ? resolvedUrl
+              : `${window.location.origin}${resolvedUrl}`;
+
+            const anchor = document.createElement('a');
+            anchor.href = href;
+            anchor.rel = 'noopener noreferrer';
+            anchor.target = '_blank';
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+          } finally {
+            setIsGeneratingCompletePdf(false);
+          }
           break;
       }
       toast({ 
@@ -374,9 +406,10 @@ const RelatoriosTab: React.FC = () => {
           <Button 
             onClick={() => handleExport('completo', 'pdf')}
             className="w-full"
+            disabled={isGeneratingCompletePdf}
           >
             <FileText className="w-4 h-4 mr-2" />
-            Gerar Relatório Completo em PDF
+            {isGeneratingCompletePdf ? 'Gerando PDF no servidor...' : 'Gerar Relatório Completo em PDF'}
           </Button>
         </CardContent>
       </Card>

@@ -2,8 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const DatabaseAdapter = require('./db-adapter');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const Stripe = require('stripe');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
+const PDFDocument = require('pdfkit');
 
 let nodemailer;
 try { nodemailer = require('nodemailer'); } catch (e) { nodemailer = null; }
@@ -961,6 +965,205 @@ const BASIC_AUTH_PASS = process.env.BASIC_AUTH_PASS || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'bingo_jwt_secret_2024_secure';
 const JWT_EXPIRY_HOURS = 24;
 const STRIPE_MIN_AMOUNT_CENTAVOS = 50; // R$ 0,50 — Stripe minimum for BRL
+const PDF_DOWNLOAD_TTL_MS = Number(process.env.PDF_DOWNLOAD_TTL_MS || 15 * 60 * 1000);
+const PDF_EXPORT_DIR = path.join(os.tmpdir(), 'bingo-pdf-exports');
+const pdfDownloads = new Map();
+
+if (!fs.existsSync(PDF_EXPORT_DIR)) {
+  fs.mkdirSync(PDF_EXPORT_DIR, { recursive: true });
+}
+
+function safeFileName(value, fallback) {
+  const normalized = String(value || fallback || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return normalized || fallback;
+}
+
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+function formatDateTimeBR(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR');
+}
+
+function parseCartelas(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(',')
+    .map((item) => Number(String(item).trim()))
+    .filter((item) => Number.isFinite(item));
+}
+
+function normalizePagamentos(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function addTextLine(doc, text, options = {}) {
+  const lineHeight = options.lineHeight || 15;
+  const bottom = options.bottom || 48;
+  if (doc.y + lineHeight > doc.page.height - bottom) {
+    doc.addPage();
+  }
+  doc.text(text, { lineBreak: false });
+  doc.moveDown(0.7);
+}
+
+function buildPaymentSummary(vendas) {
+  const summary = {
+    dinheiro: 0,
+    pix: 0,
+    cartao: 0,
+    transferencia: 0,
+  };
+
+  for (const venda of vendas) {
+    const pagamentos = normalizePagamentos(venda.pagamentos);
+    for (const pagamento of pagamentos) {
+      const tipo = String(pagamento.forma_pagamento || '').toLowerCase();
+      const valor = Number(pagamento.valor || 0);
+      if (Object.prototype.hasOwnProperty.call(summary, tipo)) {
+        summary[tipo] += valor;
+      }
+    }
+  }
+
+  return summary;
+}
+
+async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores, cartelas, atribuicoes, vendas }) {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+
+  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  const totalVendas = vendas.reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
+  const totalPago = vendas.reduce((acc, v) => acc + Number(v.valor_pago || 0), 0);
+  const cartelasVendidas = cartelas.filter((c) => c.status === 'vendida').length;
+  const paymentSummary = buildPaymentSummary(vendas);
+
+  doc.fontSize(24).fillColor('#1E40AF').text('Relatorio Completo', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.fontSize(17).fillColor('#111827').text(String(sorteio.nome || 'Sorteio'), { align: 'center' });
+  doc.moveDown(0.5);
+  doc.fontSize(10).fillColor('#6B7280').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+  doc.moveDown(2);
+
+  doc.fontSize(13).fillColor('#111827').text('Resumo Geral');
+  doc.moveDown(0.6);
+  addTextLine(doc, `Premio: ${sorteio.premio || '-'}`);
+  addTextLine(doc, `Valor por cartela: ${formatBRL(sorteio.valor_cartela)}`);
+  addTextLine(doc, `Total de cartelas: ${cartelas.length}`);
+  addTextLine(doc, `Cartelas vendidas: ${cartelasVendidas}`);
+  addTextLine(doc, `Total de vendedores: ${vendedores.length}`);
+  addTextLine(doc, `Total de vendas: ${vendas.length}`);
+  addTextLine(doc, `Receita total: ${formatBRL(totalVendas)}`);
+  addTextLine(doc, `Valor recebido: ${formatBRL(totalPago)}`);
+  addTextLine(doc, `Valor pendente: ${formatBRL(totalVendas - totalPago)}`);
+
+  doc.moveDown(0.6);
+  doc.fontSize(13).fillColor('#111827').text('Vendas por Forma de Pagamento');
+  doc.moveDown(0.6);
+  addTextLine(doc, `Dinheiro: ${formatBRL(paymentSummary.dinheiro)}`);
+  addTextLine(doc, `PIX: ${formatBRL(paymentSummary.pix)}`);
+  addTextLine(doc, `Cartao: ${formatBRL(paymentSummary.cartao)}`);
+  addTextLine(doc, `Transferencia: ${formatBRL(paymentSummary.transferencia)}`);
+
+  doc.addPage();
+  doc.fontSize(16).fillColor('#1E40AF').text('Vendas');
+  doc.moveDown(0.8);
+  doc.fontSize(9).fillColor('#374151');
+  addTextLine(doc, 'Cliente | Vendedor | Cartelas | Valor Total | Valor Pago | Status | Data');
+  addTextLine(doc, '-'.repeat(145));
+  for (const venda of vendas) {
+    const cartelasCount = parseCartelas(venda.numeros_cartelas).length;
+    const line = [
+      String(venda.cliente_nome || '-').slice(0, 22),
+      String(venda.vendedor_nome || '-').slice(0, 18),
+      String(cartelasCount),
+      formatBRL(venda.valor_total),
+      formatBRL(venda.valor_pago),
+      String(venda.status || '-').slice(0, 10),
+      formatDateTimeBR(venda.created_at || venda.data_venda),
+    ].join(' | ');
+    addTextLine(doc, line);
+  }
+
+  doc.addPage();
+  doc.fontSize(16).fillColor('#1E40AF').text('Vendedores');
+  doc.moveDown(0.8);
+  doc.fontSize(9).fillColor('#374151');
+  addTextLine(doc, 'Nome | Cartelas Atribuidas | Vendas | Total em Vendas | Status');
+  addTextLine(doc, '-'.repeat(120));
+  for (const vendedor of vendedores) {
+    const atribuicao = atribuicoes.find((a) => a.vendedor_id === vendedor.id);
+    const vendasVendedor = vendas.filter((v) => v.vendedor_id === vendedor.id);
+    const totalVendedor = vendasVendedor.reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
+    const qtdCartelas = Array.isArray(atribuicao?.cartelas) ? atribuicao.cartelas.length : 0;
+
+    const line = [
+      String(vendedor.nome || '-').slice(0, 28),
+      String(qtdCartelas),
+      String(vendasVendedor.length),
+      formatBRL(totalVendedor),
+      vendedor.ativo ? 'Ativo' : 'Inativo',
+    ].join(' | ');
+    addTextLine(doc, line);
+  }
+
+  doc.end();
+
+  await new Promise((resolve, reject) => {
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
+}
+
+function buildRequestBaseUrl(req) {
+  const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
+  if (appUrl) return appUrl;
+
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol;
+  const host = forwardedHost || req.get('host');
+  return `${protocol}://${host}`;
+}
+
+setInterval(async () => {
+  const now = Date.now();
+  for (const [token, item] of pdfDownloads.entries()) {
+    if (item.expiresAt <= now) {
+      pdfDownloads.delete(token);
+      try {
+        await fs.promises.unlink(item.filePath);
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+  }
+}, 60 * 1000).unref();
 
 // ================== Utility Functions ==================
 
@@ -1272,6 +1475,35 @@ async function checkAuth(req, action) {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/downloads/:token', async (req, res) => {
+  const { token } = req.params;
+  const item = pdfDownloads.get(token);
+
+  if (!item) {
+    return res.status(404).json({ error: 'Link de download inválido ou expirado.' });
+  }
+
+  if (item.expiresAt <= Date.now()) {
+    pdfDownloads.delete(token);
+    try {
+      await fs.promises.unlink(item.filePath);
+    } catch {
+      // Ignore cleanup failure.
+    }
+    return res.status(410).json({ error: 'Link de download expirado.' });
+  }
+
+  try {
+    await fs.promises.access(item.filePath, fs.constants.R_OK);
+  } catch {
+    pdfDownloads.delete(token);
+    return res.status(404).json({ error: 'Arquivo não encontrado para download.' });
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  return res.download(item.filePath, item.fileName);
 });
 
 app.post('/api', checkBasicAuth, async (req, res) => {
@@ -2496,6 +2728,103 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           ORDER BY ve.data_venda DESC
         `, [data.sorteio_id]);
         return res.json({ data: result.rows });
+
+      case 'generateRelatorioCompletoPdfLink': {
+        if (!data.sorteio_id) {
+          return res.status(400).json({ error: 'Sorteio não informado.' });
+        }
+
+        const sorteioResult = data.authenticated_role === 'admin'
+          ? await client.query('SELECT * FROM sorteios WHERE id = $1', [data.sorteio_id])
+          : await client.query(
+              `SELECT DISTINCT s.*
+               FROM sorteios s
+               LEFT JOIN sorteio_compartilhado sc ON sc.sorteio_id = s.id
+               WHERE s.id = $1 AND (s.user_id = $2 OR sc.user_id = $2)
+               LIMIT 1`,
+              [data.sorteio_id, data.authenticated_user_id]
+            );
+
+        if (sorteioResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Sorteio não encontrado.' });
+        }
+
+        const sorteio = sorteioResult.rows[0];
+
+        const [vendedoresResult, cartelasResult, atribuicoesResult, vendasResult] = await Promise.all([
+          client.query('SELECT * FROM vendedores WHERE sorteio_id = $1 ORDER BY nome', [data.sorteio_id]),
+          client.query('SELECT numero, status, vendedor_id, comprador_nome FROM cartelas WHERE sorteio_id = $1 ORDER BY numero', [data.sorteio_id]),
+          client.query(
+            `SELECT a.*, v.nome as vendedor_nome,
+              COALESCE(json_agg(
+                json_build_object(
+                  'numero', ac.numero_cartela,
+                  'status', ac.status,
+                  'data_atribuicao', ac.data_atribuicao,
+                  'data_devolucao', ac.data_devolucao,
+                  'venda_id', ac.venda_id
+                ) ORDER BY ac.numero_cartela
+              ) FILTER (WHERE ac.id IS NOT NULL), '[]') as cartelas
+            FROM atribuicoes a
+            LEFT JOIN vendedores v ON a.vendedor_id = v.id
+            LEFT JOIN atribuicao_cartelas ac ON a.id = ac.atribuicao_id
+            WHERE a.sorteio_id = $1
+            GROUP BY a.id, v.nome
+            ORDER BY v.nome`,
+            [data.sorteio_id]
+          ),
+          client.query(
+            `SELECT ve.*, v.nome as vendedor_nome,
+              COALESCE(json_agg(
+                json_build_object(
+                  'forma_pagamento', p.forma_pagamento,
+                  'valor', p.valor
+                ) ORDER BY p.created_at
+              ) FILTER (WHERE p.id IS NOT NULL), '[]') as pagamentos
+            FROM vendas ve
+            LEFT JOIN vendedores v ON ve.vendedor_id = v.id
+            LEFT JOIN pagamentos p ON ve.id = p.venda_id
+            WHERE ve.sorteio_id = $1
+            GROUP BY ve.id, v.nome
+            ORDER BY ve.data_venda DESC`,
+            [data.sorteio_id]
+          ),
+        ]);
+
+        const token = crypto.randomBytes(24).toString('hex');
+        const safeSorteioName = safeFileName(sorteio.nome, 'sorteio');
+        const dateLabel = new Date().toISOString().slice(0, 10);
+        const fileName = `relatorio-completo-${safeSorteioName}-${dateLabel}.pdf`;
+        const filePath = path.join(PDF_EXPORT_DIR, `${token}.pdf`);
+        const expiresAt = Date.now() + PDF_DOWNLOAD_TTL_MS;
+
+        await generateRelatorioCompletoPdfFile(filePath, {
+          sorteio,
+          vendedores: vendedoresResult.rows,
+          cartelas: cartelasResult.rows,
+          atribuicoes: atribuicoesResult.rows,
+          vendas: vendasResult.rows,
+        });
+
+        pdfDownloads.set(token, {
+          filePath,
+          fileName,
+          expiresAt,
+          createdBy: data.authenticated_user_id,
+          sorteioId: data.sorteio_id,
+        });
+
+        const relativeUrl = `/api/downloads/${token}`;
+        const absoluteUrl = `${buildRequestBaseUrl(req)}${relativeUrl}`;
+
+        return res.json({
+          success: true,
+          download_url: relativeUrl,
+          download_link: absoluteUrl,
+          expires_at: new Date(expiresAt).toISOString(),
+          file_name: fileName,
+        });
+      }
 
       case 'createVenda': {
         const vendaResult = await client.query(`
