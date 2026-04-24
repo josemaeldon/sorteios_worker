@@ -1,0 +1,30 @@
+# =====================================================
+# BINGO SYSTEM - Backend API (Node.js + PostgreSQL)
+# API backend para modo selfhosted
+# =====================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar dependências do sistema
+RUN apk add --no-cache curl
+
+# Copiar package.json para o backend
+COPY backend/package*.json ./
+
+# Instalar dependências
+RUN npm install --production
+
+# Copiar código do backend
+COPY backend/ .
+
+# Expor porta
+EXPOSE 3001
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3001/health || exit 1
+
+# Iniciar o servidor
+CMD ["node", "server.js"]
