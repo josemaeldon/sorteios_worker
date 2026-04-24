@@ -23,7 +23,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: backend_worker/Dockerfile.backend
     environment:
       DB_TYPE: postgres
       DB_HOST: postgres
@@ -48,7 +48,7 @@ services:
 
   frontend:
     build:
-      context: .
+      context: ./frontend_worker
       dockerfile: Dockerfile
     environment:
       VITE_API_URL: http://localhost:3001

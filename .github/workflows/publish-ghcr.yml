@@ -41,12 +41,12 @@ jobs:
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./frontend_worker
+          file: ./frontend_worker/Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:frontend-latest
-            ${{ env.IMAGE_NAME }}:frontend-${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:frontend_worker-latest
+            ${{ env.IMAGE_NAME }}:frontend_worker-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -70,11 +70,11 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile.backend
+          context: ./backend_worker
+          file: ./backend_worker/Dockerfile.backend
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:backend-latest
-            ${{ env.IMAGE_NAME }}:backend-${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:backend_worker-latest
+            ${{ env.IMAGE_NAME }}:backend_worker-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

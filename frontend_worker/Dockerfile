@@ -8,7 +8,7 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copiar arquivos de dependências
+# Copiar arquivos de dependências do frontend worker
 COPY package*.json ./
 COPY bun.lockb ./
 

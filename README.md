@@ -19,7 +19,7 @@ npm install
 
 Backend:
 ```bash
-cd backend
+cd backend_worker
 npm install
 ```
 
@@ -63,7 +63,7 @@ VITE_BASIC_AUTH_PASS=senha
 
 Backend:
 ```bash
-cd backend
+cd backend_worker
 npm start
 ```
 
@@ -95,21 +95,21 @@ Isso iniciará:
 
 ```
 .
-├── backend/               # API Node.js + Express
+├── backend_worker/        # API Node.js + Express
 │   ├── server.js         # Servidor principal
 │   ├── db-adapter.js     # Adaptador de banco de dados
 │   └── package.json
 ├── database/             # Scripts SQL
 │   └── database-complete.sql  # Schema completo do banco
-├── src/                  # Frontend React + TypeScript
+├── frontend_worker/      # Frontend React + TypeScript
 │   ├── components/       # Componentes UI
 │   ├── contexts/         # Contextos React
 │   ├── hooks/            # Custom hooks
 │   ├── lib/              # Utilitários
 │   ├── pages/            # Páginas da aplicação
 │   └── types/            # TypeScript types
-├── public/               # Arquivos estáticos
-└── package.json          # Dependências frontend
+├── frontend_worker/public/  # Arquivos estáticos
+└── frontend_worker/package.json  # Dependências frontend
 ```
 
 ## 🔒 Segurança

@@ -10,14 +10,14 @@ WORKDIR /app
 # Instalar dependências do sistema
 RUN apk add --no-cache curl
 
-# Copiar package.json para o backend
-COPY backend/package*.json ./
+# Copiar package.json do backend worker
+COPY package*.json ./
 
 # Instalar dependências
 RUN npm install --production
 
-# Copiar código do backend
-COPY backend/ .
+# Copiar código do backend worker
+COPY . .
 
 # Expor porta
 EXPOSE 3001
