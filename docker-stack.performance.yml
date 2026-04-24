@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   bingo_app:
-    image: ghcr.io/josemaeldon/sorteios:frontend_worker-latest
+    image: ghcr.io/josemaeldon/sorteios_worker:frontend_worker-latest
     environment:
       VITE_API_BASE_URL: https://api.bingo.cloudbr.app
       VITE_BASIC_AUTH_USER: ""
@@ -36,7 +36,7 @@ services:
         - traefik.http.services.bingo_app.loadbalancer.server.port=80
 
   bingo_backend:
-    image: ghcr.io/josemaeldon/sorteios:backend_worker-latest
+    image: ghcr.io/josemaeldon/sorteios_worker:backend_worker-latest
     environment:
       DB_TYPE: postgres
       DB_HOST: pgvector
