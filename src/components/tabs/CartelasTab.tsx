@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
 import { Grid3X3, Search, Filter, Eraser, User, Loader2, Edit2, Trash2, Printer, Plus, RefreshCw, Save, X, CheckSquare } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { generateBingoGrid, exportBingoCardsPDF, DEFAULT_LAYOUT, BINGO_COLS, A4_W_MM, A4_H_MM } from '@/lib/utils/bingoCardUtils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { callApi } from '@/lib/apiClient';
 
 // ─── BINGO column ranges (B I N G O) ─────────────────────────────────────────
 const COL_RANGES = [
@@ -112,11 +113,9 @@ const LOTE_STORAGE_KEY = 'bingo_tamanho_lote';
 const CartelasTab: React.FC = () => {
   const {
     sorteioAtivo,
-    cartelas,
     vendedores,
     filtrosCartelas,
     setFiltrosCartelas,
-    isLoading,
     salvarNumerosCartelas,
     deleteCartela,
     createCartela,
@@ -147,6 +146,7 @@ const CartelasTab: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [forcedStatus, setForcedStatus] = useState<Cartela['status']>('disponivel');
   const [isForcingStatus, setIsForcingStatus] = useState(false);
+  const [isLoadingCartelaDetalhe, setIsLoadingCartelaDetalhe] = useState(false);
 
   // ─── New-cartela modal state ───────────────────────────────────────────────
   const [showNewModal, setShowNewModal] = useState(false);
@@ -201,6 +201,18 @@ const CartelasTab: React.FC = () => {
   // ─── Edit validated cartela ────────────────────────────────────────────────
   const [editingValidada, setEditingValidada] = useState<{ numero: number; nome: string } | null>(null);
   const [isSavingValidada, setIsSavingValidada] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingLista, setIsLoadingLista] = useState(false);
+  const [cartelasPagina, setCartelasPagina] = useState<Cartela[]>([]);
+  const [totalFiltrado, setTotalFiltrado] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [contadores, setContadores] = useState({
+    disponivel: 0,
+    atribuida: 0,
+    vendida: 0,
+    devolvida: 0,
+  });
+  const PAGE_SIZE = 600;
 
   // Group validated cartelas into batches for display (must be before early return)
   const lotes = React.useMemo(() => {
@@ -222,31 +234,53 @@ const CartelasTab: React.FC = () => {
     );
   }
 
-  // ─── Filtering ─────────────────────────────────────────────────────────────
-  const cartelasFiltradas = cartelas.filter(c => {
-    if (filtrosCartelas.busca) {
-      const numeroFormatado = formatarNumeroCartela(c.numero);
-      if (numeroFormatado !== filtrosCartelas.busca) return false;
-    }
-    if (filtrosCartelas.status !== 'todos') {
-      if (filtrosCartelas.status === 'disponivel') {
-        if (c.status !== 'disponivel' && c.status !== 'devolvida') return false;
-      } else {
-        if (c.status !== filtrosCartelas.status) return false;
+  const loadCartelasPagina = useCallback(async () => {
+    if (!sorteioAtivo || subTab !== 'lista') return;
+    setIsLoadingLista(true);
+    try {
+      const result = await callApi('getCartelas', {
+        sorteio_id: sorteioAtivo.id,
+        include_grades: false,
+        page: currentPage,
+        page_size: PAGE_SIZE,
+        busca: filtrosCartelas.busca,
+        status: filtrosCartelas.status,
+        vendedor_id: filtrosCartelas.vendedor,
+      });
+      setCartelasPagina(result?.data || []);
+      setTotalFiltrado(Number(result?.pagination?.total || 0));
+      setTotalPaginas(Math.max(1, Number(result?.pagination?.total_pages || 1)));
+      if (result?.counters) {
+        setContadores({
+          disponivel: Number(result.counters.disponivel || 0),
+          atribuida: Number(result.counters.atribuida || 0),
+          vendida: Number(result.counters.vendida || 0),
+          devolvida: Number(result.counters.devolvida || 0),
+        });
       }
+    } catch (error) {
+      console.error('Error loading paged cartelas:', error);
+      toast({ title: 'Erro ao carregar cartelas', description: 'Não foi possível carregar a lista paginada.', variant: 'destructive' });
+    } finally {
+      setIsLoadingLista(false);
     }
-    if (filtrosCartelas.vendedor !== 'todos') {
-      if (!c.vendedor_id || c.vendedor_id !== filtrosCartelas.vendedor) return false;
-    }
-    return true;
-  });
+  }, [sorteioAtivo, subTab, currentPage, filtrosCartelas, toast]);
 
-  const contadores = {
-    disponivel: cartelas.filter(c => c.status === 'disponivel').length,
-    atribuida:  cartelas.filter(c => c.status === 'ativa').length,
-    vendida:    cartelas.filter(c => c.status === 'vendida').length,
-    devolvida:  cartelas.filter(c => c.status === 'devolvida').length,
-  };
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filtrosCartelas.busca, filtrosCartelas.status, filtrosCartelas.vendedor, sorteioAtivo?.id]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPaginas) {
+      setCurrentPage(totalPaginas);
+    }
+  }, [currentPage, totalPaginas]);
+
+  React.useEffect(() => {
+    loadCartelasPagina();
+  }, [loadCartelasPagina]);
 
   const limparFiltros = () => setFiltrosCartelas({ busca: '', status: 'todos', vendedor: 'todos' });
 
@@ -275,10 +309,28 @@ const CartelasTab: React.FC = () => {
   };
 
   // ─── Edit handlers ─────────────────────────────────────────────────────────
-  const openCartela = (cartela: Cartela) => {
+  const openCartela = async (cartela: Cartela) => {
     setSelectedCartela(cartela);
     setForcedStatus(cartela.status);
     setEditMode(false);
+
+    if (!sorteioAtivo || (cartela.numeros_grade && cartela.numeros_grade.length > 0)) return;
+
+    setIsLoadingCartelaDetalhe(true);
+    try {
+      const result = await callApi('getCartelaDetalhe', { sorteio_id: sorteioAtivo.id, numero: cartela.numero });
+      if (result?.data) {
+        setSelectedCartela((prev) => {
+          if (!prev || prev.numero !== cartela.numero) return prev;
+          return { ...prev, ...result.data };
+        });
+      }
+    } catch (error) {
+      console.error('Error loading cartela details:', error);
+      toast({ title: 'Erro ao carregar detalhes da cartela', variant: 'destructive' });
+    } finally {
+      setIsLoadingCartelaDetalhe(false);
+    }
   };
 
   const handleForceStatus = async () => {
@@ -297,6 +349,7 @@ const CartelasTab: React.FC = () => {
           ? null
           : prev.vendedor_id
       }) : null);
+      await loadCartelasPagina();
       toast({
         title: "Status atualizado",
         description: `Cartela ${formatarNumeroCartela(selectedCartela.numero)} alterada para ${getStatusLabel(forcedStatus)}.`
@@ -366,6 +419,7 @@ const CartelasTab: React.FC = () => {
       await deleteCartela(selectedCartela.numero);
       setSelectedCartela(null);
       setShowDeleteConfirm(false);
+      await loadCartelasPagina();
     } finally {
       setIsDeleting(false);
     }
@@ -383,6 +437,7 @@ const CartelasTab: React.FC = () => {
     setIsSavingNew(true);
     try {
       await createCartela(newGrid);
+      await loadCartelasPagina();
       setShowNewModal(false);
     } finally {
       setIsSavingNew(false);
@@ -472,8 +527,8 @@ const CartelasTab: React.FC = () => {
             Cartelas - {sorteioAtivo.nome}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {cartelas.length} cartelas
-            {cartelas.length !== sorteioAtivo.quantidade_cartelas && (
+            {totalFiltrado} cartelas
+            {totalFiltrado !== sorteioAtivo.quantidade_cartelas && (
               <span className="text-xs ml-1">({sorteioAtivo.quantidade_cartelas} configuradas)</span>
             )}
           </p>
@@ -638,14 +693,14 @@ const CartelasTab: React.FC = () => {
 
           {/* Grid de Cartelas */}
           <div className="bg-card p-6 rounded-xl border border-border">
-            {isLoading ? (
+            {isLoadingLista ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <span className="ml-2 text-muted-foreground">Carregando cartelas...</span>
               </div>
             ) : (
               <div className="flex flex-wrap justify-start">
-                {cartelasFiltradas.map((cartela) => (
+                {cartelasPagina.map((cartela) => (
                   <div
                     key={cartela.numero}
                     className={cn(
@@ -658,13 +713,40 @@ const CartelasTab: React.FC = () => {
                     <div className="cartela-tooltip">{getTooltip(cartela)}</div>
                   </div>
                 ))}
-                {cartelasFiltradas.length === 0 && (
+                {totalFiltrado === 0 && (
                   <div className="w-full text-center py-12">
                     <Filter className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                     <p className="text-lg text-muted-foreground">Nenhuma cartela encontrada</p>
                     <p className="text-sm text-muted-foreground mt-2">Tente ajustar os filtros de busca</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {!isLoadingLista && totalFiltrado > 0 && (
+              <div className="mt-5 border-t border-border pt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Exibindo {pageStart + 1} a {Math.min(pageStart + PAGE_SIZE, totalFiltrado)} de {totalFiltrado} cartelas
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPaginas}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage >= totalPaginas}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPaginas, p + 1))}
+                  >
+                    Próxima
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -744,7 +826,7 @@ const CartelasTab: React.FC = () => {
                 variant="outline"
                 className="gap-1"
                 onClick={handleSaveTamanhoLote}
-                disabled={cartelasValidadas.length > 0 || isSavingLote || isLoading}
+                disabled={cartelasValidadas.length > 0 || isSavingLote}
                 title={cartelasValidadas.length > 0 ? 'Exclua os números validados para alterar o tamanho do lote' : 'Salvar configuração de lote'}
               >
                 {isSavingLote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -857,6 +939,12 @@ const CartelasTab: React.FC = () => {
                 {getStatusLabel(selectedCartela?.status ?? '')}
               </span>
             </DialogTitle>
+            {isLoadingCartelaDetalhe && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Carregando detalhes da cartela...
+              </div>
+            )}
             {selectedCartela?.comprador_nome && selectedCartela.status === 'vendida' && (
               <p className="text-sm text-muted-foreground mt-1">Comprador: <strong>{selectedCartela.comprador_nome}</strong></p>
             )}

@@ -17,6 +17,9 @@ class DatabaseAdapter {
         database: this.config.database,
         user: this.config.user,
         password: this.config.password,
+        max: Number(this.config.maxPoolSize || process.env.DB_POOL_MAX || 40),
+        idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_TIMEOUT_MS || 30000),
+        connectionTimeoutMillis: Number(process.env.DB_POOL_CONN_TIMEOUT_MS || 5000),
       });
       console.log('PostgreSQL pool initialized');
     } else if (this.type === 'mysql') {

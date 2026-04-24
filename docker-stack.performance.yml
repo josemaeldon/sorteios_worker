@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  bingo_app:
+    image: ghcr.io/josemaeldon/sorteios:frontend-latest
+    environment:
+      VITE_API_BASE_URL: https://api.bingo.cloudbr.app
+      VITE_BASIC_AUTH_USER: ""
+      VITE_BASIC_AUTH_PASS: ""
+    networks:
+      - cloudbrnet
+    deploy:
+      mode: replicated
+      replicas: 2
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: start-first
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=cloudbrnet
+        - traefik.http.routers.bingo_app.rule=Host(`bingo.cloudbr.app`)
+        - traefik.http.routers.bingo_app.entrypoints=websecure
+        - traefik.http.routers.bingo_app.tls.certresolver=letsencryptresolver
+        - traefik.http.services.bingo_app.loadbalancer.server.port=80
+
+  bingo_backend:
+    image: ghcr.io/josemaeldon/sorteios:backend-latest
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: pgvector
+      DB_PORT: 5432
+      DB_NAME: bingo_db
+      DB_USER: postgres
+      DB_PASSWORD: 85bd65e10bdd7aa12b93ab1f13b3eea8
+      PORT: 3001
+      JWT_SECRET: 6J8Q~cE2zR9wXbN5pY7tV3sK1mF4gH6jL9qT2wZ6f
+      BASIC_AUTH_USER: ""
+      BASIC_AUTH_PASS: ""
+      APP_URL: https://bingo.cloudbr.app
+      DB_POOL_MAX: 80
+      DB_POOL_IDLE_TIMEOUT_MS: 30000
+      DB_POOL_CONN_TIMEOUT_MS: 5000
+      NODE_OPTIONS: --max-old-space-size=512
+    networks:
+      - cloudbrnet
+    deploy:
+      mode: replicated
+      replicas: 3
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 1024M
+        reservations:
+          cpus: "0.50"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: start-first
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=cloudbrnet
+        - traefik.http.routers.bingo_backend.rule=Host(`api.bingo.cloudbr.app`)
+        - traefik.http.routers.bingo_backend.entrypoints=websecure
+        - traefik.http.routers.bingo_backend.tls.certresolver=letsencryptresolver
+        - traefik.http.services.bingo_backend.loadbalancer.server.port=3001
+
+networks:
+  cloudbrnet:
+    external: true

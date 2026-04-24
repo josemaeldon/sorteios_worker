@@ -596,6 +596,26 @@ async function initSchema() {
             }
           }
         }
+        const mysqlIndexes = [
+          'CREATE INDEX idx_cartelas_sorteio_numero ON cartelas (sorteio_id, numero)',
+          'CREATE INDEX idx_cartelas_sorteio_status_vendedor ON cartelas (sorteio_id, status, vendedor_id)',
+          'CREATE INDEX idx_cartelas_validadas_sorteio_numero ON cartelas_validadas (sorteio_id, numero)',
+          'CREATE INDEX idx_sorteio_historico_rodada_ordem ON sorteio_historico (rodada_id, ordem)',
+          'CREATE INDEX idx_sorteio_historico_rodada_numero ON sorteio_historico (rodada_id, numero_sorteado)',
+          'CREATE UNIQUE INDEX uq_sorteio_historico_rodada_ordem ON sorteio_historico (rodada_id, ordem)',
+          'CREATE UNIQUE INDEX uq_sorteio_historico_rodada_numero ON sorteio_historico (rodada_id, numero_sorteado)',
+          'CREATE INDEX idx_loja_cartelas_user_status_created ON loja_cartelas (user_id, status, created_at)',
+          'CREATE INDEX idx_loja_cartelas_card_set_numero ON loja_cartelas (card_set_id, numero_cartela)',
+        ];
+        for (const sql of mysqlIndexes) {
+          try {
+            await client.query(sql);
+          } catch (e) {
+            if (!e.message || (!e.message.includes('Duplicate key name') && !e.message.includes('already exists'))) {
+              console.warn('mysql index migration warning:', e.message);
+            }
+          }
+        }
       } else {
         // Create core base tables if they don't exist (first-run without SQL init file)
         await client.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
@@ -898,6 +918,20 @@ async function initSchema() {
         await client.query(`ALTER TABLE sorteios ADD COLUMN IF NOT EXISTS apenas_numero_rifa BOOLEAN DEFAULT FALSE`);
         await client.query(`ALTER TABLE sorteios ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'bingo'`);
         await client.query(`ALTER TABLE sorteios ADD COLUMN IF NOT EXISTS tamanho_lote INTEGER DEFAULT 50`);
+        const pgIndexes = [
+          'CREATE INDEX IF NOT EXISTS idx_cartelas_sorteio_numero ON cartelas (sorteio_id, numero)',
+          'CREATE INDEX IF NOT EXISTS idx_cartelas_sorteio_status_vendedor ON cartelas (sorteio_id, status, vendedor_id)',
+          'CREATE INDEX IF NOT EXISTS idx_cartelas_validadas_sorteio_numero ON cartelas_validadas (sorteio_id, numero)',
+          'CREATE INDEX IF NOT EXISTS idx_sorteio_historico_rodada_ordem ON sorteio_historico (rodada_id, ordem)',
+          'CREATE INDEX IF NOT EXISTS idx_sorteio_historico_rodada_numero ON sorteio_historico (rodada_id, numero_sorteado)',
+          'CREATE INDEX IF NOT EXISTS idx_loja_cartelas_user_status_created ON loja_cartelas (user_id, status, created_at)',
+          'CREATE INDEX IF NOT EXISTS idx_loja_cartelas_card_set_numero ON loja_cartelas (card_set_id, numero_cartela)',
+          'CREATE UNIQUE INDEX IF NOT EXISTS uq_sorteio_historico_rodada_ordem ON sorteio_historico (rodada_id, ordem)',
+          'CREATE UNIQUE INDEX IF NOT EXISTS uq_sorteio_historico_rodada_numero ON sorteio_historico (rodada_id, numero_sorteado)',
+        ];
+        for (const sql of pgIndexes) {
+          await client.query(sql);
+        }
       }
       console.log('Schema initialized: sorteio_compartilhado table ready');
     } finally {
@@ -1670,7 +1704,16 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       // ================== RODADAS DE SORTEIO ==================
       case 'getRodadas':
         result = await client.query(
-          'SELECT * FROM rodadas_sorteio WHERE sorteio_id = $1 ORDER BY created_at DESC',
+          `SELECT r.*, COALESCE(h.numeros_sorteados, 0) AS numeros_sorteados
+           FROM rodadas_sorteio r
+           LEFT JOIN (
+             SELECT rodada_id, COUNT(*)::int AS numeros_sorteados
+             FROM sorteio_historico
+             WHERE rodada_id IS NOT NULL
+             GROUP BY rodada_id
+           ) h ON h.rodada_id = r.id
+           WHERE r.sorteio_id = $1
+           ORDER BY r.created_at DESC`,
           [data.sorteio_id]
         );
         return res.json({ data: result.rows });
@@ -1705,25 +1748,47 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'saveRodadaNumero': {
         const { rodada_id, numero_sorteado, ordem } = data;
-        
-        // Get rodada information to extract range values
-        const rodadaInfo = await client.query(
-          'SELECT range_start, range_end FROM rodadas_sorteio WHERE id = $1',
-          [rodada_id]
-        );
-        
-        if (rodadaInfo.rows.length === 0) {
-          return res.status(404).json({ error: 'Rodada não encontrada' });
+
+        // Serializa gravações por rodada para evitar duplicidade em sorteios simultâneos.
+        await client.query('BEGIN');
+        try {
+          const rodadaInfo = await client.query(
+            'SELECT range_start, range_end FROM rodadas_sorteio WHERE id = $1 FOR UPDATE',
+            [rodada_id]
+          );
+
+          if (rodadaInfo.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Rodada não encontrada' });
+          }
+
+          const duplicateNumber = await client.query(
+            'SELECT 1 FROM sorteio_historico WHERE rodada_id = $1 AND numero_sorteado = $2 LIMIT 1',
+            [rodada_id, Number(numero_sorteado)]
+          );
+          if (duplicateNumber.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: `Número ${numero_sorteado} já foi sorteado nesta rodada.` });
+          }
+
+          const nextOrderResult = await client.query(
+            'SELECT COALESCE(MAX(ordem), 0) + 1 AS next_ordem FROM sorteio_historico WHERE rodada_id = $1',
+            [rodada_id]
+          );
+          const nextOrdem = Number(nextOrderResult.rows[0]?.next_ordem || ordem || 1);
+          const { range_start, range_end } = rodadaInfo.rows[0];
+
+          result = await client.query(`
+            INSERT INTO sorteio_historico (rodada_id, numero_sorteado, range_start, range_end, ordem, data_sorteio)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING *
+          `, [rodada_id, Number(numero_sorteado), range_start, range_end, nextOrdem]);
+          await client.query('COMMIT');
+          return res.json({ data: result.rows[0] });
+        } catch (txError) {
+          await client.query('ROLLBACK');
+          throw txError;
         }
-        
-        const { range_start, range_end } = rodadaInfo.rows[0];
-        
-        result = await client.query(`
-          INSERT INTO sorteio_historico (rodada_id, numero_sorteado, range_start, range_end, ordem, data_sorteio)
-          VALUES ($1, $2, $3, $4, $5, NOW())
-          RETURNING *
-        `, [rodada_id, numero_sorteado, range_start, range_end, ordem]);
-        return res.json({ data: result.rows[0] });
       }
 
       case 'clearRodadaHistorico':
@@ -1768,10 +1833,95 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       // ================== CARTELAS ==================
       case 'getCartelas': {
+        const includeGrades = data.include_grades === true;
+        const page = Math.max(1, Number(data.page || 1));
+        const pageSize = Math.min(2000, Math.max(50, Number(data.page_size || 500)));
+        const offset = (page - 1) * pageSize;
+        const whereParts = ['sorteio_id = $1'];
+        const whereParams = [data.sorteio_id];
+
+        const busca = typeof data.busca === 'string' ? data.busca.trim() : '';
+        if (busca) {
+          const numeroBusca = Number(String(busca).replace(/\D/g, ''));
+          if (!Number.isInteger(numeroBusca) || numeroBusca < 1) {
+            whereParts.push('1 = 0');
+          } else {
+            whereParts.push(`numero = $${whereParams.length + 1}`);
+            whereParams.push(numeroBusca);
+          }
+        }
+
+        const status = typeof data.status === 'string' ? data.status : 'todos';
+        if (status && status !== 'todos') {
+          if (status === 'disponivel') {
+            whereParts.push(`(status = $${whereParams.length + 1} OR status = $${whereParams.length + 2})`);
+            whereParams.push('disponivel', 'devolvida');
+          } else {
+            whereParts.push(`status = $${whereParams.length + 1}`);
+            whereParams.push(status);
+          }
+        }
+
+        const vendedorId = typeof data.vendedor_id === 'string' ? data.vendedor_id : '';
+        if (vendedorId && vendedorId !== 'todos') {
+          whereParts.push(`vendedor_id = $${whereParams.length + 1}`);
+          whereParams.push(vendedorId);
+        }
+
+        const whereSql = whereParts.join(' AND ');
+
+        const totalResult = await client.query(
+          `SELECT COUNT(*) AS total FROM cartelas WHERE ${whereSql}`,
+          whereParams
+        );
+        const total = Number(totalResult.rows[0]?.total || 0);
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+        const pagedParams = [...whereParams, pageSize, offset];
         result = await client.query(
-          'SELECT numero, status, vendedor_id, numeros_grade, comprador_nome FROM cartelas WHERE sorteio_id = $1 ORDER BY numero',
+          `SELECT numero, status, vendedor_id, ${includeGrades ? 'numeros_grade,' : ''} comprador_nome
+           FROM cartelas
+           WHERE ${whereSql}
+           ORDER BY numero
+           LIMIT $${pagedParams.length - 1} OFFSET $${pagedParams.length}`,
+          pagedParams
+        );
+
+        const countersResult = await client.query(
+          `SELECT status, COUNT(*) AS total
+           FROM cartelas
+           WHERE sorteio_id = $1
+           GROUP BY status`,
           [data.sorteio_id]
         );
+        const counters = {
+          disponivel: 0,
+          atribuida: 0,
+          vendida: 0,
+          devolvida: 0,
+          extraviada: 0,
+        };
+        for (const row of countersResult.rows) {
+          const qty = Number(row.total || 0);
+          if (row.status === 'disponivel') counters.disponivel = qty;
+          if (row.status === 'ativa') counters.atribuida = qty;
+          if (row.status === 'vendida') counters.vendida = qty;
+          if (row.status === 'devolvida') counters.devolvida = qty;
+          if (row.status === 'extraviada') counters.extraviada = qty;
+        }
+
+        if (!includeGrades) {
+          return res.json({
+            data: result.rows,
+            pagination: {
+              page,
+              page_size: pageSize,
+              total,
+              total_pages: totalPages,
+            },
+            counters,
+          });
+        }
         // Normalize numeros_grade to number[][] format
         const rows = result.rows.map(row => {
           if (!row.numeros_grade) return row;
@@ -1787,7 +1937,41 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
           return { ...row, numeros_grade: raw };
         });
-        return res.json({ data: rows });
+        return res.json({
+          data: rows,
+          pagination: {
+            page,
+            page_size: pageSize,
+            total,
+            total_pages: totalPages,
+          },
+          counters,
+        });
+      }
+
+      case 'getCartelaDetalhe': {
+        result = await client.query(
+          'SELECT numero, status, vendedor_id, numeros_grade, comprador_nome FROM cartelas WHERE sorteio_id = $1 AND numero = $2 LIMIT 1',
+          [data.sorteio_id, Number(data.numero)]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Cartela não encontrada' });
+        }
+        const row = result.rows[0];
+        if (!row.numeros_grade) {
+          return res.json({ data: row });
+        }
+        try {
+          const raw = Array.isArray(row.numeros_grade) ? row.numeros_grade : JSON.parse(row.numeros_grade);
+          if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'number') {
+            row.numeros_grade = [raw];
+          } else {
+            row.numeros_grade = raw;
+          }
+        } catch {
+          // Keep raw value if parsing fails.
+        }
+        return res.json({ data: row });
       }
 
       case 'updateCartela':
@@ -1854,11 +2038,34 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         // data.sorteio_id, data.cartelas: [{numero, numeros_grade: number[][]}]
         // numeros_grade is an array of flat 25-number arrays (one per prize)
         const cartelasGrade = data.cartelas || [];
-        for (const c of cartelasGrade) {
-          await client.query(
-            `UPDATE cartelas SET numeros_grade = $1, updated_at = NOW() WHERE sorteio_id = $2 AND numero = $3`,
-            [JSON.stringify(c.numeros_grade), data.sorteio_id, c.numero]
-          );
+        if (dbConfig.type === 'postgres' && cartelasGrade.length > 0) {
+          const chunkSize = 300;
+          for (let i = 0; i < cartelasGrade.length; i += chunkSize) {
+            const chunk = cartelasGrade.slice(i, i + chunkSize);
+            const values = [];
+            const params = [data.sorteio_id];
+            let p = 2;
+            for (const c of chunk) {
+              values.push(`($${p}, $${p + 1}::jsonb)`);
+              params.push(Number(c.numero), JSON.stringify(c.numeros_grade));
+              p += 2;
+            }
+            await client.query(
+              `UPDATE cartelas c
+               SET numeros_grade = v.numeros_grade,
+                   updated_at = NOW()
+               FROM (VALUES ${values.join(', ')}) AS v(numero, numeros_grade)
+               WHERE c.sorteio_id = $1 AND c.numero = v.numero`,
+              params
+            );
+          }
+        } else {
+          for (const c of cartelasGrade) {
+            await client.query(
+              `UPDATE cartelas SET numeros_grade = $1, updated_at = NOW() WHERE sorteio_id = $2 AND numero = $3`,
+              [JSON.stringify(c.numeros_grade), data.sorteio_id, c.numero]
+            );
+          }
         }
         return res.json({ data: [{ success: true, saved: cartelasGrade.length }] });
       }
@@ -1959,24 +2166,50 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (naoEncontradas.length > 0) {
           return res.status(404).json({ error: `Cartelas não encontradas neste sorteio: ${naoEncontradas.join(', ')}` });
         }
-        // Upsert all validations
-        for (const num of numeros) {
-          if (dbConfig.type === 'mysql') {
+        if (dbConfig.type === 'postgres') {
+          await client.query(
+            `INSERT INTO cartelas_validadas (sorteio_id, numero, comprador_nome)
+             SELECT $1, x.numero, $2
+             FROM UNNEST($3::int[]) AS x(numero)
+             ON CONFLICT (sorteio_id, numero)
+             DO UPDATE SET comprador_nome = EXCLUDED.comprador_nome`,
+            [data.sorteio_id, data.comprador_nome || null, numeros]
+          );
+        } else {
+          // Upsert all validations (MySQL fallback)
+          for (const num of numeros) {
             await client.query(
               `INSERT INTO cartelas_validadas (id, sorteio_id, numero, comprador_nome) VALUES (UUID(), $1, $2, $3)
                ON DUPLICATE KEY UPDATE comprador_nome = VALUES(comprador_nome)`,
               [data.sorteio_id, num, data.comprador_nome || null]
             );
-          } else {
-            await client.query(
-              `INSERT INTO cartelas_validadas (sorteio_id, numero, comprador_nome)
-               VALUES ($1, $2, $3)
-               ON CONFLICT (sorteio_id, numero) DO UPDATE SET comprador_nome = EXCLUDED.comprador_nome`,
-              [data.sorteio_id, num, data.comprador_nome || null]
-            );
           }
         }
         return res.json({ data: [{ success: true, count: numeros.length }] });
+      }
+
+      case 'getCartelasValidadasComGrade': {
+        result = await client.query(
+          `SELECT cv.numero, cv.comprador_nome, c.numeros_grade
+           FROM cartelas_validadas cv
+           INNER JOIN cartelas c ON c.sorteio_id = cv.sorteio_id AND c.numero = cv.numero
+           WHERE cv.sorteio_id = $1 AND c.numeros_grade IS NOT NULL
+           ORDER BY cv.created_at ASC`,
+          [data.sorteio_id]
+        );
+        const rows = result.rows.map((row) => {
+          let raw;
+          try {
+            raw = Array.isArray(row.numeros_grade) ? row.numeros_grade : JSON.parse(row.numeros_grade);
+          } catch {
+            return { ...row, numeros_grade: [] };
+          }
+          if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'number') {
+            return { ...row, numeros_grade: [raw] };
+          }
+          return { ...row, numeros_grade: raw };
+        });
+        return res.json({ data: rows });
       }
 
       case 'removerValidacaoLote': {

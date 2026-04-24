@@ -205,6 +205,12 @@ CREATE INDEX IF NOT EXISTS idx_rodadas_sorteio_sorteio_id ON public.rodadas_sort
 CREATE INDEX IF NOT EXISTS idx_sorteio_historico_sorteio_id ON public.sorteio_historico(sorteio_id);
 CREATE INDEX IF NOT EXISTS idx_sorteio_historico_rodada_id ON public.sorteio_historico(rodada_id);
 CREATE INDEX IF NOT EXISTS idx_sorteio_historico_ordem ON public.sorteio_historico(sorteio_id, ordem);
+CREATE INDEX IF NOT EXISTS idx_cartelas_sorteio_numero ON public.cartelas(sorteio_id, numero);
+CREATE INDEX IF NOT EXISTS idx_cartelas_sorteio_status_vendedor ON public.cartelas(sorteio_id, status, vendedor_id);
+CREATE INDEX IF NOT EXISTS idx_sorteio_historico_rodada_ordem ON public.sorteio_historico(rodada_id, ordem);
+CREATE INDEX IF NOT EXISTS idx_sorteio_historico_rodada_numero ON public.sorteio_historico(rodada_id, numero_sorteado);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sorteio_historico_rodada_ordem ON public.sorteio_historico(rodada_id, ordem) WHERE rodada_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sorteio_historico_rodada_numero ON public.sorteio_historico(rodada_id, numero_sorteado) WHERE rodada_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sorteio_compartilhado_sorteio_id ON public.sorteio_compartilhado(sorteio_id);
 CREATE INDEX IF NOT EXISTS idx_sorteio_compartilhado_user_id ON public.sorteio_compartilhado(user_id);
 
