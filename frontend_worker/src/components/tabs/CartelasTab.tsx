@@ -201,18 +201,15 @@ const CartelasTab: React.FC = () => {
   // ─── Edit validated cartela ────────────────────────────────────────────────
   const [editingValidada, setEditingValidada] = useState<{ numero: number; nome: string } | null>(null);
   const [isSavingValidada, setIsSavingValidada] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingLista, setIsLoadingLista] = useState(false);
   const [cartelasPagina, setCartelasPagina] = useState<Cartela[]>([]);
   const [totalFiltrado, setTotalFiltrado] = useState(0);
-  const [totalPaginas, setTotalPaginas] = useState(1);
   const [contadores, setContadores] = useState({
     disponivel: 0,
     atribuida: 0,
     vendida: 0,
     devolvida: 0,
   });
-  const PAGE_SIZE = 600;
 
   // Group validated cartelas into batches for display (must be before early return)
   const lotes = React.useMemo(() => {
@@ -241,15 +238,13 @@ const CartelasTab: React.FC = () => {
       const result = await callApi('getCartelas', {
         sorteio_id: sorteioAtivo.id,
         include_grades: false,
-        page: currentPage,
-        page_size: PAGE_SIZE,
         busca: filtrosCartelas.busca,
         status: filtrosCartelas.status,
         vendedor_id: filtrosCartelas.vendedor,
       });
-      setCartelasPagina(result?.data || []);
-      setTotalFiltrado(Number(result?.pagination?.total || 0));
-      setTotalPaginas(Math.max(1, Number(result?.pagination?.total_pages || 1)));
+      const cartelas = Array.isArray(result?.data) ? result.data : [];
+      setCartelasPagina(cartelas);
+      setTotalFiltrado(cartelas.length);
       if (result?.counters) {
         setContadores({
           disponivel: Number(result.counters.disponivel || 0),
@@ -259,24 +254,12 @@ const CartelasTab: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Error loading paged cartelas:', error);
-      toast({ title: 'Erro ao carregar cartelas', description: 'Não foi possível carregar a lista paginada.', variant: 'destructive' });
+      console.error('Error loading cartelas:', error);
+      toast({ title: 'Erro ao carregar cartelas', description: 'Não foi possível carregar a lista.', variant: 'destructive' });
     } finally {
       setIsLoadingLista(false);
     }
-  }, [sorteioAtivo, subTab, currentPage, filtrosCartelas, toast]);
-
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [filtrosCartelas.busca, filtrosCartelas.status, filtrosCartelas.vendedor, sorteioAtivo?.id]);
-
-  React.useEffect(() => {
-    if (currentPage > totalPaginas) {
-      setCurrentPage(totalPaginas);
-    }
-  }, [currentPage, totalPaginas]);
+  }, [sorteioAtivo, subTab, filtrosCartelas, toast]);
 
   React.useEffect(() => {
     loadCartelasPagina();
@@ -726,26 +709,7 @@ const CartelasTab: React.FC = () => {
             {!isLoadingLista && totalFiltrado > 0 && (
               <div className="mt-5 border-t border-border pt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm text-muted-foreground">
-                  Exibindo {pageStart + 1} a {Math.min(pageStart + PAGE_SIZE, totalFiltrado)} de {totalFiltrado} cartelas
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPaginas}</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={currentPage >= totalPaginas}
-                    onClick={() => setCurrentPage((p) => Math.min(totalPaginas, p + 1))}
-                  >
-                    Próxima
-                  </Button>
+                  Exibindo {totalFiltrado} cartela{totalFiltrado !== 1 ? 's' : ''}
                 </div>
               </div>
             )}
