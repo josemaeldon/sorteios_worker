@@ -315,38 +315,6 @@ const NumberInput: React.FC<{
   </PropRow>
 );
 
-const parseSelecaoCartelasInput = (value: string): { numeros: number[]; randomCount: number | null } | null => {
-  const raw = value.trim();
-  if (!raw) return null;
-
-  const randomMatch = raw.match(/^(aleatorias?|aleatórios?|aleatorio|random|rand)\s*[:x]?\s*(\d+)$/i);
-  if (randomMatch) {
-    const count = Number(randomMatch[2]);
-    if (!Number.isInteger(count) || count < 1) return null;
-    return { numeros: [], randomCount: count };
-  }
-
-  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length === 0) return null;
-
-  const nums: number[] = [];
-  for (const part of parts) {
-    const rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
-    if (rangeMatch) {
-      const from = Number(rangeMatch[1]);
-      const to = Number(rangeMatch[2]);
-      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from) return null;
-      for (let n = from; n <= to; n++) nums.push(n);
-      continue;
-    }
-    const n = Number(part);
-    if (!Number.isInteger(n) || n < 1) return null;
-    nums.push(n);
-  }
-
-  return { numeros: Array.from(new Set(nums)).sort((a, b) => a - b), randomCount: null };
-};
-
 // ─── Main component ───────────────────────────────────────────────────────────
 const BingoCardsBuilderTab: React.FC = () => {
   const {
@@ -408,10 +376,6 @@ const BingoCardsBuilderTab: React.FC = () => {
   const [bulkPreco, setBulkPreco] = useState('');
   const [isBulkVendendo, setIsBulkVendendo] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
-  const [previewLojaSelecao, setPreviewLojaSelecao] = useState('');
-  const [previewLojaPreco, setPreviewLojaPreco] = useState('');
-  const [isPreviewLojaVendendo, setIsPreviewLojaVendendo] = useState(false);
-  const [previewLojaProgress, setPreviewLojaProgress] = useState(0);
 
   // Vendor publish state
   const [showVendedorLojaModal, setShowVendedorLojaModal] = useState(false);
@@ -940,79 +904,6 @@ const BingoCardsBuilderTab: React.FC = () => {
     setShowBulkVenderModal(true);
   };
 
-  const handleDisponibilizarSelecaoPreview = async () => {
-    if (!activeLayoutId) return;
-    const normalisedPrice = previewLojaPreco.trim().includes(',')
-      ? previewLojaPreco.trim().replace(/\./g, '').replace(',', '.')
-      : previewLojaPreco.trim();
-    const preco = parseFloat(normalisedPrice);
-    if (isNaN(preco) || preco < 0) {
-      toast({ title: 'Preço inválido', variant: 'destructive' });
-      return;
-    }
-    if (cards.length === 0) {
-      toast({ title: 'Gere as cartelas primeiro', variant: 'destructive' });
-      return;
-    }
-
-    const parsed = parseSelecaoCartelasInput(previewLojaSelecao);
-    if (!parsed) {
-      toast({ title: 'Seleção inválida', description: 'Use número, faixa, lista ou "aleatorias:10".', variant: 'destructive' });
-      return;
-    }
-
-    let targetCards: BingoCardGrid[] = [];
-    if (parsed.randomCount !== null) {
-      const requested = Math.max(1, parsed.randomCount);
-      const disponiveis = cards.filter(
-        (c) => !lojaCartelas.some((lc) => lc.card_set_id === activeLayoutId && lc.numero_cartela === c.cartelaNumero)
-      );
-      const source = disponiveis.length > 0 ? disponiveis : cards;
-      const shuffled = [...source].sort(() => Math.random() - 0.5);
-      targetCards = shuffled.slice(0, Math.min(requested, source.length));
-    } else {
-      const byNumero = new Map(cards.map((c) => [c.cartelaNumero, c]));
-      targetCards = parsed.numeros.map((n) => byNumero.get(n)).filter((c): c is BingoCardGrid => !!c);
-    }
-
-    if (targetCards.length === 0) {
-      toast({ title: 'Nenhuma cartela encontrada na seleção', variant: 'destructive' });
-      return;
-    }
-
-    setIsPreviewLojaVendendo(true);
-    setPreviewLojaProgress(0);
-    let added = 0;
-    let skipped = 0;
-
-    try {
-      for (const card of targetCards) {
-        const cartelaInfo = cartelas.find((c) => c.numero === card.cartelaNumero);
-        const cardVendedorId = cartelaInfo?.vendedor_id;
-        try {
-          await adicionarCartelaLoja(activeLayoutId, card.cartelaNumero, preco, JSON.stringify(card), JSON.stringify(layout), cardVendedorId);
-          added++;
-        } catch (cardErr: unknown) {
-          if (cardErr && typeof cardErr === 'object' && 'code' in cardErr && (cardErr as { code?: string }).code === 'DUPLICATE_CARTELA') {
-            skipped++;
-          } else {
-            throw cardErr;
-          }
-        }
-        setPreviewLojaProgress(Math.round((added + skipped) / targetCards.length * 100));
-      }
-      const msg = skipped > 0
-        ? `${added} cartela${added !== 1 ? 's' : ''} adicionada${added !== 1 ? 's' : ''}, ${skipped} já estava${skipped !== 1 ? 'm' : ''} na loja.`
-        : `${added} cartela${added !== 1 ? 's' : ''} disponibilizada${added !== 1 ? 's' : ''} para venda!`;
-      toast({ title: msg });
-      setPreviewLojaSelecao('');
-    } catch (err: unknown) {
-      toast({ title: (err instanceof Error ? err.message : 'Erro inesperado') || 'Erro ao disponibilizar cartelas', variant: 'destructive' });
-    } finally {
-      setIsPreviewLojaVendendo(false);
-    }
-  };
-
   const handleBulkVender = async () => {
     if (!activeLayoutId) return;
     const normalised = bulkPreco.trim().includes(',')
@@ -1176,10 +1067,6 @@ const BingoCardsBuilderTab: React.FC = () => {
       .replace(/^-+|-+$/g, '');
     return `${window.location.origin}/loja/${slug}/${sorteioAtivo.short_id}`;
   }, [sorteioAtivo?.short_id, sorteioAtivo?.nome, sorteioAtivo?.user_id, user]);
-
-  useEffect(() => {
-    setPreviewLojaPreco(String(sorteioAtivo?.valor_cartela ?? ''));
-  }, [sorteioAtivo?.id, sorteioAtivo?.valor_cartela]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
   if (!sorteioAtivo) {
@@ -1473,49 +1360,6 @@ const BingoCardsBuilderTab: React.FC = () => {
                   <Store className="w-3 h-3" />
                   Disponibilizar Várias em Prévia
                 </Button>
-              )}
-              {activeLayoutId && (
-                <div className="space-y-2 rounded-md border border-border p-2">
-                  <p className="text-[10px] text-muted-foreground leading-tight">
-                    Loja rápida: use número, faixa, lista ou aleatórias.
-                  </p>
-                  <Input
-                    value={previewLojaSelecao}
-                    onChange={(e) => setPreviewLojaSelecao(e.target.value)}
-                    placeholder="Ex: 25 | 10-40 | 1,5,9 | aleatorias:20"
-                    className="h-7 text-xs"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={previewLojaPreco}
-                    onChange={(e) => setPreviewLojaPreco(e.target.value)}
-                    placeholder="Preço (R$)"
-                    className="h-7 text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full gap-1 h-7 text-xs"
-                    onClick={handleDisponibilizarSelecaoPreview}
-                    disabled={isPreviewLojaVendendo}
-                  >
-                    {isPreviewLojaVendendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Store className="w-3 h-3" />}
-                    Disponibilizar seleção
-                  </Button>
-                  {isPreviewLojaVendendo && (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span>Publicando…</span>
-                        <span>{previewLojaProgress}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${previewLojaProgress}%` }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
               )}
               {activeLayoutId && vendedores.length > 0 && (
                 <Button

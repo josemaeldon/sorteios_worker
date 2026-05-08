@@ -3,19 +3,6 @@ import { Dice5, BarChart3, Users, Grid3X3, ListTodo, ShoppingCart, PieChart, Shu
 import { useBingo } from '@/contexts/BingoContext';
 import { TabType } from '@/types/bingo';
 import { cn } from '@/lib/utils';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
 
 const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'sorteios', label: 'Sorteios', icon: Dice5 },
@@ -40,46 +27,35 @@ const Navigation: React.FC = () => {
   };
 
   return (
-    <Sidebar side="left" variant="sidebar" collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-sidebar-foreground/90 group-data-[collapsible=icon]:hidden">
-            Menu
-          </span>
-          <SidebarTrigger className="h-7 w-7" />
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = currentTab === tab.id;
-                const isDisabled = tab.id !== 'sorteios' && !sorteioAtivo;
+    <nav className="bg-card shadow-sm border-b border-border sticky top-0 z-40">
+      <div className="container mx-auto px-4">
+        <div className="flex overflow-x-auto space-x-1 scrollbar-hide">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = currentTab === tab.id;
+            const isDisabled = tab.id !== 'sorteios' && !sorteioAtivo;
 
-                return (
-                  <SidebarMenuItem key={tab.id}>
-                    <SidebarMenuButton
-                      onClick={() => handleTabClick(tab.id)}
-                      disabled={isDisabled}
-                      isActive={isActive}
-                      tooltip={tab.label}
-                      className={cn(isDisabled && 'opacity-50 cursor-not-allowed')}
-                    >
-                      <Icon />
-                      <span>{tab.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                disabled={isDisabled}
+                className={cn(
+                  'py-4 px-6 font-semibold whitespace-nowrap flex items-center gap-2 transition-all duration-200 border-b-3',
+                  isActive 
+                    ? 'border-b-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                  isDisabled && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
   );
 };
 
