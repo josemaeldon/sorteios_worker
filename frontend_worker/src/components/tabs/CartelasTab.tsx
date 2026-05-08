@@ -736,7 +736,7 @@ const CartelasTab: React.FC = () => {
                   value={validacaoNumero}
                   onChange={(e) => setValidacaoNumero(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleValidarCartela()}
-                  className="w-56"
+                  className="w-full sm:w-56"
                 />
                 <p className="text-xs text-muted-foreground">
                   Número único, faixa (1-50) ou lista separada por vírgula
@@ -751,7 +751,7 @@ const CartelasTab: React.FC = () => {
                   value={validacaoNome}
                   onChange={(e) => setValidacaoNome(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleValidarCartela()}
-                  className="w-56"
+                  className="w-full sm:w-56"
                 />
               </div>
               <Button onClick={handleValidarCartela} disabled={isValidando} className="gap-2">

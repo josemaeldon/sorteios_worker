@@ -1186,10 +1186,10 @@ const BingoCardsBuilderTab: React.FC = () => {
       )}
 
       {/* ── Main editor area ── */}
-      <div className="flex gap-3 flex-1 min-h-0" style={{ height: 'calc(100vh - 220px)' }}>
+      <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0 lg:h-[calc(100vh-220px)]">
 
         {/* ─ Left panel ─ */}
-        <div className="w-56 flex flex-col gap-3 overflow-y-auto flex-shrink-0">
+        <div className="w-full lg:w-56 flex flex-col gap-3 overflow-y-auto lg:flex-shrink-0">
 
           {/* Elements */}
           <div className="bg-card border border-border rounded-xl p-3 space-y-2">
@@ -1270,7 +1270,7 @@ const BingoCardsBuilderTab: React.FC = () => {
                 </button>
               ))
             ))}
-            <div className="grid grid-cols-2 gap-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
               {([
                 ['buyer_name', 'Nome'],
                 ['buyer_address', 'Endereço'],
@@ -1382,7 +1382,7 @@ const BingoCardsBuilderTab: React.FC = () => {
         </div>
 
         {/* ─ Canvas ─ */}
-        <div className="flex-1 bg-muted overflow-auto flex items-start justify-center p-6 min-w-0">
+        <div className="flex-1 bg-muted overflow-auto flex items-start justify-center p-3 sm:p-6 min-w-0">
           <div
             style={{
               width: canvasW,
@@ -1516,7 +1516,7 @@ const BingoCardsBuilderTab: React.FC = () => {
         </div>
 
         {/* ─ Properties panel ─ */}
-        <div className="w-64 flex flex-col gap-3 overflow-y-auto flex-shrink-0">
+        <div className="w-full lg:w-64 flex flex-col gap-3 overflow-y-auto lg:flex-shrink-0">
           {!selectedEl ? (
             <div className="bg-card border border-border rounded-xl p-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -1565,7 +1565,7 @@ const BingoCardsBuilderTab: React.FC = () => {
               </div>
 
               {/* Position & size */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <NumberInput label="X (mm)" value={Math.round(selectedEl.x * 10) / 10}
                   onChange={(v) => updateElement(selectedEl.id, { x: v })} min={0} max={paperW} step={0.5} />
                 <NumberInput label="Y (mm)" value={Math.round(selectedEl.y * 10) / 10}
@@ -2048,7 +2048,7 @@ const BingoCardsBuilderTab: React.FC = () => {
             <p className="text-sm text-muted-foreground">
               Selecione o intervalo de cartelas para disponibilizar na loja. As cartelas já existentes serão atualizadas com o novo preço.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Da cartela</Label>
                 <Input
@@ -2122,7 +2122,7 @@ const BingoCardsBuilderTab: React.FC = () => {
             <p className="text-sm text-muted-foreground">
               Informe o intervalo de cartelas que deseja exportar. Para uma única cartela, preencha o mesmo número nos dois campos.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Da cartela</Label>
                 <Input
