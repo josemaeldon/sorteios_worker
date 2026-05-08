@@ -328,7 +328,7 @@ const VendasTab: React.FC = () => {
                       variant="outline" 
                       onClick={() => handlePagamento(venda.id)} 
                       title="Pagamento"
-                      className="text-success hover:text-success"
+                      className="text-success hover:text-accent-foreground"
                     >
                       <DollarSign className="w-4 h-4" />
                     </Button>
@@ -337,7 +337,7 @@ const VendasTab: React.FC = () => {
                       variant="outline"
                       onClick={() => handleRecibo(venda.id)}
                       title="Recibo"
-                      className="text-blue-600 hover:text-blue-600"
+                      className="text-blue-600 hover:text-accent-foreground"
                     >
                       <Receipt className="w-4 h-4" />
                     </Button>
