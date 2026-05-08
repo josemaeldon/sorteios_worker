@@ -244,7 +244,7 @@ const CartelasTab: React.FC = () => {
       });
       const cartelas = Array.isArray(result?.data) ? result.data : [];
       setCartelasPagina(cartelas);
-      setTotalFiltrado(Number(result?.pagination?.total ?? cartelas.length ?? 0));
+      setTotalFiltrado(cartelas.length);
       if (result?.counters) {
         setContadores({
           disponivel: Number(result.counters.disponivel || 0),
