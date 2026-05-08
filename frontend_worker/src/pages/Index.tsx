@@ -1,7 +1,6 @@
 import { BingoProvider, useBingo } from '@/contexts/BingoContext';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import SorteiosTab from '@/components/tabs/SorteiosTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import DrawTab from '@/components/tabs/DrawTab';
@@ -31,22 +30,13 @@ const MainContent = () => {
   };
 
   return (
-    <SidebarProvider defaultOpen>
+    <div className="min-h-screen bg-background">
+      <Header />
       <Navigation />
-      <SidebarInset>
-        <div className="min-h-screen bg-background">
-          <Header />
-          <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container mx-auto px-4 py-2">
-              <SidebarTrigger className="h-8 w-8" />
-            </div>
-          </div>
-          <main className="container mx-auto px-4 py-8">
-            {renderTab()}
-          </main>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+      <main className="container mx-auto px-4 py-8">
+        {renderTab()}
+      </main>
+    </div>
   );
 };
 
