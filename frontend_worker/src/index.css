@@ -270,6 +270,15 @@
     box-shadow: var(--shadow-glow);
   }
 
+  @media (max-width: 640px) {
+    .cartela-item {
+      width: 2.5rem;
+      height: 2.5rem;
+      margin: 0.25rem;
+      font-size: 0.75rem;
+    }
+  }
+
   .cartela-tooltip {
     @apply absolute bottom-full left-1/2 -translate-x-1/2 bg-foreground text-background px-3 py-1.5 rounded-md text-xs whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-200 mb-2 z-10;
   }
