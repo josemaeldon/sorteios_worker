@@ -54,7 +54,7 @@ BASIC_AUTH_PASS=senha
 
 Frontend (`.env`):
 ```bash
-VITE_API_URL=http://localhost:3001
+VITE_API_BASE_URL=http://localhost:3001
 VITE_BASIC_AUTH_USER=admin
 VITE_BASIC_AUTH_PASS=senha
 ```

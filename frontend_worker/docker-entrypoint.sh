@@ -15,12 +15,13 @@ echo "============================================="
 # Check mode
 # Aceita chave do backend como VITE_SUPABASE_PUBLISHABLE_KEY (preferido) ou VITE_SUPABASE_ANON_KEY (legado)
 SUPABASE_KEY="${VITE_SUPABASE_PUBLISHABLE_KEY:-${VITE_SUPABASE_ANON_KEY:-}}"
+API_BASE_URL="${VITE_API_BASE_URL:-${VITE_API_URL:-}}"
 
-if [ -n "$VITE_API_BASE_URL" ]; then
+if [ -n "$API_BASE_URL" ]; then
   echo "Modo: SELFHOSTED (PostgreSQL direto)"
   echo ""
   echo "Configuração detectada:"
-  echo "  - API_BASE_URL: $VITE_API_BASE_URL"
+  echo "  - API_BASE_URL: $API_BASE_URL"
   echo "  - BASIC_AUTH: ${VITE_BASIC_AUTH_USER:+(configurado)}"
   echo ""
 
@@ -30,7 +31,7 @@ if [ -n "$VITE_API_BASE_URL" ]; then
     -e "s|__VITE_SUPABASE_ANON_KEY__|${VITE_SUPABASE_ANON_KEY:-}|g" \
     -e "s|__VITE_SUPABASE_PUBLISHABLE_KEY__|${SUPABASE_KEY}|g" \
     -e "s|__VITE_SUPABASE_PROJECT_ID__|${VITE_SUPABASE_PROJECT_ID:-}|g" \
-    -e "s|__VITE_API_BASE_URL__|${VITE_API_BASE_URL}|g" \
+    -e "s|__VITE_API_BASE_URL__|${API_BASE_URL}|g" \
     -e "s|__VITE_BASIC_AUTH_USER__|${VITE_BASIC_AUTH_USER:-}|g" \
     -e "s|__VITE_BASIC_AUTH_PASS__|${VITE_BASIC_AUTH_PASS:-}|g" \
     {} \;
@@ -60,7 +61,7 @@ elif [ -n "$VITE_SUPABASE_URL" ]; then
     -e "s|__VITE_BASIC_AUTH_PASS__||g" \
     {} \;
 else
-  echo "ERRO: Configure VITE_API_BASE_URL (selfhosted) ou VITE_SUPABASE_URL (Supabase)!"
+  echo "ERRO: Configure VITE_API_BASE_URL (ou legado VITE_API_URL) para selfhosted, ou VITE_SUPABASE_URL para Supabase!"
   exit 1
 fi
 
