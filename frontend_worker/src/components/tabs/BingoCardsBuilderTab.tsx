@@ -390,7 +390,8 @@ const BingoCardsBuilderTab: React.FC = () => {
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [autoZoom, setAutoZoom] = useState(true);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const zoomRef = useRef(canvasZoom);
+  const zoomRef = useRef(1);
+  const fitSizeRef = useRef({ width: 0, height: 0, canvasW: 0, canvasH: 0 });
 
   // Layout
   const [layout, setLayout] = useState<CanvasLayout>(() =>
@@ -481,6 +482,15 @@ const BingoCardsBuilderTab: React.FC = () => {
     const availableW = Math.max(0, container.clientWidth - padding);
     const availableH = Math.max(0, container.clientHeight - padding);
     if (availableW === 0 || availableH === 0) return;
+    if (
+      fitSizeRef.current.width === availableW &&
+      fitSizeRef.current.height === availableH &&
+      fitSizeRef.current.canvasW === canvasW &&
+      fitSizeRef.current.canvasH === canvasH
+    ) {
+      return;
+    }
+    fitSizeRef.current = { width: availableW, height: availableH, canvasW, canvasH };
     const fitZoom = Math.min(availableW / canvasW, availableH / canvasH, 1);
     setZoom(fitZoom);
   }, [canvasW, canvasH, isMobile, setZoom]);
@@ -681,7 +691,7 @@ const BingoCardsBuilderTab: React.FC = () => {
     const handleMove = (e: PointerEvent) => {
       if (draggingRef.current) {
         const d = draggingRef.current;
-        const zoom = zoomRef.current || 1;
+        const zoom = zoomRef.current;
         const dx = px((e.clientX - d.startX) / zoom);
         const dy = px((e.clientY - d.startY) / zoom);
         setLayout((prev) => {
@@ -702,7 +712,7 @@ const BingoCardsBuilderTab: React.FC = () => {
         });
       } else if (resizingRef.current) {
         const r = resizingRef.current;
-        const zoom = zoomRef.current || 1;
+        const zoom = zoomRef.current;
         const dx = px((e.clientX - r.startX) / zoom);
         const dy = px((e.clientY - r.startY) / zoom);
         setLayout((prev) => {
