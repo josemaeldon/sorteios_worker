@@ -3,7 +3,7 @@ import JsBarcode from 'jsbarcode';
 import {
   LayoutGrid, Plus, Trash2, Download, RefreshCw, ChevronLeft, ChevronRight,
   Image, Type, AlignLeft, AlignCenter, AlignRight, Bold, Loader2, FileText,
-  Save, List, X, Edit2, Barcode, Copy, ShoppingCart, Store, Link, DollarSign, User,
+  Save, List, X, Edit2, Barcode, Copy, ShoppingCart, Store, Link, DollarSign, User, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 // ─── Canvas constants ─────────────────────────────────────────────────────────
 /** px per mm — keeps A4 canvas at ~595×841 px (72 dpi equivalent) */
 const SCALE = 595 / 210;
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
 
 const mm = (v: number) => v * SCALE;   // mm → px
 const px = (v: number) => v / SCALE;   // px → mm
@@ -384,6 +387,10 @@ const BingoCardsBuilderTab: React.FC = () => {
   const handleOffset = isMobile ? -9 : -5;
   const handleBorder = isMobile ? 3 : 2;
   const handleRadius = isMobile ? 999 : 3;
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const [autoZoom, setAutoZoom] = useState(true);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const zoomRef = useRef(canvasZoom);
 
   // Layout
   const [layout, setLayout] = useState<CanvasLayout>(() =>
@@ -439,6 +446,8 @@ const BingoCardsBuilderTab: React.FC = () => {
     setCards([]);
     setPreviewIndex(0);
     hasRestoredRef.current = false;
+    setAutoZoom(true);
+    setCanvasZoom(1);
   }, [sorteioAtivo?.id]);
 
   // Named layout management
@@ -456,6 +465,44 @@ const BingoCardsBuilderTab: React.FC = () => {
   useEffect(() => { layoutRef.current = layout; }, [layout]);
   const paperDimsRef = useRef({ paperW, paperH });
   useEffect(() => { paperDimsRef.current = { paperW, paperH }; }, [paperW, paperH]);
+  useEffect(() => { zoomRef.current = canvasZoom; }, [canvasZoom]);
+
+  const setZoom = useCallback((value: number) => {
+    setCanvasZoom((prev) => {
+      const next = clamp(value, ZOOM_MIN, ZOOM_MAX);
+      return Math.abs(prev - next) < 0.01 ? prev : next;
+    });
+  }, []);
+
+  const applyFitZoom = useCallback(() => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    const padding = isMobile ? 24 : 48;
+    const availableW = Math.max(0, container.clientWidth - padding);
+    const availableH = Math.max(0, container.clientHeight - padding);
+    if (availableW === 0 || availableH === 0) return;
+    const fitZoom = Math.min(availableW / canvasW, availableH / canvasH, 1);
+    setZoom(fitZoom);
+  }, [canvasW, canvasH, isMobile, setZoom]);
+
+  useEffect(() => {
+    if (!autoZoom) return;
+    applyFitZoom();
+  }, [autoZoom, applyFitZoom]);
+
+  useEffect(() => {
+    if (!autoZoom) return;
+    const container = canvasContainerRef.current;
+    if (!container) return undefined;
+    if (typeof ResizeObserver === 'undefined') {
+      const handleResize = () => applyFitZoom();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+    const observer = new ResizeObserver(() => applyFitZoom());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [autoZoom, applyFitZoom]);
 
   // Tracks whether the one-time DB restore has already run for the current sorteio
   const hasRestoredRef = useRef(false);
@@ -609,13 +656,34 @@ const BingoCardsBuilderTab: React.FC = () => {
     setSelectedId(null);
   };
 
+  const handleZoomIn = () => {
+    setAutoZoom(false);
+    setZoom(canvasZoom + ZOOM_STEP);
+  };
+
+  const handleZoomOut = () => {
+    setAutoZoom(false);
+    setZoom(canvasZoom - ZOOM_STEP);
+  };
+
+  const handleZoomReset = () => {
+    setAutoZoom(false);
+    setZoom(1);
+  };
+
+  const handleZoomFit = () => {
+    setAutoZoom(true);
+    applyFitZoom();
+  };
+
   // ─── Global pointer events (drag & resize) ─────────────────────────────────
   useEffect(() => {
     const handleMove = (e: PointerEvent) => {
       if (draggingRef.current) {
         const d = draggingRef.current;
-        const dx = px(e.clientX - d.startX);
-        const dy = px(e.clientY - d.startY);
+        const zoom = zoomRef.current || 1;
+        const dx = px((e.clientX - d.startX) / zoom);
+        const dy = px((e.clientY - d.startY) / zoom);
         setLayout((prev) => {
           const el = prev.elements.find((el) => el.id === d.id);
           if (!el) return prev;
@@ -634,8 +702,9 @@ const BingoCardsBuilderTab: React.FC = () => {
         });
       } else if (resizingRef.current) {
         const r = resizingRef.current;
-        const dx = px(e.clientX - r.startX);
-        const dy = px(e.clientY - r.startY);
+        const zoom = zoomRef.current || 1;
+        const dx = px((e.clientX - r.startX) / zoom);
+        const dy = px((e.clientY - r.startY) / zoom);
         setLayout((prev) => {
           const target = prev.elements.find((el) => el.id === r.id);
           if (!target) return prev;
@@ -1431,143 +1500,201 @@ const BingoCardsBuilderTab: React.FC = () => {
         </div>
 
         {/* ─ Canvas ─ */}
-        <div className="flex-1 bg-muted overflow-auto flex items-start justify-center p-3 sm:p-6 min-w-0">
-          <div
-            style={{
-              width: canvasW,
-              height: canvasH,
-              position: 'relative',
-              flexShrink: 0,
-              backgroundColor: layout.background.color,
-              backgroundImage: layout.background.imageData
-                ? `url(${layout.background.imageData})`
-                : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-              userSelect: 'none',
-            }}
-            onClick={() => setSelectedId(null)}
-          >
-            {/* Background image opacity overlay */}
-            {layout.background.imageData && layout.background.imageOpacity !== undefined && layout.background.imageOpacity < 1 && (
+        <div className="flex-1 bg-muted min-w-0 flex flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-border/50 bg-muted/70">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Visualização da cartela
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7"
+                onClick={handleZoomOut}
+                disabled={canvasZoom <= ZOOM_MIN + 0.01}
+                title="Diminuir zoom"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={handleZoomReset}
+                title="Zoom 100%"
+              >
+                {Math.round(canvasZoom * 100)}%
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7"
+                onClick={handleZoomIn}
+                disabled={canvasZoom >= ZOOM_MAX - 0.01}
+                title="Aumentar zoom"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant={autoZoom ? 'default' : 'outline'}
+                className="h-7 px-2 text-xs"
+                onClick={handleZoomFit}
+                title="Ajustar para caber na tela"
+              >
+                Ajustar
+              </Button>
+            </div>
+          </div>
+          <div ref={canvasContainerRef} className="flex-1 overflow-auto flex items-start justify-center p-3 sm:p-6 min-w-0">
+            <div
+              style={{
+                width: canvasW * canvasZoom,
+                height: canvasH * canvasZoom,
+                position: 'relative',
+                flexShrink: 0,
+              }}
+            >
               <div
                 style={{
-                  position: 'absolute', inset: 0,
-                  background: layout.background.color,
-                  opacity: 1 - (layout.background.imageOpacity ?? 1),
-                  pointerEvents: 'none',
+                  width: canvasW,
+                  height: canvasH,
+                  position: 'absolute',
+                  inset: 0,
+                  transform: `scale(${canvasZoom})`,
+                  transformOrigin: 'top left',
+                  backgroundColor: layout.background.color,
+                  backgroundImage: layout.background.imageData
+                    ? `url(${layout.background.imageData})`
+                    : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+                  userSelect: 'none',
                 }}
-              />
-            )}
+                onClick={() => setSelectedId(null)}
+              >
+                {/* Background image opacity overlay */}
+                {layout.background.imageData && layout.background.imageOpacity !== undefined && layout.background.imageOpacity < 1 && (
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0,
+                      background: layout.background.color,
+                      opacity: 1 - (layout.background.imageOpacity ?? 1),
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
 
-            {/* Canvas elements */}
-            {layout.elements.filter(el => !(rifaOnly && el.type === 'bingo_grid')).map((el) => {
-              const isSelected = selectedId === el.id;
-              return (
-                <div
-                  key={el.id}
-                  style={{
-                    position: 'absolute',
-                    left: mm(el.x),
-                    top: mm(el.y),
-                    width: mm(el.width),
-                    height: mm(el.height),
-                    cursor: 'move',
-                    outline: isSelected ? '2px solid #3b82f6' : undefined,
-                    outlineOffset: 1,
-                    boxSizing: 'border-box',
-                    overflow: 'hidden',
-                    touchAction: 'none',
-                    backgroundColor: el.backgroundColor && el.backgroundColor !== 'transparent'
-                      ? el.backgroundColor : undefined,
-                  }}
-                  onPointerDown={(e) => handleElementPointerDown(e, el.id)}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Content */}
-                  {el.type === 'card_number' && (
+                {/* Canvas elements */}
+                {layout.elements.filter(el => !(rifaOnly && el.type === 'bingo_grid')).map((el) => {
+                  const isSelected = selectedId === el.id;
+                  return (
                     <div
+                      key={el.id}
                       style={{
-                        width: '100%', height: '100%',
-                        display: 'flex', alignItems: 'center',
-                        justifyContent: el.textAlign === 'center' ? 'center'
-                          : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
-                        fontSize: el.fontSize,
-                        fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
-                        color: el.color ?? '#1e3a8a',
-                        whiteSpace: 'nowrap',
+                        position: 'absolute',
+                        left: mm(el.x),
+                        top: mm(el.y),
+                        width: mm(el.width),
+                        height: mm(el.height),
+                        cursor: 'move',
+                        outline: isSelected ? '2px solid #3b82f6' : undefined,
+                        outlineOffset: 1,
+                        boxSizing: 'border-box',
                         overflow: 'hidden',
+                        touchAction: 'none',
+                        backgroundColor: el.backgroundColor && el.backgroundColor !== 'transparent'
+                          ? el.backgroundColor : undefined,
                       }}
+                      onPointerDown={(e) => handleElementPointerDown(e, el.id)}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {el.prefix ?? 'Cartela '}
-                      {previewCard
-                        ? previewCard.cartelaNumero.toString().padStart(3, '0')
-                        : '001'}
+                      {/* Content */}
+                      {el.type === 'card_number' && (
+                        <div
+                          style={{
+                            width: '100%', height: '100%',
+                            display: 'flex', alignItems: 'center',
+                            justifyContent: el.textAlign === 'center' ? 'center'
+                              : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
+                            fontSize: el.fontSize,
+                            fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
+                            color: el.color ?? '#1e3a8a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {el.prefix ?? 'Cartela '}
+                          {previewCard
+                            ? previewCard.cartelaNumero.toString().padStart(3, '0')
+                            : '001'}
+                        </div>
+                      )}
+
+                      {el.type === 'bingo_grid' && !rifaOnly && (
+                        <BingoGridPreview el={el} card={previewCard} scale={SCALE} numeroPremios={numeroPremios} gridCols={gridCols} gridRows={gridRows} />
+                      )}
+
+                      {el.type === 'text' && (
+                        <div
+                          style={{
+                            width: '100%', height: '100%',
+                            display: 'flex', alignItems: 'center',
+                            justifyContent: el.textAlign === 'center' ? 'center'
+                              : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
+                            fontSize: el.fontSize,
+                            fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
+                            color: el.color ?? '#111827',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {el.content}
+                        </div>
+                      )}
+
+                      {el.type === 'barcode' && (
+                        <BarcodePreview el={el} cartelaNumero={previewCard?.cartelaNumero ?? 1} />
+                      )}
+
+                      {(el.type === 'buyer_name' || el.type === 'buyer_address' || el.type === 'buyer_city' || el.type === 'buyer_phone') && (
+                        <div
+                          style={{
+                            width: '100%', height: '100%',
+                            display: 'flex', alignItems: 'center',
+                            justifyContent: el.textAlign === 'center' ? 'center'
+                              : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
+                            fontSize: el.fontSize,
+                            fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
+                            color: el.color ?? '#9ca3af',
+                            fontStyle: 'italic',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            borderBottom: '1px dashed #9ca3af',
+                          }}
+                        >
+                          {BUYER_ELEMENT_LABELS[el.type]}
+                        </div>
+                      )}
+
+                      {/* Resize handles (only on selected) */}
+                      {isSelected && (
+                        <ResizeHandles
+                          onPointerDown={(e, h) => handleResizePointerDown(e, el.id, h)}
+                          onDragPointerDown={(e) => handleElementPointerDown(e, el.id)}
+                          size={handleSize}
+                          offset={handleOffset}
+                          borderWidth={handleBorder}
+                          radius={handleRadius}
+                          showDragHandle
+                        />
+                      )}
                     </div>
-                  )}
-
-                  {el.type === 'bingo_grid' && !rifaOnly && (
-                    <BingoGridPreview el={el} card={previewCard} scale={SCALE} numeroPremios={numeroPremios} gridCols={gridCols} gridRows={gridRows} />
-                  )}
-
-                  {el.type === 'text' && (
-                    <div
-                      style={{
-                        width: '100%', height: '100%',
-                        display: 'flex', alignItems: 'center',
-                        justifyContent: el.textAlign === 'center' ? 'center'
-                          : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
-                        fontSize: el.fontSize,
-                        fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
-                        color: el.color ?? '#111827',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {el.content}
-                    </div>
-                  )}
-
-                  {el.type === 'barcode' && (
-                    <BarcodePreview el={el} cartelaNumero={previewCard?.cartelaNumero ?? 1} />
-                  )}
-
-                  {(el.type === 'buyer_name' || el.type === 'buyer_address' || el.type === 'buyer_city' || el.type === 'buyer_phone') && (
-                    <div
-                      style={{
-                        width: '100%', height: '100%',
-                        display: 'flex', alignItems: 'center',
-                        justifyContent: el.textAlign === 'center' ? 'center'
-                          : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
-                        fontSize: el.fontSize,
-                        fontWeight: el.fontWeight === 'bold' ? 'bold' : 'normal',
-                        color: el.color ?? '#9ca3af',
-                        fontStyle: 'italic',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        borderBottom: '1px dashed #9ca3af',
-                      }}
-                    >
-                      {BUYER_ELEMENT_LABELS[el.type]}
-                    </div>
-                  )}
-
-                  {/* Resize handles (only on selected) */}
-                  {isSelected && (
-                    <ResizeHandles
-                      onPointerDown={(e, h) => handleResizePointerDown(e, el.id, h)}
-                      onDragPointerDown={(e) => handleElementPointerDown(e, el.id)}
-                      size={handleSize}
-                      offset={handleOffset}
-                      borderWidth={handleBorder}
-                      radius={handleRadius}
-                      showDragHandle
-                    />
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
