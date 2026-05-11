@@ -209,12 +209,15 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const sorteio = sorteios.find(s => s.id === id);
       if (!sorteio) return;
       
-      await callApi('updateSorteio', { id, ...sorteio, ...updates });
+      const result = await callApi('updateSorteio', { id, ...sorteio, ...updates });
+      const updatedSorteio = result.data?.[0] as Sorteio | undefined;
       toast({ title: "Sorteio atualizado!" });
       await loadSorteios();
       
       if (sorteioAtivo?.id === id) {
-        setSorteioAtivoState(prev => prev ? { ...prev, ...updates } : null);
+        setSorteioAtivoState(prev => updatedSorteio || (prev ? { ...prev, ...updates } : null));
+        const cartelasResult = await callApi('getCartelas', { sorteio_id: id, include_grades: false });
+        setCartelas(cartelasResult.data || []);
       }
     } catch (error: unknown) {
       console.error('Error updating sorteio:', error);
@@ -368,8 +371,13 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     
     try {
       setIsLoading(true);
-      await callApi('gerarCartelas', { sorteio_id: sorteioAtivo.id, quantidade });
-      toast({ title: `${quantidade} cartelas geradas!` });
+      const result = await callApi('gerarCartelas', { sorteio_id: sorteioAtivo.id, quantidade });
+      const info = result.data?.[0];
+      const quantidadeFinal = Number(info?.quantidade ?? quantidade);
+      const adicionadas = Number(info?.adicionadas ?? quantidade);
+      setSorteioAtivoState(prev => prev ? { ...prev, quantidade_cartelas: quantidadeFinal } : prev);
+      setSorteios(prev => prev.map(s => s.id === sorteioAtivo.id ? { ...s, quantidade_cartelas: quantidadeFinal } : s));
+      toast({ title: adicionadas > 0 ? `${adicionadas} nova(s) cartela(s) gerada(s)!` : 'Nenhuma cartela existente foi alterada.' });
       await loadCartelas();
     } catch (error: unknown) {
       console.error('Error generating cartelas:', error);
@@ -429,14 +437,17 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const createCartela = useCallback(async (numerosGrade: number[]) => {
     if (!sorteioAtivo) return;
     try {
-      await callApi('createCartela', { sorteio_id: sorteioAtivo.id, numeros_grade: numerosGrade });
+      const result = await callApi('createCartela', { sorteio_id: sorteioAtivo.id, numeros_grade: numerosGrade });
+      const numeroCriado = Number(result.data?.[0]?.numero || 0);
       toast({ title: "Cartela criada!" });
       await loadCartelas();
+      await loadSorteios();
+      setSorteioAtivoState(prev => prev ? { ...prev, quantidade_cartelas: Math.max(prev.quantidade_cartelas || 0, numeroCriado) } : prev);
     } catch (error: unknown) {
       console.error('Error creating cartela:', error);
       toast({ title: "Erro ao criar cartela", description: getErrorMessage(error), variant: "destructive" });
     }
-  }, [sorteioAtivo, callApi, toast, loadCartelas]);
+  }, [sorteioAtivo, callApi, toast, loadCartelas, loadSorteios]);
 
   // ================== ATRIBUIÇÕES ==================
   const loadAtribuicoes = useCallback(async () => {

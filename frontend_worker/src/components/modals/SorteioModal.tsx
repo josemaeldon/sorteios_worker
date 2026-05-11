@@ -634,6 +634,11 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                 placeholder="Ex: 1000"
                 required
               />
+              {editingId && (
+                <p className="text-xs text-muted-foreground">
+                  Ao aumentar a quantidade, o sistema cria apenas as novas cartelas e preserva as já geradas.
+                </p>
+              )}
             </div>
           </div>
 

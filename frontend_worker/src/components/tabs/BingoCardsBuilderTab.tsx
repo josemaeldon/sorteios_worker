@@ -526,28 +526,37 @@ const BingoCardsBuilderTab: React.FC = () => {
   const selectedEl = layout.elements.find((e) => e.id === selectedId) ?? null;
   const previewCard = cards[previewIndex] ?? null;
   const totalCards = sorteioAtivo?.quantidade_cartelas ?? cartelas.length ?? 10;
+  const maxGeneratedNumber = Math.max(
+    cards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0),
+    cartelas.reduce((max, cartela) => (
+      cartela.numeros_grade && cartela.numeros_grade.length > 0
+        ? Math.max(max, cartela.numero)
+        : max
+    ), 0),
+  );
+  const canAddMissingCards = totalCards > maxGeneratedNumber;
+  const getSavedCardsFromCartelas = useCallback(() => {
+    const expectedCells = gridCols * gridRows;
+    return cartelas
+      .filter(c => c.numeros_grade && c.numeros_grade.length > 0)
+      .sort((a, b) => a.numero - b.numero)
+      .filter(c => c.numeros_grade!.every(flat => flat.length === expectedCells))
+      .map(c => {
+        const grids = c.numeros_grade!.map(flat =>
+          Array.from({ length: gridRows }, (_, row) => flat.slice(row * gridCols, row * gridCols + gridCols))
+        );
+        return { cartelaNumero: c.numero, grids };
+      });
+  }, [cartelas, gridCols, gridRows]);
 
   // ─── Restore saved cards from DB on mount ─────────────────────────────────
   useEffect(() => {
     if (hasRestoredRef.current) return;
-    const saved = cartelas
-      .filter(c => c.numeros_grade && c.numeros_grade.length > 0)
-      .sort((a, b) => a.numero - b.numero);
+    const saved = getSavedCardsFromCartelas();
     if (saved.length === 0) return;
     hasRestoredRef.current = true;
-    const expectedCells = gridCols * gridRows;
-    setCards(
-      saved
-        .filter(c => c.numeros_grade!.every(flat => flat.length === expectedCells))
-        .map(c => {
-          // numeros_grade stores flat arrays per prize; reshape each to a gridRows×gridCols grid
-          const grids = c.numeros_grade!.map(flat =>
-            Array.from({ length: gridRows }, (_, row) => flat.slice(row * gridCols, row * gridCols + gridCols))
-          );
-          return { cartelaNumero: c.numero, grids };
-        }),
-    );
-  }, [cartelas, gridCols, gridRows]);
+    setCards(saved);
+  }, [getSavedCardsFromCartelas]);
 
   // ─── Auto-load the existing layout for the current sorteio (Req 4) ─────────
   useEffect(() => {
@@ -560,8 +569,11 @@ const BingoCardsBuilderTab: React.FC = () => {
     try {
       const parsedLayout: CanvasLayout = JSON.parse(item.layout_data);
       const parsedCards: BingoCardGrid[] = JSON.parse(item.cards_data);
+      const savedCards = getSavedCardsFromCartelas();
+      const parsedMax = parsedCards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
+      const savedMax = savedCards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
       setLayout(parsedLayout);
-      setCards(parsedCards);
+      setCards(savedMax > parsedMax ? savedCards : parsedCards);
       setPreviewIndex(0);
       setActiveLayoutId(item.id);
       hasRestoredRef.current = true;
@@ -569,7 +581,7 @@ const BingoCardsBuilderTab: React.FC = () => {
       // ignore parse errors
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartelaLayouts]);
+  }, [cartelaLayouts, getSavedCardsFromCartelas, sorteioAtivo]);
 
   // ─── Layout helpers ────────────────────────────────────────────────────────
   const updateElement = useCallback((id: string, patch: Partial<CanvasElement>) => {
@@ -795,16 +807,15 @@ const BingoCardsBuilderTab: React.FC = () => {
 
   // ─── Generate cards ────────────────────────────────────────────────────────
   const doGenerate = async () => {
-    const maxExistingNumber = cards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
-    const canGenerateIncremental = maxExistingNumber > 0 && totalCards > maxExistingNumber;
+    const canGenerateIncremental = maxGeneratedNumber > 0 && totalCards > maxGeneratedNumber;
 
     setIsSaving(true);
     try {
       if (canGenerateIncremental) {
-        const missingCount = totalCards - maxExistingNumber;
+        const missingCount = totalCards - maxGeneratedNumber;
         const generatedMissing = generateAllBingoCards(missingCount, numeroPremios, gridCols, gridRows).map((card, idx) => ({
           ...card,
-          cartelaNumero: maxExistingNumber + idx + 1,
+          cartelaNumero: maxGeneratedNumber + idx + 1,
         }));
 
         const mergedCards = [...cards, ...generatedMissing].sort((a, b) => a.cartelaNumero - b.cartelaNumero);
@@ -840,8 +851,7 @@ const BingoCardsBuilderTab: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    const maxExistingNumber = cards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
-    if (maxExistingNumber > 0 && totalCards > maxExistingNumber) {
+    if (maxGeneratedNumber > 0 && totalCards > maxGeneratedNumber) {
       await doGenerate();
       return;
     }
@@ -1267,7 +1277,7 @@ const BingoCardsBuilderTab: React.FC = () => {
             <List className="w-4 h-4" />
             Minhas Cartelas {cartelaLayouts.length > 0 && `(${cartelaLayouts.length})`}
           </Button>
-          <Button onClick={handleGenerate} variant="outline" className="gap-2" disabled={isSaving || hasValidatedCards}>
+          <Button onClick={handleGenerate} variant="outline" className="gap-2" disabled={isSaving || (hasValidatedCards && !canAddMissingCards)}>
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Gerar
           </Button>
@@ -1300,7 +1310,7 @@ const BingoCardsBuilderTab: React.FC = () => {
         <div className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-xl text-sm">
           <X className="w-5 h-5 text-destructive flex-shrink-0" />
           <span className="text-destructive">
-            Existem <strong>{cartelasValidadas.length}</strong> cartela(s) validada(s). Novos números só podem ser gerados após a exclusão das cartelas validadas.
+            Existem <strong>{cartelasValidadas.length}</strong> cartela(s) validada(s). A geração completa está bloqueada, mas novas cartelas adicionais podem ser geradas sem alterar as anteriores.
           </span>
         </div>
       )}

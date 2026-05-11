@@ -2711,14 +2711,18 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         return res.json({ data: [{ success: true }] });
 
       case 'gerarCartelas': {
-        await client.query('DELETE FROM cartelas WHERE sorteio_id = $1', [data.sorteio_id]);
-        
         const batchSize = 500;
         const totalCartelas = Number(data.quantidade || 0);
+        const maxCartelaResult = await client.query(
+          'SELECT COALESCE(MAX(numero), 0) AS max_numero FROM cartelas WHERE sorteio_id = $1',
+          [data.sorteio_id]
+        );
+        const maxNumeroExistente = Number(maxCartelaResult.rows[0]?.max_numero || 0);
+        const quantidadeFinal = Math.max(totalCartelas, maxNumeroExistente);
         
-        for (let batch = 0; batch < Math.ceil(totalCartelas / batchSize); batch++) {
-          const startNum = batch * batchSize + 1;
-          const endNum = Math.min((batch + 1) * batchSize, totalCartelas);
+        for (let batch = 0; batch < Math.ceil(Math.max(0, totalCartelas - maxNumeroExistente) / batchSize); batch++) {
+          const startNum = maxNumeroExistente + (batch * batchSize) + 1;
+          const endNum = Math.min(maxNumeroExistente + ((batch + 1) * batchSize), totalCartelas);
           
           const values = [];
           const params = [data.sorteio_id];
@@ -2737,8 +2741,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             );
           }
         }
+
+        await client.query(
+          'UPDATE sorteios SET quantidade_cartelas = $2, updated_at = NOW() WHERE id = $1',
+          [data.sorteio_id, quantidadeFinal]
+        );
         
-        return res.json({ data: [{ success: true, quantidade: totalCartelas }] });
+        return res.json({
+          data: [{
+            success: true,
+            quantidade: quantidadeFinal,
+            adicionadas: Math.max(0, totalCartelas - maxNumeroExistente)
+          }]
+        });
       }
 
       case 'salvarNumerosCartelas': {
@@ -2802,6 +2817,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         await client.query(
           'INSERT INTO cartelas (sorteio_id, numero, status, numeros_grade) VALUES ($1, $2, $3, $4)',
           [data.sorteio_id, nextNum, 'disponivel', numerosGradeJson]
+        );
+        await client.query(
+          'UPDATE sorteios SET quantidade_cartelas = GREATEST(COALESCE(quantidade_cartelas, 0), $2), updated_at = NOW() WHERE id = $1',
+          [data.sorteio_id, nextNum]
         );
         return res.json({ data: [{ success: true, numero: nextNum }] });
       }
