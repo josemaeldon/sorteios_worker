@@ -1510,17 +1510,20 @@ app.post('/api', checkBasicAuth, async (req, res) => {
   const { action, data = {} } = req.body;
   
   console.log(`API Call: ${action}`);
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+
+  if (!rateLimitCheck(ip, `api:${action}`, 300, 60000)) {
+    return res.status(429).json({ error: 'Muitas solicitações. Aguarde um momento e tente novamente.' });
+  }
 
   // Rate-limit sensitive public actions (10 requests per minute per IP)
   if (['login', 'publicRegister', 'cadastrarComprador', 'loginComprador', 'createStripeCheckoutCartela', 'confirmStripeCheckoutCartela', 'createStripeCheckoutMultiCartela', 'confirmStripeCheckoutMultiCartela'].includes(action)) {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     if (!rateLimitCheck(ip, action, 10, 60000)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um momento e tente novamente.' });
     }
   }
 
   if (['exportSorteioBackup', 'importSorteioBackup'].includes(action)) {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     if (!rateLimitCheck(ip, action, 5, 60000)) {
       return res.status(429).json({ error: 'Muitas solicitações de backup. Aguarde um momento e tente novamente.' });
     }
@@ -2203,7 +2206,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             );
           }
 
-          const cartelaBatchSize = 400; // keep query size under common parameter limits
+          const cartelaBatchSize = 400; // keep query size under PostgreSQL's 65535 parameter limit
           for (let batch = 0; batch < Math.ceil(cartelas.length / cartelaBatchSize); batch++) {
             const slice = cartelas.slice(batch * cartelaBatchSize, (batch + 1) * cartelaBatchSize);
             if (slice.length === 0) continue;
@@ -2320,7 +2323,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.json({ data: { sorteio_id: newSorteioId } });
         } catch (err) {
           await client.query('ROLLBACK');
-          console.error('Backup import error:', err.message);
+          console.error('Backup import error:', err?.stack || err);
           return res.status(500).json({ error: 'Erro ao importar backup.' });
         }
       }

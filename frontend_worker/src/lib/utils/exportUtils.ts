@@ -1,5 +1,5 @@
 import { Venda, Cartela, Vendedor, Atribuicao, Sorteio } from '@/types/bingo';
-import { formatarMoeda, formatarDataHora, getStatusLabel, formatarNumeroCartela } from './formatters';
+import { formatarMoeda, formatarDataHora, getStatusLabel, formatarNumeroCartela, sanitizeFilename } from './formatters';
 
 type JsPdfCtor = (typeof import('jspdf'))['default'];
 type AutoTableFn = (typeof import('jspdf-autotable'))['default'];
@@ -44,6 +44,7 @@ const formatPremio = (premio: string | number): string => {
 export const exportVendasPDF = async (vendas: Venda[], sorteio: Sorteio, vendedores: Vendedor[]) => {
   const { jsPDF, autoTable } = await loadPdfTools();
   const doc = new jsPDF();
+  const safeNome = sanitizeFilename(sorteio.nome);
   
   // Header
   doc.setFontSize(20);
@@ -94,12 +95,13 @@ export const exportVendasPDF = async (vendas: Venda[], sorteio: Sorteio, vendedo
     alternateRowStyles: { fillColor: [245, 247, 250] },
   });
   
-  doc.save(`vendas-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`vendas-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 export const exportCartelasPDF = async (cartelas: Cartela[], sorteio: Sorteio) => {
   const { jsPDF, autoTable } = await loadPdfTools();
   const doc = new jsPDF();
+  const safeNome = sanitizeFilename(sorteio.nome);
   
   // Header
   doc.setFontSize(20);
@@ -140,12 +142,13 @@ export const exportCartelasPDF = async (cartelas: Cartela[], sorteio: Sorteio) =
     alternateRowStyles: { fillColor: [245, 247, 250] },
   });
   
-  doc.save(`cartelas-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`cartelas-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 export const exportAtribuicoesPDF = async (atribuicoes: Atribuicao[], sorteio: Sorteio, vendedores: Vendedor[]) => {
   const { jsPDF, autoTable } = await loadPdfTools();
   const doc = new jsPDF();
+  const safeNome = sanitizeFilename(sorteio.nome);
   
   // Header
   doc.setFontSize(20);
@@ -193,12 +196,13 @@ export const exportAtribuicoesPDF = async (atribuicoes: Atribuicao[], sorteio: S
     alternateRowStyles: { fillColor: [245, 247, 250] },
   });
   
-  doc.save(`atribuicoes-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`atribuicoes-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 export const exportVendedoresPDF = async (vendedores: Vendedor[], atribuicoes: Atribuicao[], vendas: Venda[], sorteio: Sorteio) => {
   const { jsPDF, autoTable } = await loadPdfTools();
   const doc = new jsPDF();
+  const safeNome = sanitizeFilename(sorteio.nome);
   
   // Header
   doc.setFontSize(20);
@@ -235,12 +239,13 @@ export const exportVendedoresPDF = async (vendedores: Vendedor[], atribuicoes: A
     alternateRowStyles: { fillColor: [245, 247, 250] },
   });
   
-  doc.save(`vendedores-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`vendedores-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 // Excel Export Functions
 export const exportVendasExcel = async (vendas: Venda[], sorteio: Sorteio, vendedores: Vendedor[]) => {
   const XLSX = await loadXlsx();
+  const safeNome = sanitizeFilename(sorteio.nome);
   const data = vendas.map(venda => {
     const vendedor = vendedores.find(v => v.id === venda.vendedor_id);
     const cartelas = parseCartelas(venda.numeros_cartelas);
@@ -270,11 +275,12 @@ export const exportVendasExcel = async (vendas: Venda[], sorteio: Sorteio, vende
   const colWidths = Object.keys(data[0] || {}).map(key => ({ wch: Math.max(key.length, 15) }));
   ws['!cols'] = colWidths;
   
-  XLSX.writeFile(wb, `vendas-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `vendas-${safeNome}-${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 export const exportCartelasExcel = async (cartelas: Cartela[], sorteio: Sorteio) => {
   const XLSX = await loadXlsx();
+  const safeNome = sanitizeFilename(sorteio.nome);
   const data = cartelas.map(cartela => ({
     'Número': formatarNumeroCartela(cartela.numero),
     'Status': getStatusLabel(cartela.status),
@@ -288,11 +294,12 @@ export const exportCartelasExcel = async (cartelas: Cartela[], sorteio: Sorteio)
   const colWidths = [{ wch: 10 }, { wch: 15 }, { wch: 25 }];
   ws['!cols'] = colWidths;
   
-  XLSX.writeFile(wb, `cartelas-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `cartelas-${safeNome}-${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 export const exportAtribuicoesExcel = async (atribuicoes: Atribuicao[], sorteio: Sorteio, vendedores: Vendedor[]) => {
   const XLSX = await loadXlsx();
+  const safeNome = sanitizeFilename(sorteio.nome);
   const data = atribuicoes.flatMap(atrib => {
     const vendedor = vendedores.find(v => v.id === atrib.vendedor_id);
     return atrib.cartelas.map(cartela => ({
@@ -311,11 +318,12 @@ export const exportAtribuicoesExcel = async (atribuicoes: Atribuicao[], sorteio:
   const colWidths = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
   ws['!cols'] = colWidths;
   
-  XLSX.writeFile(wb, `atribuicoes-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `atribuicoes-${safeNome}-${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 export const exportVendedoresExcel = async (vendedores: Vendedor[], atribuicoes: Atribuicao[], vendas: Venda[], sorteio: Sorteio) => {
   const XLSX = await loadXlsx();
+  const safeNome = sanitizeFilename(sorteio.nome);
   const data = vendedores.map(vendedor => {
     const atribuicao = atribuicoes.find(a => a.vendedor_id === vendedor.id);
     const vendasVendedor = vendas.filter(v => v.vendedor_id === vendedor.id);
@@ -340,7 +348,7 @@ export const exportVendedoresExcel = async (vendedores: Vendedor[], atribuicoes:
   const colWidths = Object.keys(data[0] || {}).map(key => ({ wch: Math.max(key.length, 15) }));
   ws['!cols'] = colWidths;
   
-  XLSX.writeFile(wb, `vendedores-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `vendedores-${safeNome}-${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 // Complete Report PDF
@@ -353,6 +361,7 @@ export const exportRelatorioCompletoPDF = async (
 ) => {
   const { jsPDF, autoTable } = await loadPdfTools();
   const doc = new jsPDF();
+  const safeNome = sanitizeFilename(sorteio.nome);
   
   // Cover page
   doc.setFontSize(28);
@@ -476,7 +485,7 @@ export const exportRelatorioCompletoPDF = async (
     headStyles: { fillColor: [59, 130, 246] },
   });
   
-  doc.save(`relatorio-completo-${sorteio.nome.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`relatorio-completo-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 // Per-seller report PDF
@@ -590,7 +599,7 @@ export const exportRelatorioVendedorPDF = async (
     });
   }
 
-  const safeName = vendedor.nome.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeName = sanitizeFilename(vendedor.nome);
   doc.save(`relatorio-vendedor-${safeName}-${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
@@ -642,6 +651,6 @@ export const exportRelatorioVendedorExcel = async (
   wsVendas['!cols'] = (vendasData.length > 0 ? Object.keys(vendasData[0]) : defaultVendasCols).map(k => ({ wch: Math.max(k.length, 15) }));
   XLSX.utils.book_append_sheet(wb, wsVendas, 'Vendas');
 
-  const safeName = vendedor.nome.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeName = sanitizeFilename(vendedor.nome);
   XLSX.writeFile(wb, `relatorio-vendedor-${safeName}-${new Date().toISOString().split('T')[0]}.xlsx`);
 };

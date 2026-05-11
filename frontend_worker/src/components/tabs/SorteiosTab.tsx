@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Sorteio } from '@/types/bingo';
 import SorteioCard from '@/components/SorteioCard';
 import SorteioModal from '@/components/modals/SorteioModal';
+import { sanitizeFilename } from '@/lib/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -112,11 +113,7 @@ const SorteiosTab: React.FC = () => {
 
     try {
       const backup = await exportSorteioBackup(id);
-      const safeName = sorteio.nome
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeName = sanitizeFilename(sorteio.nome);
       const fileName = `backup-sorteio-${safeName || 'sorteio'}-${new Date().toISOString().split('T')[0]}.json`;
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
