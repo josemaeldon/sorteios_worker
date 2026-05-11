@@ -414,7 +414,7 @@ const AtribuicoesTab: React.FC = () => {
                                           size="sm" 
                                           variant="outline"
                                           onClick={() => handleExtraviada(atribuicao.id, cartela.numero)}
-                                          className="gap-1 border-orange-400 text-orange-600 hover:bg-orange-50"
+                                          className="gap-1 border-orange-400 text-orange-600 hover:border-orange-600 hover:bg-orange-600 hover:text-white"
                                           title="Marcar como extraviada"
                                         >
                                           <AlertTriangle className="w-4 h-4" />
