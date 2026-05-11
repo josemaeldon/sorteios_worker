@@ -1512,7 +1512,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
   console.log(`API Call: ${action}`);
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
-  if (!rateLimitCheck(ip, `api:${action}`, 300, 60000)) {
+  if (!rateLimitCheck(ip, `api:${action}`, 120, 60000)) {
     return res.status(429).json({ error: 'Muitas solicitações. Aguarde um momento e tente novamente.' });
   }
 
@@ -2047,6 +2047,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(500).json({ error: 'Não foi possível gerar um identificador único para a loja.' });
         }
 
+        const CARTELA_IMPORT_BATCH_SIZE = 400; // keep query size under PostgreSQL's 65535 parameter limit
         const vendedores = normalizeArray(backup.vendedores);
         const cartelas = normalizeArray(backup.cartelas);
         const atribuicoes = normalizeArray(backup.atribuicoes);
@@ -2206,7 +2207,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             );
           }
 
-          const cartelaBatchSize = 400; // keep query size under PostgreSQL's 65535 parameter limit
+          const cartelaBatchSize = CARTELA_IMPORT_BATCH_SIZE;
           for (let batch = 0; batch < Math.ceil(cartelas.length / cartelaBatchSize); batch++) {
             const slice = cartelas.slice(batch * cartelaBatchSize, (batch + 1) * cartelaBatchSize);
             if (slice.length === 0) continue;

@@ -161,7 +161,18 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
     setIsImporting(true);
     try {
       const text = await backupFile.text();
-      const parsed = JSON.parse(text);
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(text);
+      } catch (parseError) {
+        console.error('Backup parse error:', parseError);
+        toast({
+          title: "Arquivo inválido",
+          description: "O arquivo selecionado não é um JSON válido.",
+          variant: "destructive"
+        });
+        return;
+      }
 
       if (!parsed?.sorteio) {
         toast({
