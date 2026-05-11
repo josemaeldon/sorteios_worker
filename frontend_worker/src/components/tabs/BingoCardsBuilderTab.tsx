@@ -668,24 +668,29 @@ const BingoCardsBuilderTab: React.FC = () => {
     setSelectedId(null);
   };
 
-  const handleZoomIn = () => {
+  const setZoomManually = (value: number) => {
     setAutoZoom(false);
-    setZoom(canvasZoom + ZOOM_STEP);
+    setZoom(value);
+  };
+
+  const handleZoomIn = () => {
+    setZoomManually(canvasZoom + ZOOM_STEP);
   };
 
   const handleZoomOut = () => {
-    setAutoZoom(false);
-    setZoom(canvasZoom - ZOOM_STEP);
+    setZoomManually(canvasZoom - ZOOM_STEP);
   };
 
   const handleZoomReset = () => {
-    setAutoZoom(false);
-    setZoom(1);
+    setZoomManually(1);
   };
 
   const handleZoomFit = () => {
+    if (autoZoom) {
+      applyFitZoom();
+      return;
+    }
     setAutoZoom(true);
-    applyFitZoom();
   };
 
   // ─── Global pointer events (drag & resize) ─────────────────────────────────
