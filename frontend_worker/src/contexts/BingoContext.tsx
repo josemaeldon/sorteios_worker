@@ -52,6 +52,8 @@ interface BingoContextType {
   addSorteio: (sorteio: Omit<Sorteio, 'id' | 'created_at' | 'updated_at'>, targetUserId?: string) => Promise<void>;
   updateSorteio: (id: string, sorteio: Partial<Sorteio>) => Promise<void>;
   deleteSorteio: (id: string) => Promise<void>;
+  exportSorteioBackup: (sorteioId: string) => Promise<Record<string, unknown>>;
+  importSorteioBackup: (backup: Record<string, unknown>, targetUserId?: string) => Promise<void>;
   
   // CRUD Operations - Vendedores
   loadVendedores: () => Promise<void>;
@@ -247,6 +249,45 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setIsLoading(false);
     }
   }, [sorteioAtivo, callApi, toast, loadSorteios]);
+
+  const exportSorteioBackup = useCallback(async (sorteioId: string) => {
+    try {
+      setIsLoading(true);
+      const result = await callApi('exportSorteioBackup', { sorteio_id: sorteioId });
+      return result.data || {};
+    } catch (error: unknown) {
+      console.error('Error exporting sorteio backup:', error);
+      toast({
+        title: "Erro ao exportar backup",
+        description: getErrorMessage(error),
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callApi, toast]);
+
+  const importSorteioBackup = useCallback(async (backup: Record<string, unknown>, targetUserId?: string) => {
+    try {
+      setIsLoading(true);
+      await callApi('importSorteioBackup', {
+        backup,
+        ...(targetUserId ? { target_user_id: targetUserId } : {})
+      });
+      await loadSorteios();
+    } catch (error: unknown) {
+      console.error('Error importing sorteio backup:', error);
+      toast({
+        title: "Erro ao importar backup",
+        description: getErrorMessage(error),
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callApi, toast, loadSorteios]);
 
   // ================== VENDEDORES ==================
   const loadVendedores = useCallback(async () => {
@@ -878,6 +919,8 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     addSorteio,
     updateSorteio,
     deleteSorteio,
+    exportSorteioBackup,
+    importSorteioBackup,
     loadVendedores,
     addVendedor,
     updateVendedor,

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dice5, Save, Loader2, Plus, Trash2, Gift } from 'lucide-react';
+import { Dice5, Save, Loader2, Plus, Trash2, Gift, Upload } from 'lucide-react';
 
 interface SorteioModalProps {
   isOpen: boolean;
@@ -43,7 +43,7 @@ const PAPER_PRESETS = [
 const RIFA_PAPER_PRESET = PAPER_PRESETS.find(p => p.value === 'Rifa') ?? { label: 'Rifa (210 × 70 mm)', value: 'Rifa', w: 210, h: 70 };
 
 const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId }) => {
-  const { sorteios, addSorteio, updateSorteio } = useBingo();
+  const { sorteios, addSorteio, updateSorteio, importSorteioBackup } = useBingo();
   const { user, getAllUsers } = useAuth();
   const { toast } = useToast();
   
@@ -69,6 +69,9 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
 
   const [isCreating, setIsCreating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [creationMode, setCreationMode] = useState<'novo' | 'backup'>('novo');
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Load active users list for admin and reset targetUserId on close
   useEffect(() => {
@@ -77,11 +80,15 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
     }
     if (!isOpen) {
       setTargetUserId('');
+      setCreationMode('novo');
+      setBackupFile(null);
+      setIsImporting(false);
     }
   }, [isOpen, isAdmin, getAllUsers]);
 
   useEffect(() => {
     if (editingId) {
+      setCreationMode('novo');
       const sorteio = sorteios.find(s => s.id === editingId);
       if (sorteio) {
         // Convert premios from DB or use single premio as array
@@ -135,6 +142,64 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       setProgress(0);
     }
   }, [isOpen]);
+
+  const handleBackupFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setBackupFile(file);
+  };
+
+  const handleImportBackup = async () => {
+    if (!backupFile) {
+      toast({
+        title: "Arquivo não selecionado",
+        description: "Selecione um arquivo de backup para importar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const text = await backupFile.text();
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(text);
+      } catch (parseError) {
+        console.error('Backup parse error:', parseError);
+        toast({
+          title: "Arquivo inválido",
+          description: "O arquivo selecionado não é um JSON válido.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!parsed?.sorteio) {
+        toast({
+          title: "Backup inválido",
+          description: "O arquivo selecionado não contém dados de sorteio válidos.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      await importSorteioBackup(parsed, isAdmin && targetUserId ? targetUserId : undefined);
+      toast({
+        title: "Backup importado",
+        description: "O sorteio foi importado com sucesso."
+      });
+      onClose();
+    } catch (error) {
+      console.error('Backup import error:', error);
+      toast({
+        title: "Erro ao importar backup",
+        description: "Não foi possível importar o arquivo. Verifique o conteúdo e tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // When paper preset changes, update width/height fields
   const handlePapelTamanhoChange = (value: string) => {
@@ -345,6 +410,69 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
           </DialogTitle>
         </DialogHeader>
 
+        {!editingId && (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={creationMode === 'novo' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setCreationMode('novo')}
+            >
+              Criar do zero
+            </Button>
+            <Button
+              type="button"
+              variant={creationMode === 'backup' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setCreationMode('backup')}
+            >
+              Importar backup
+            </Button>
+          </div>
+        )}
+
+        {creationMode === 'backup' && !editingId ? (
+          <div className="space-y-4">
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="target_user">Usuário Proprietário *</Label>
+                <Select value={targetUserId} onValueChange={setTargetUserId}>
+                  <SelectTrigger id="target_user">
+                    <SelectValue placeholder="Selecione um usuário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {usuarios.map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.nome} ({u.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="backup_file">Arquivo de Backup *</Label>
+              <Input
+                id="backup_file"
+                type="file"
+                accept=".json,application/json"
+                onChange={handleBackupFileChange}
+              />
+              <p className="text-xs text-muted-foreground">
+                Selecione o arquivo de backup completo do sorteio.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="w-full gap-2"
+              onClick={handleImportBackup}
+              disabled={isImporting || (isAdmin && !targetUserId)}
+            >
+              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {isImporting ? 'Importando...' : 'Importar Backup'}
+            </Button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {isAdmin && !editingId && (
             <div className="space-y-2">
@@ -359,9 +487,9 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                       {u.nome} ({u.email})
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  </SelectContent>
+                </Select>
+              </div>
           )}
 
           {/* Tipo do Sorteio */}
@@ -630,6 +758,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
             </Button>
           </div>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

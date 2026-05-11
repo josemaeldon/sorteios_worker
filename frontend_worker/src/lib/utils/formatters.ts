@@ -86,3 +86,11 @@ export const formatarTelefone = (telefone: string): string => {
   }
   return telefone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
 };
+
+export const sanitizeFilename = (value: string): string => {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+};

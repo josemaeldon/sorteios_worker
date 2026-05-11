@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Sorteio } from '@/types/bingo';
 import SorteioCard from '@/components/SorteioCard';
 import SorteioModal from '@/components/modals/SorteioModal';
+import { sanitizeFilename } from '@/lib/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,7 +27,8 @@ const SorteiosTab: React.FC = () => {
     sorteioAtivo, 
     setSorteioAtivo, 
     deleteSorteio,
-    setCurrentTab
+    setCurrentTab,
+    exportSorteioBackup
   } = useBingo();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -105,6 +107,32 @@ const SorteiosTab: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
+  const handleBackup = async (id: string) => {
+    const sorteio = sorteios.find(s => s.id === id);
+    if (!sorteio) return;
+
+    try {
+      const backup = await exportSorteioBackup(id);
+      const safeName = sanitizeFilename(sorteio.nome);
+      const fileName = `backup-sorteio-${safeName || 'sorteio'}-${new Date().toISOString().split('T')[0]}.json`;
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Backup gerado",
+        description: `Backup do sorteio "${sorteio.nome}" baixado com sucesso.`
+      });
+    } catch (error) {
+      console.error('Error downloading backup:', error);
+    }
+  };
+
   const confirmDelete = () => {
     if (deletingSorteioId) {
       deleteSorteio(deletingSorteioId);
@@ -137,6 +165,7 @@ const SorteiosTab: React.FC = () => {
           onSelect={handleSelect}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onBackup={handleBackup}
         />
       ))}
     </div>
