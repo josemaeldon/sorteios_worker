@@ -1518,6 +1518,13 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um momento e tente novamente.' });
     }
   }
+
+  if (['exportSorteioBackup', 'importSorteioBackup'].includes(action)) {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!rateLimitCheck(ip, action, 5, 60000)) {
+      return res.status(429).json({ error: 'Muitas solicitações de backup. Aguarde um momento e tente novamente.' });
+    }
+  }
   
   // Check authentication
   const authResult = await checkAuth(req, action);
@@ -2007,17 +2014,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           if (typeof value === 'string' && value.trim()) {
             try {
               const parsed = JSON.parse(value);
-              return Array.isArray(parsed) ? parsed : [value];
+              return Array.isArray(parsed) ? parsed : [];
             } catch {
-              return [value];
+              return [];
             }
           }
           return [];
         };
 
         const sorteioData = backup.sorteio || {};
-        const premiosImport = normalizeJsonArray(sorteioData.premios ?? sorteioData.premio);
-        const premioImport = premiosImport[0] || '';
+        const premiosImport = normalizeJsonArray(sorteioData.premios);
+        const premioFallback = typeof sorteioData.premio === 'string' ? sorteioData.premio : '';
+        const premiosFinal = premiosImport.length > 0 ? premiosImport : (premioFallback ? [premioFallback] : []);
+        const premioImport = premiosFinal[0] || '';
 
         const newSorteioId = crypto.randomUUID();
 
@@ -2025,7 +2034,11 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         let shortIdUnique = false;
         for (let attempt = 0; attempt < 10 && !shortIdUnique; attempt++) {
           const existing = await client.query('SELECT id FROM sorteios WHERE short_id = $1', [shortId]);
-          if (existing.rows.length === 0) { shortIdUnique = true; } else { shortId = generateShortId(); }
+          if (existing.rows.length === 0) {
+            shortIdUnique = true;
+          } else {
+            shortId = generateShortId();
+          }
         }
         if (!shortIdUnique) {
           return res.status(500).json({ error: 'Não foi possível gerar um identificador único para a loja.' });
@@ -2054,7 +2067,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
               sorteioData.nome || 'Sorteio importado',
               sorteioData.data_sorteio || null,
               premioImport,
-              JSON.stringify(premiosImport),
+              JSON.stringify(premiosFinal),
               sorteioData.valor_cartela ?? 0,
               sorteioData.quantidade_cartelas ?? 0,
               sorteioData.status || 'agendado',
@@ -2190,7 +2203,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             );
           }
 
-          const cartelaBatchSize = 400;
+          const cartelaBatchSize = 400; // keep query size under common parameter limits
           for (let batch = 0; batch < Math.ceil(cartelas.length / cartelaBatchSize); batch++) {
             const slice = cartelas.slice(batch * cartelaBatchSize, (batch + 1) * cartelaBatchSize);
             if (slice.length === 0) continue;

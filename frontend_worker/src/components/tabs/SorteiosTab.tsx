@@ -112,7 +112,11 @@ const SorteiosTab: React.FC = () => {
 
     try {
       const backup = await exportSorteioBackup(id);
-      const safeName = sorteio.nome.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+      const safeName = sorteio.nome
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
       const fileName = `backup-sorteio-${safeName || 'sorteio'}-${new Date().toISOString().split('T')[0]}.json`;
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
