@@ -35,6 +35,7 @@ const SCALE = 595 / 210;
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
+const ZOOM_EPSILON = 0.01;
 
 const mm = (v: number) => v * SCALE;   // mm → px
 const px = (v: number) => v / SCALE;   // px → mm
@@ -472,7 +473,7 @@ const BingoCardsBuilderTab: React.FC = () => {
   const setZoom = useCallback((value: number) => {
     setCanvasZoom((prev) => {
       const next = clamp(value, ZOOM_MIN, ZOOM_MAX);
-      return Math.abs(prev - next) < 0.01 ? prev : next;
+      return Math.abs(prev - next) < ZOOM_EPSILON ? prev : next;
     });
   }, []);
 
@@ -1522,7 +1523,7 @@ const BingoCardsBuilderTab: React.FC = () => {
                 variant="outline"
                 className="h-7 w-7"
                 onClick={handleZoomOut}
-                disabled={canvasZoom <= ZOOM_MIN + 0.01}
+                disabled={canvasZoom <= ZOOM_MIN + ZOOM_EPSILON}
                 title="Diminuir zoom"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
@@ -1541,7 +1542,7 @@ const BingoCardsBuilderTab: React.FC = () => {
                 variant="outline"
                 className="h-7 w-7"
                 onClick={handleZoomIn}
-                disabled={canvasZoom >= ZOOM_MAX - 0.01}
+                disabled={canvasZoom >= ZOOM_MAX - ZOOM_EPSILON}
                 title="Aumentar zoom"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
