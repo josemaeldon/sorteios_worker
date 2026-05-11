@@ -1896,6 +1896,39 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       case 'updateSorteio': {
         const premiosUpdate = data.premios || (data.premio ? [data.premio] : []);
         const premioUpdate = premiosUpdate[0] || '';
+        const requestedQuantidade = Math.max(0, Number(data.quantidade_cartelas || 0));
+
+        const maxCartelaResult = await client.query(
+          'SELECT COALESCE(MAX(numero), 0) AS max_numero FROM cartelas WHERE sorteio_id = $1',
+          [data.id]
+        );
+        const maxNumeroExistente = Number(maxCartelaResult.rows[0]?.max_numero || 0);
+        const quantidadeFinal = Math.max(requestedQuantidade, maxNumeroExistente);
+
+        if (requestedQuantidade > maxNumeroExistente) {
+          const batchSize = 500;
+          for (let batch = 0; batch < Math.ceil((requestedQuantidade - maxNumeroExistente) / batchSize); batch++) {
+            const startNum = maxNumeroExistente + (batch * batchSize) + 1;
+            const endNum = Math.min(maxNumeroExistente + ((batch + 1) * batchSize), requestedQuantidade);
+
+            const values = [];
+            const params = [data.id];
+            let paramIndex = 2;
+
+            for (let i = startNum; i <= endNum; i++) {
+              values.push(`($1, $${paramIndex}, 'disponivel')`);
+              params.push(i);
+              paramIndex++;
+            }
+
+            if (values.length > 0) {
+              await client.query(
+                `INSERT INTO cartelas (sorteio_id, numero, status) VALUES ${values.join(', ')}`,
+                params
+              );
+            }
+          }
+        }
         
         result = await client.query(`
           UPDATE sorteios 
@@ -1904,7 +1937,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
               tamanho_lote = $15, updated_at = NOW()
           WHERE id = $1
           RETURNING *
-        `, [data.id, data.nome, data.data_sorteio, premioUpdate, JSON.stringify(premiosUpdate), data.valor_cartela, data.quantidade_cartelas, data.status,
+        `, [data.id, data.nome, data.data_sorteio, premioUpdate, JSON.stringify(premiosUpdate), data.valor_cartela, quantidadeFinal, data.status,
             data.tipo ?? 'bingo', data.papel_largura ?? 210, data.papel_altura ?? 297, data.grade_colunas ?? 5, data.grade_linhas ?? 5, data.apenas_numero_rifa ?? false,
             data.tamanho_lote ?? 50]);
         return res.json({ data: result.rows });

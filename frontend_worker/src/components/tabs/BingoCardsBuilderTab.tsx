@@ -795,29 +795,56 @@ const BingoCardsBuilderTab: React.FC = () => {
 
   // ─── Generate cards ────────────────────────────────────────────────────────
   const doGenerate = async () => {
-    const count = totalCards;
-    const generated = generateAllBingoCards(count, numeroPremios, gridCols, gridRows);
-    setCards(generated);
-    setPreviewIndex(0);
-    // Save all prize grids to each cartela in the DB
+    const maxExistingNumber = cards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
+    const canGenerateIncremental = maxExistingNumber > 0 && totalCards > maxExistingNumber;
+
     setIsSaving(true);
     try {
+      if (canGenerateIncremental) {
+        const missingCount = totalCards - maxExistingNumber;
+        const generatedMissing = generateAllBingoCards(missingCount, numeroPremios, gridCols, gridRows).map((card, idx) => ({
+          ...card,
+          cartelaNumero: maxExistingNumber + idx + 1,
+        }));
+
+        const mergedCards = [...cards, ...generatedMissing].sort((a, b) => a.cartelaNumero - b.cartelaNumero);
+        setCards(mergedCards);
+        setPreviewIndex(0);
+
+        await salvarNumerosCartelas(
+          generatedMissing.map((c) => ({
+            numero: c.cartelaNumero,
+            numeros_grade: c.grids.map(g => g.flat()),
+          }))
+        );
+        toast({ title: `${missingCount} novas cartelas geradas e salvas sem alterar as anteriores!` });
+        return;
+      }
+
+      const count = totalCards;
+      const generated = generateAllBingoCards(count, numeroPremios, gridCols, gridRows);
+      setCards(generated);
+      setPreviewIndex(0);
       await salvarNumerosCartelas(
         generated.map((c) => ({
           numero: c.cartelaNumero,
-          // Each prize has its own independent grid; save all as number[][]
           numeros_grade: c.grids.map(g => g.flat()),
         }))
       );
       toast({ title: `${count} cartelas geradas e salvas com sucesso!` });
     } catch {
-      toast({ title: `${count} cartelas geradas. Erro ao salvar no banco.`, variant: 'destructive' });
+      toast({ title: 'Erro ao gerar e salvar cartelas.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleGenerate = async () => {
+    const maxExistingNumber = cards.reduce((max, card) => Math.max(max, card.cartelaNumero), 0);
+    if (maxExistingNumber > 0 && totalCards > maxExistingNumber) {
+      await doGenerate();
+      return;
+    }
     if (cards.length > 0) {
       setShowGenerateConfirm(true);
     } else {
