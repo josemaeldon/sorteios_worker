@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useBingo } from '@/contexts/BingoContext';
 import {
   CanvasElement, CanvasLayout, BingoCardGrid,
@@ -239,34 +240,77 @@ const BarcodePreview: React.FC<{
 };
 
 // ─── Resize handles ───────────────────────────────────────────────────────────
-const HANDLE_POSITIONS: Record<string, React.CSSProperties> = {
-  nw: { top: -5, left: -5, cursor: 'nw-resize' },
-  ne: { top: -5, right: -5, cursor: 'ne-resize' },
-  sw: { bottom: -5, left: -5, cursor: 'sw-resize' },
-  se: { bottom: -5, right: -5, cursor: 'se-resize' },
-};
+const getHandlePositions = (offset: number): Record<ResizeState['handle'], React.CSSProperties> => ({
+  nw: { top: offset, left: offset, cursor: 'nw-resize' },
+  ne: { top: offset, right: offset, cursor: 'ne-resize' },
+  sw: { bottom: offset, left: offset, cursor: 'sw-resize' },
+  se: { bottom: offset, right: offset, cursor: 'se-resize' },
+});
 
 const ResizeHandles: React.FC<{
   onPointerDown: (e: React.PointerEvent, h: ResizeState['handle']) => void;
-}> = ({ onPointerDown }) => (
-  <>
-    {(Object.keys(HANDLE_POSITIONS) as ResizeState['handle'][]).map((h) => (
-      <div
-        key={h}
-        style={{
-          position: 'absolute',
-          width: 10, height: 10,
-          background: '#3b82f6',
-          border: '2px solid white',
-          borderRadius: 2,
-          zIndex: 10,
-          ...HANDLE_POSITIONS[h],
-        }}
-        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, h); }}
-      />
-    ))}
-  </>
-);
+  onDragPointerDown?: (e: React.PointerEvent) => void;
+  size?: number;
+  offset?: number;
+  borderWidth?: number;
+  radius?: number;
+  showDragHandle?: boolean;
+}> = ({
+  onPointerDown,
+  onDragPointerDown,
+  size = 10,
+  offset = -5,
+  borderWidth = 2,
+  radius = 2,
+  showDragHandle = false,
+}) => {
+  const positions = getHandlePositions(offset);
+  return (
+    <>
+      {(Object.keys(positions) as ResizeState['handle'][]).map((h) => (
+        <div
+          key={h}
+          style={{
+            position: 'absolute',
+            width: size,
+            height: size,
+            background: '#3b82f6',
+            border: `${borderWidth}px solid white`,
+            borderRadius: radius,
+            zIndex: 10,
+            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.35)',
+            touchAction: 'none',
+            ...positions[h],
+          }}
+          onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, h); }}
+        />
+      ))}
+      {showDragHandle && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: size,
+            height: size,
+            transform: 'translate(-50%, -50%)',
+            background: '#3b82f6',
+            border: `${borderWidth}px solid white`,
+            borderRadius: radius,
+            zIndex: 10,
+            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.35)',
+            cursor: 'grab',
+            touchAction: 'none',
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onDragPointerDown?.(e);
+          }}
+        />
+      )}
+    </>
+  );
+};
 
 // ─── Property panel helpers ───────────────────────────────────────────────────
 const PropRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -326,6 +370,7 @@ const BingoCardsBuilderTab: React.FC = () => {
   } = useBingo();
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // ─── Paper / grid dimensions derived from active sorteio ─────────────────
   const paperW = sorteioAtivo?.papel_largura ?? A4_W_MM;
@@ -335,6 +380,10 @@ const BingoCardsBuilderTab: React.FC = () => {
   const gridCols = sorteioAtivo?.grade_colunas ?? 5;
   const gridRows = sorteioAtivo?.grade_linhas ?? 5;
   const rifaOnly = sorteioAtivo?.apenas_numero_rifa ?? false;
+  const handleSize = isMobile ? 18 : 10;
+  const handleOffset = isMobile ? -9 : -5;
+  const handleBorder = isMobile ? 3 : 2;
+  const handleRadius = isMobile ? 999 : 3;
 
   // Layout
   const [layout, setLayout] = useState<CanvasLayout>(() =>
@@ -1429,6 +1478,7 @@ const BingoCardsBuilderTab: React.FC = () => {
                     outlineOffset: 1,
                     boxSizing: 'border-box',
                     overflow: 'hidden',
+                    touchAction: 'none',
                     backgroundColor: el.backgroundColor && el.backgroundColor !== 'transparent'
                       ? el.backgroundColor : undefined,
                   }}
@@ -1507,6 +1557,12 @@ const BingoCardsBuilderTab: React.FC = () => {
                   {isSelected && (
                     <ResizeHandles
                       onPointerDown={(e, h) => handleResizePointerDown(e, el.id, h)}
+                      onDragPointerDown={(e) => handleElementPointerDown(e, el.id)}
+                      size={handleSize}
+                      offset={handleOffset}
+                      borderWidth={handleBorder}
+                      radius={handleRadius}
+                      showDragHandle
                     />
                   )}
                 </div>
@@ -1523,7 +1579,7 @@ const BingoCardsBuilderTab: React.FC = () => {
                 Clique num elemento para editar
               </p>
               <p className="text-xs text-muted-foreground">
-                Arraste elementos no canvas para reposicioná-los. Use as alças de canto para redimensionar.
+                Use o ponto central para arrastar e os pontos dos cantos para redimensionar.
               </p>
             </div>
           ) : (
