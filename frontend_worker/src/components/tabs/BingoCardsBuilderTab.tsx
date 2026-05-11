@@ -387,6 +387,7 @@ const BingoCardsBuilderTab: React.FC = () => {
   const handleOffset = isMobile ? -9 : -5;
   const handleBorder = isMobile ? 3 : 2;
   const handleRadius = isMobile ? 999 : 3;
+  // Canvas zoom
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [autoZoom, setAutoZoom] = useState(true);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
