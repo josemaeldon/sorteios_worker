@@ -1,7 +1,7 @@
 import React from 'react';
 import { Sorteio } from '@/types/bingo';
 import { formatarData, formatarMoeda, getStatusLabel } from '@/lib/utils/formatters';
-import { Edit, Trash2, User } from 'lucide-react';
+import { Edit, Trash2, User, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SorteioCardProps {
@@ -10,6 +10,7 @@ interface SorteioCardProps {
   onSelect: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onBackup: (id: string) => void;
 }
 
 const SorteioCard: React.FC<SorteioCardProps> = ({
@@ -17,7 +18,8 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
   isActive,
   onSelect,
   onEdit,
-  onDelete
+  onDelete,
+  onBackup
 }) => {
   const cartelasVendidas = sorteio.vendas?.cartelas_vendidas || 0;
   const totalCartelas = sorteio.quantidade_cartelas || 1;
@@ -33,6 +35,11 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
     onDelete(sorteio.id);
   };
 
+  const handleBackup = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onBackup(sorteio.id);
+  };
+
   return (
     <div 
       className={cn('sorteio-card', isActive && 'active')}
@@ -44,6 +51,12 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
           className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
         >
           <Edit className="w-4 h-4" />
+        </button>
+        <button 
+          onClick={handleBackup}
+          className="w-8 h-8 rounded-full bg-muted text-foreground flex items-center justify-center hover:bg-muted/80 transition-colors"
+        >
+          <Download className="w-4 h-4" />
         </button>
         <button 
           onClick={handleDelete}
