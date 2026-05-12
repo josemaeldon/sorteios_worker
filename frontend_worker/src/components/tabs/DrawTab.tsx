@@ -842,7 +842,7 @@ const DrawTab: React.FC = () => {
         <div className="flex gap-6 items-start">
           <div className="flex-1 min-w-0 space-y-6">
             <div className="grid grid-cols-1 gap-6">
-          <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-8 min-h-screen flex flex-col")}>
+          <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-3 md:p-8 min-h-screen flex flex-col")}>
             <Card className="border-2 flex-1 flex flex-col relative z-0">
               <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
                 <CardTitle>Número Sorteado</CardTitle>
@@ -953,7 +953,7 @@ const DrawTab: React.FC = () => {
                               <div
                                 key={num}
                                 className={cn(
-                                  "relative flex items-center justify-center w-20 h-20 rounded-lg font-bold text-2xl border-2 transition-all duration-300",
+                                  "relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg font-bold text-lg sm:text-xl md:text-2xl border-2 transition-all duration-300",
                                   num === currentNumber && !isDrawing
                                     ? "bg-primary text-primary-foreground border-primary scale-110"
                                     : "bg-muted text-foreground border-border"
@@ -969,7 +969,7 @@ const DrawTab: React.FC = () => {
                     </div>
 
                     {/* Top 10 Sidebar in fullscreen */}
-                    <div className="w-96 flex-shrink-0 bg-card rounded-lg p-6 border-2 border-yellow-400/50">
+                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-2xl font-bold flex items-center gap-2">
                           <Trophy className="w-6 h-6 text-yellow-500" />
@@ -1121,7 +1121,7 @@ const DrawTab: React.FC = () => {
           )}
         </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Card className="bg-card/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Total</CardTitle>
@@ -1179,7 +1179,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-80 flex-shrink-0 space-y-4 flex flex-col">
+          <div className="w-full md:w-80 flex-shrink-0 space-y-4 flex flex-col">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className="border-2 border-success bg-success/5">
