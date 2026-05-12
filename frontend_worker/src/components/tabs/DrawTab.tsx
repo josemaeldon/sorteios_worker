@@ -585,7 +585,7 @@ const DrawTab: React.FC = () => {
     loadRodadas();
   };
 
-  // Compute top-10 cartelas as an individual score ranking
+  // Compute all scored cartelas; the UI groups them by score and shows the top 10 scores.
   const topScoringCartelas = useMemo(() => {
     if (drawnNumbers.length === 0) return [];
     const isRifa = sorteioAtivo?.tipo === 'rifa';
@@ -597,8 +597,7 @@ const DrawTab: React.FC = () => {
       if (winners.length === 0) return [];
       return winners
         .map(cv => ({ numero: cv.numero, nome: cv.comprador_nome, score: 1 }))
-        .sort((a, b) => a.numero - b.numero)
-        .slice(0, 10);
+        .sort((a, b) => a.numero - b.numero);
     }
 
     const drawnSet = new Set(drawnNumbers);
@@ -612,8 +611,7 @@ const DrawTab: React.FC = () => {
 
     return scored
       .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score || a.numero - b.numero)
-      .slice(0, 10);
+      .sort((a, b) => b.score - a.score || a.numero - b.numero);
   }, [drawnNumbers, validatedCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
   // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
@@ -939,20 +937,26 @@ const DrawTab: React.FC = () => {
                         </div>
                       ) : (
                         <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
-                          {topScoringCartelas.map((entry, idx) => (
-                            <div key={entry.numero} className="py-3 first:pt-0 last:pb-0">
+                          {groupedTop.map((group, idx) => (
+                            <div key={group.score} className="py-3 first:pt-0 last:pb-0">
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}º</span>
-                                <span className="text-lg font-semibold text-primary">{entry.score} pts</span>
+                                <span className="text-lg font-semibold text-primary">{group.score} pts</span>
+                                <span className="text-sm text-muted-foreground">
+                                  {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
+                                </span>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                <button
-                                  onClick={() => handleCartelaClick(entry.numero, entry.nome)}
-                                  aria-label={`Ver números da cartela ${entry.numero.toString().padStart(3, '0')}${entry.nome ? ` - ${entry.nome}` : ''}`}
-                                  className="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
-                                >
-                                  {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome}` : ''}
-                                </button>
+                                {group.cartelas.map((cartela) => (
+                                  <button
+                                    key={cartela.numero}
+                                    onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
+                                    aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
+                                    className="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                                  >
+                                    {cartela.numero.toString().padStart(3, '0')}
+                                  </button>
+                                ))}
                               </div>
                             </div>
                           ))}
@@ -1126,21 +1130,27 @@ const DrawTab: React.FC = () => {
                   </div>
                 ) : (
                   <div className="divide-y divide-border overflow-y-auto">
-                    {topScoringCartelas.map((entry, idx) => (
-                      <div key={entry.numero} className="py-2.5 first:pt-0 last:pb-0">
+                    {groupedTop.map((group, idx) => (
+                      <div key={group.score} className="py-2.5 first:pt-0 last:pb-0">
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
-                          <span className="text-sm font-semibold text-primary">{entry.score} pts</span>
+                          <span className="text-sm font-semibold text-primary">{group.score} pts</span>
+                          <span className="text-xs text-muted-foreground">
+                            {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
+                          </span>
                         </div>
-                        <div>
-                          <button
-                            onClick={() => handleCartelaClick(entry.numero, entry.nome)}
-                            aria-label={`Ver números da cartela ${entry.numero.toString().padStart(3, '0')}${entry.nome ? ` - ${entry.nome}` : ''}`}
-                            className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer truncate"
-                            title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}
-                          >
-                            {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome.substring(0, 8)}` : ''}
-                          </button>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.cartelas.map((cartela) => (
+                            <button
+                              key={cartela.numero}
+                              onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
+                              aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
+                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                              title={cartela.nome ? `${cartela.numero} - ${cartela.nome}` : cartela.numero.toString()}
+                            >
+                              {cartela.numero.toString().padStart(3, '0')}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     ))}
