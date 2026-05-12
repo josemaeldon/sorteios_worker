@@ -16,6 +16,7 @@ export function useFavicon() {
       })
       .catch((err) => {
         console.error('useFavicon: failed to load public config', err);
+        applyFavicon(null);
       });
 
     return () => {
@@ -24,26 +25,37 @@ export function useFavicon() {
   }, []);
 }
 
+function withCacheBust(url: string) {
+  const token = `fv=${Date.now()}`;
+  return url.includes('?') ? `${url}&${token}` : `${url}?${token}`;
+}
+
+function appendIconLink(rel: string, href: string, type?: string, sizes?: string) {
+  const link = document.createElement('link');
+  link.rel = rel;
+  link.href = href;
+  if (type) link.type = type;
+  if (sizes) link.sizes = sizes;
+  document.head.appendChild(link);
+}
+
 export function applyFavicon(url: string | null) {
-  const href = url || DEFAULT_FAVICON;
-  const ensureLink = (rel: string) => {
-    let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = rel;
-      document.head.appendChild(link);
-    }
-    link.href = href;
-  };
+  const baseHref = url || DEFAULT_FAVICON;
+  const href = withCacheBust(baseHref);
 
-  ensureLink('icon');
-  ensureLink('shortcut icon');
+  document
+    .querySelectorAll<HTMLLinkElement>(
+      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="mask-icon"], link[rel="alternate icon"]'
+    )
+    .forEach((el) => el.parentElement?.removeChild(el));
 
-  let appleTouchIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
-  if (!appleTouchIcon) {
-    appleTouchIcon = document.createElement('link');
-    appleTouchIcon.rel = 'apple-touch-icon';
-    document.head.appendChild(appleTouchIcon);
-  }
-  appleTouchIcon.href = href;
+  appendIconLink('icon', href, 'image/x-icon');
+  appendIconLink('shortcut icon', href, 'image/x-icon');
+  appendIconLink('apple-touch-icon', href, undefined, '180x180');
+
+  const maskIcon = document.createElement('link');
+  maskIcon.rel = 'mask-icon';
+  maskIcon.href = href;
+  maskIcon.color = '#1d4ed8';
+  document.head.appendChild(maskIcon);
 }
