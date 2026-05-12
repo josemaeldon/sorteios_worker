@@ -34,6 +34,38 @@ function nextMonthSameDay(from) {
   return result;
 }
 
+function nextYearSameDay(date) {
+  const d = new Date(date);
+  d.setFullYear(d.getFullYear() + 1);
+  return d;
+}
+
+async function resolvePlanVencimentoFromStripeSession(stripe, session, startedAt) {
+  const baseDate = startedAt || new Date();
+  try {
+    if (session?.subscription) {
+      const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+      if (subId) {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        if (sub?.current_period_end) {
+          return new Date(sub.current_period_end * 1000);
+        }
+      }
+    }
+
+    if (session?.id) {
+      const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+      const first = lineItems?.data?.[0];
+      const recurring = first?.price?.recurring;
+      if (recurring?.interval === 'year') return nextYearSameDay(baseDate);
+      if (recurring?.interval === 'month') return nextMonthSameDay(baseDate);
+    }
+  } catch (err) {
+    console.warn('Could not resolve plan expiration from Stripe session:', err?.message || err);
+  }
+  return nextMonthSameDay(baseDate);
+}
+
 // Stripe webhook must receive raw body — register before express.json()
 app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -78,7 +110,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
         const updateClient = await dbAdapter.getConnection();
         try {
           const now = new Date();
-          const vencimento = nextMonthSameDay(now);
+          const vencimento = await resolvePlanVencimentoFromStripeSession(stripe, session, now);
           await updateClient.query(
             'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
             [planoId, now, vencimento, userId]
@@ -3762,7 +3794,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const planoId = data.plano_id || null;
         if (planoId) {
           const now = new Date();
-          const vencimento = nextMonthSameDay(now);
+          const vencimento = await resolvePlanVencimentoFromStripeSession(stripe, session, now);
           await client.query(
             'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, updated_at = NOW() WHERE id = $1',
             [data.user_id, planoId, now, vencimento]
@@ -3801,8 +3833,18 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           ? `${baseUrl}${successPath}&session_id={CHECKOUT_SESSION_ID}`
           : `${baseUrl}${successPath}?session_id={CHECKOUT_SESSION_ID}`;
 
+        let checkoutMode = 'payment';
+        if (plano.stripe_price_id) {
+          try {
+            const stripePrice = await stripe.prices.retrieve(plano.stripe_price_id);
+            if (stripePrice?.recurring) checkoutMode = 'subscription';
+          } catch (err) {
+            console.warn('Could not inspect Stripe price for recurring mode:', err?.message || err);
+          }
+        }
+
         let sessionParams = {
-          mode: 'payment',
+          mode: checkoutMode,
           success_url: successUrl,
           cancel_url: `${baseUrl}${cancelPath}`,
           metadata: { user_id: data.authenticated_user_id, plano_id: plano.id },
@@ -3852,7 +3894,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(400).json({ error: 'Plano não identificado na sessão.' });
         }
         const confirmNow = new Date();
-        const confirmVencimento = nextMonthSameDay(confirmNow);
+        const confirmVencimento = await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
         await client.query(
           'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
           [sessionPlanoId, confirmNow, confirmVencimento, data.authenticated_user_id]
