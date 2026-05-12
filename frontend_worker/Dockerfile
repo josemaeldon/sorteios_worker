@@ -12,8 +12,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY bun.lockb ./
 
-# Instalar dependências
-RUN npm ci
+# Instalar dependências (inclui binários opcionais do esbuild para o ambiente alvo)
+RUN npm ci --include=optional \
+  && npm rebuild esbuild
 
 # Copiar código fonte
 COPY . .
