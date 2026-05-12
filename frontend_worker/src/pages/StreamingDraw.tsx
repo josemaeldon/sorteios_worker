@@ -18,12 +18,6 @@ type HistoricoItem = {
   ordem: number;
 };
 
-type RankingCartela = {
-  numero: number;
-  nome?: string;
-  score: number;
-};
-
 type GroupedTopEntry = {
   score: number;
   cartelas: number[];
@@ -41,6 +35,7 @@ const StreamingDraw: React.FC = () => {
   const [rodada, setRodada] = useState<PublicRodada | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [top10, setTop10] = useState<TopCartelaEntry[]>([]);
+  const [top10GroupedFromApi, setTop10GroupedFromApi] = useState<GroupedTopEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
@@ -54,6 +49,7 @@ const StreamingDraw: React.FC = () => {
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
       setTop10(data?.top10_cartelas ?? []);
+      setTop10GroupedFromApi(data?.top10 ?? []);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar sorteio.');
@@ -78,6 +74,39 @@ const StreamingDraw: React.FC = () => {
     : null;
   const isNewNumber = sortedHistorico.length !== lastCountRef.current;
 
+  const groupedTop10 = useMemo(() => {
+    if (top10GroupedFromApi.length > 0) {
+      return top10GroupedFromApi
+        .map(group => ({
+          score: group.score,
+          count: group.count,
+          cartelas: (group.cartelas || [])
+            .slice()
+            .sort((a, b) => a - b)
+            .map(numero => ({ numero, score: group.score })),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    }
+
+    const groups = top10.reduce((acc, entry) => {
+      const key = String(entry.score);
+      if (!acc[key]) acc[key] = { score: entry.score, count: 0, cartelas: [] as TopCartelaEntry[] };
+      acc[key].count += 1;
+      acc[key].cartelas.push(entry);
+      return acc;
+    }, {} as Record<string, { score: number; count: number; cartelas: TopCartelaEntry[] }>);
+
+    return Object.values(groups)
+      .map(group => ({
+        score: group.score,
+        count: group.count,
+        cartelas: group.cartelas.sort((a, b) => a.numero - b.numero),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }, [top10, top10GroupedFromApi]);
+
   useEffect(() => {
     lastCountRef.current = sortedHistorico.length;
   }, [sortedHistorico.length]);
@@ -99,7 +128,7 @@ const StreamingDraw: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-black text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-slate-900 to-black text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="px-4 md:px-8 py-4 md:py-5 border-b border-white/10 flex items-center justify-between gap-4 flex-shrink-0">
         <div className="min-w-0 flex-1">
@@ -113,28 +142,28 @@ const StreamingDraw: React.FC = () => {
       </header>
 
       {/* Main Content - Responsive Layout */}
-      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-hidden">
+      <main className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 md:gap-5 p-3 md:p-6 overflow-hidden">
         {/* Left Section: Number + Historico */}
-        <div className="flex-1 flex flex-col min-w-0 items-center justify-center">
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
           {/* Large Current Number */}
-          <p className="text-white/50 text-lg md:text-2xl mb-2 md:mb-4">Número Sorteado</p>
+          <p className="text-white/50 text-lg md:text-2xl mb-1 md:mb-2 text-center">Número Sorteado</p>
           <div
-            className={`font-black leading-none tabular-nums text-center mb-6 md:mb-8 ${
+            className={`font-black leading-none tabular-nums text-center flex-1 min-h-0 flex items-center justify-center mb-1 md:mb-2 ${
               isNewNumber ? 'animate-bingo-globe-emerge' : ''
             }`}
-            style={{ fontSize: 'clamp(3rem, 20vw, 20rem)' }}
+            style={{ fontSize: "clamp(4rem, 18vw, 18rem)" }}
           >
             {currentNumber ?? '-'}
           </div>
 
           {/* Historico Footer */}
-          <div className="w-full">
-            <p className="text-white/50 text-xs md:text-sm mb-2">Números Sorteados</p>
-            <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="w-full flex-shrink-0 max-h-[28vh] md:max-h-[32vh] overflow-y-auto pr-1">
+            <p className="text-white/50 text-xs md:text-sm mb-1.5">Números Sorteados</p>
+            <div className="flex flex-wrap gap-1.5 pb-2">
               {sortedHistorico.slice(-18).map((item) => (
                 <span
                   key={`${item.ordem}-${item.numero_sorteado}`}
-                  className="min-w-12 md:min-w-14 rounded-lg border border-white/15 bg-white/10 px-2 md:px-4 py-1 md:py-2 text-center text-lg md:text-2xl font-bold flex-shrink-0"
+                  className="min-w-10 md:min-w-12 rounded-lg border border-white/15 bg-white/10 px-2 md:px-3 py-1 md:py-1.5 text-center text-sm md:text-xl font-bold"
                 >
                   {item.numero_sorteado}
                 </span>
@@ -144,22 +173,27 @@ const StreamingDraw: React.FC = () => {
         </div>
 
         {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
-        {top10.length > 0 && (
-          <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6">
+        {groupedTop10.length > 0 && (
+          <div className="w-full md:w-[22rem] md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 flex flex-col min-h-[220px] max-h-[42vh] md:max-h-full md:h-full overflow-hidden">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
             </div>
-            <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
-              {top10.slice(0, 10).map((entry, idx) => (
-                <div key={entry.numero} className="py-2 md:py-3 first:pt-0 last:pb-0">
+            <div className="divide-y divide-white/10 overflow-y-auto flex-1 min-h-0 pr-1">
+              {groupedTop10.map((group, idx) => (
+                <div key={group.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
                     <span className="font-bold text-yellow-400 w-6">{idx + 1}º</span>
-                    <span className="font-semibold text-yellow-300">{entry.score} pts</span>
+                    <span className="font-semibold text-yellow-300">{group.score} pts</span>
+                    <span className="text-white/70">{group.count} {group.count === 1 ? 'cartela' : 'cartelas'}</span>
                   </div>
-                  <span className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
-                    {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome}` : ''}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {group.cartelas.map((entry) => (
+                      <span key={entry.numero} className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
+                        {entry.numero.toString().padStart(3, '0')}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
