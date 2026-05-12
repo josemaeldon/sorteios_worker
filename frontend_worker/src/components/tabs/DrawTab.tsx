@@ -616,6 +616,21 @@ const DrawTab: React.FC = () => {
       .slice(0, 10);
   }, [drawnNumbers, validatedCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
+  // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
+  const groupedTop = useMemo(() => {
+    const groups = topScoringCartelas.reduce((acc, cur) => {
+      const s = String(cur.score);
+      if (!acc[s]) acc[s] = { score: cur.score, cartelas: [] };
+      acc[s].cartelas.push({ numero: cur.numero, nome: cur.nome });
+      return acc;
+    }, {} as Record<string, { score: number; cartelas: { numero: number; nome?: string }[] }>);
+
+    return Object.values(groups)
+      .map(g => ({ score: g.score, cartelas: g.cartelas.sort((a, b) => a.numero - b.numero), count: g.cartelas.length }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }, [topScoringCartelas]);
+
   useEffect(() => {
     const winnerEntries = topScoringCartelas.filter(entry => entry.score >= winningScore);
     if (winnerEntries.length > 0) {
@@ -924,24 +939,25 @@ const DrawTab: React.FC = () => {
                         </div>
                       ) : (
                         <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
-                          {topScoringCartelas.map((entry, idx) => (
-                            <div key={entry.score} className="py-3 first:pt-0 last:pb-0">
+                          {groupedTop.map((entry, idx) => (
+                            <div key={`${entry.score}-${idx}`} className="py-3 first:pt-0 last:pb-0">
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}º</span>
                                 <span className="text-lg font-semibold text-primary">{entry.score} pts</span>
-                                <span className="ml-auto text-sm text-muted-foreground">{entry.cartelas.length} cartela{entry.cartelas.length !== 1 ? 's' : ''}</span>
+                                <span className="ml-auto text-sm text-muted-foreground">{entry.count} cartela{entry.count !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                {entry.cartelas.map(({ numero, nome }) => (
+                                {entry.cartelas.slice(0, 18).map((c) => (
                                   <button
-                                    key={numero}
-                                    onClick={() => handleCartelaClick(numero, nome)}
-                                    aria-label={`Ver números da cartela ${numero.toString().padStart(3, '0')}${nome ? ` - ${nome}` : ''}`}
-                                    className="px-3 py-1 rounded bg-muted text-foreground text-sm font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                                    key={c.numero}
+                                    onClick={() => handleCartelaClick(c.numero, c.nome)}
+                                    aria-label={`Ver números da cartela ${c.numero.toString().padStart(3, '0')}${c.nome ? ` - ${c.nome}` : ''}`}
+                                    className="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
                                   >
-                                    {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}
+                                    {c.numero.toString().padStart(3, '0')}
                                   </button>
                                 ))}
+                                {entry.count > 18 && <span className="text-xs text-muted-foreground">...</span>}
                               </div>
                             </div>
                           ))}
@@ -1115,20 +1131,26 @@ const DrawTab: React.FC = () => {
                   </div>
                 ) : (
                   <div className="divide-y divide-border overflow-y-auto">
-                    {topScoringCartelas.map((entry, idx) => (
-                      <div key={entry.numero} className="py-2.5 first:pt-0 last:pb-0">
+                    {groupedTop.map((entry, idx) => (
+                      <div key={`${entry.score}-${idx}`} className="py-2.5 first:pt-0 last:pb-0">
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
                           <span className="text-sm font-semibold text-primary">{entry.score} pts</span>
+                          <span className="ml-auto text-sm text-muted-foreground">{entry.count} cartela{entry.count !== 1 ? 's' : ''}</span>
                         </div>
-                        <button
-                          onClick={() => handleCartelaClick(entry.numero, entry.nome)}
-                          aria-label={`Ver números da cartela ${entry.numero.toString().padStart(3, '0')}${entry.nome ? ` - ${entry.nome}` : ''}`}
-                          className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer truncate"
-                          title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}
-                        >
-                          {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome.substring(0, 8)}` : ''}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          {entry.cartelas.slice(0, 18).map(c => (
+                            <button
+                              key={c.numero}
+                              onClick={() => handleCartelaClick(c.numero, c.nome)}
+                              aria-label={`Ver números da cartela ${c.numero.toString().padStart(3, '0')}${c.nome ? ` - ${c.nome}` : ''}`}
+                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                            >
+                              {c.numero.toString().padStart(3, '0')}
+                            </button>
+                          ))}
+                          {entry.count > 18 && <span className="text-xs text-muted-foreground">...</span>}
+                        </div>
                       </div>
                     ))}
                   </div>
