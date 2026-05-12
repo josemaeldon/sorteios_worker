@@ -3490,9 +3490,37 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           await client.query(`
             UPDATE atribuicao_cartelas SET status = 'vendida', venda_id = $1 
             WHERE numero_cartela = $2 AND atribuicao_id IN (
-              SELECT id FROM atribuicoes WHERE sorteio_id = $3 AND vendedor_id = $4
+              SELECT id FROM atribuicoes WHERE sorteio_id = $3
             )
           `, [vendaId, numero, data.sorteio_id, data.vendedor_id]);
+        }
+
+        // Attempt to infer vendedor_id from atribuições if not provided and update venda
+        if (!data.vendedor_id) {
+          let inferredVendedor = null;
+          for (const numero of numerosVenda) {
+            const vRes = await client.query(
+              `SELECT a.vendedor_id FROM atribuicao_cartelas ac JOIN atribuicoes a ON ac.atribuicao_id = a.id
+               WHERE ac.numero_cartela = $1 AND a.sorteio_id = $2 LIMIT 1`,
+              [numero, data.sorteio_id]
+            );
+            if (vRes.rows.length > 0 && vRes.rows[0].vendedor_id) {
+              inferredVendedor = vRes.rows[0].vendedor_id;
+              break;
+            }
+          }
+          if (inferredVendedor) {
+            await client.query('UPDATE vendas SET vendedor_id = $2 WHERE id = $1', [vendaId, inferredVendedor]);
+          }
+        }
+
+        // Sync loja_cartelas: mark as vendida if present in loja
+        for (const numero of numerosVenda) {
+          await client.query(`
+            UPDATE loja_cartelas SET status = 'vendida', comprador_nome = $1, updated_at = NOW(), vendedor_id = COALESCE(vendedor_id, $3)
+            WHERE card_set_id IN (SELECT id FROM bingo_card_sets WHERE sorteio_id = $2)
+              AND numero_cartela = $3
+          `, [data.cliente_nome || null, data.sorteio_id, numero]);
         }
 
         // Auto-assign cliente_nome to validated cartelas when a name is provided
