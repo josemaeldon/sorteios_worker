@@ -2901,6 +2901,14 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           [data.sorteio_id, data.numero]
         );
         await client.query(
+          `DELETE FROM loja_cartelas
+           WHERE numero_cartela = $1
+             AND card_set_id IN (
+               SELECT id FROM bingo_card_sets WHERE sorteio_id = $2
+             )`,
+          [data.numero, data.sorteio_id]
+        );
+        await client.query(
           'DELETE FROM cartelas WHERE sorteio_id = $1 AND numero = $2',
           [data.sorteio_id, data.numero]
         );
