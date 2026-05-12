@@ -20,7 +20,7 @@ const Landing: React.FC = () => {
         <div className="flex items-center gap-2 font-bold text-xl"><Ticket className="w-6 h-6 text-primary" /> Sorteios Pro</div>
         <div className="flex gap-2">
           <Button asChild variant="outline"><Link to="/auth">Fazer login</Link></Button>
-          <Button asChild><Link to="/auth">Criar conta</Link></Button>
+          <Button asChild><Link to="/auth?tab=register">Criar conta</Link></Button>
         </div>
       </header>
 
@@ -30,7 +30,7 @@ const Landing: React.FC = () => {
             <h1 className="text-4xl md:text-5xl font-black leading-tight">Venda mais cartelas e gerencie sorteios com confiança.</h1>
             <p className="text-muted-foreground text-lg">Automatize vendas, validações, transmissão em tempo real e relatórios. Tudo em um único sistema profissional para sorteios e rifas.</p>
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" asChild><Link to="/auth">Começar agora</Link></Button>
+              <Button size="lg" asChild><Link to="/auth?tab=register">Começar agora</Link></Button>
               <Button size="lg" variant="outline" asChild><Link to="/auth">Ver demonstração</Link></Button>
             </div>
             <div className="grid sm:grid-cols-3 gap-3 text-sm">
@@ -46,15 +46,14 @@ const Landing: React.FC = () => {
 
         <section className="grid md:grid-cols-3 gap-4">
           {[
-            { icon: BarChart3, title: 'Gestão total', image: '/landing/gestao-total.svg', text: 'Controle sorteios, cartelas, vendedores e pagamentos no mesmo painel.' },
-            { icon: ShieldCheck, title: 'Segurança e transparência', image: '/landing/seguranca-transparencia.svg', text: 'Histórico completo, validações e rastreabilidade de cada número sorteado.' },
-            { icon: Smartphone, title: 'Funciona em qualquer tela', image: '/landing/funciona-qualquer-tela.svg', text: 'Administre do desktop ou celular com layout responsivo e rápido.' },
-            { icon: Clock3, title: 'Economia de tempo', image: '/landing/economia-tempo.svg', text: 'Processos automatizados para você focar em vender mais e crescer.' },
-            { icon: Ticket, title: 'Rifas e bingo', image: '/landing/rifas-bingo.svg', text: 'Suporte aos dois formatos com regras, faixas e rodadas configuráveis.' },
-            { icon: CheckCircle2, title: 'Escala profissional', image: '/landing/escala-profissional.svg', text: 'Ideal para quem quer sair do controle manual e profissionalizar operação.' },
+            { icon: BarChart3, title: 'Gestão total', text: 'Controle sorteios, cartelas, vendedores e pagamentos no mesmo painel.' },
+            { icon: ShieldCheck, title: 'Segurança e transparência', text: 'Histórico completo, validações e rastreabilidade de cada número sorteado.' },
+            { icon: Smartphone, title: 'Funciona em qualquer tela', text: 'Administre do desktop ou celular com layout responsivo e rápido.' },
+            { icon: Clock3, title: 'Economia de tempo', text: 'Processos automatizados para você focar em vender mais e crescer.' },
+            { icon: Ticket, title: 'Rifas e bingo', text: 'Suporte aos dois formatos com regras, faixas e rodadas configuráveis.' },
+            { icon: CheckCircle2, title: 'Escala profissional', text: 'Ideal para quem quer sair do controle manual e profissionalizar operação.' },
           ].map((item) => (
-            <Card key={item.title} className="overflow-hidden">
-              <img src={item.image} alt={item.title} className="w-full h-28 object-cover border-b" />
+            <Card key={item.title} className="transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/15 hover:border-primary/40">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg"><item.icon className="w-5 h-5 text-primary" />{item.title}</CardTitle>
               </CardHeader>

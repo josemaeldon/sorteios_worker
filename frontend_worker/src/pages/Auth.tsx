@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,8 @@ const registerSchema = z.object({
 const Auth: React.FC = () => {
   const navigate = useNavigate();
   const { login, registerUser, isAuthenticated, isLoading, checkFirstAccess, setupAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const authTab = searchParams.get('tab') === 'register' ? 'cadastro' : 'login';
   
   const [isFirstAccess, setIsFirstAccess] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -163,7 +165,10 @@ const Auth: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
+      <Button asChild variant="ghost" className="absolute top-4 left-4">
+        <Link to="/">← Voltar para Home</Link>
+      </Button>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
@@ -269,7 +274,7 @@ const Auth: React.FC = () => {
               </form>
             </>
           ) : (
-            <Tabs defaultValue="login">
+            <Tabs defaultValue={authTab}>
               <TabsList className="w-full mb-4">
                 <TabsTrigger value="login" className="flex-1">
                   <LogIn className="h-4 w-4 mr-2" />
