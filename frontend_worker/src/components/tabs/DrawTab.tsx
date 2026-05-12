@@ -283,12 +283,10 @@ const DrawTab: React.FC = () => {
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
-        const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
         const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
         loadedCardsWithGrade = (cardsResult.data || [])
           .filter(
             (card: ValidatedCartelaComGrade) =>
-              validatedNumbers.has(card.numero) &&
               card.numeros_grade &&
               card.numeros_grade.length > 0
           )
