@@ -10,26 +10,31 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const PDFDocument = require('pdfkit');
 
 let nodemailer;
-try { nodemailer = require('nodemailer'); } catch (e) { nodemailer = null; }
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-// CORS configuration
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Basic-Auth'],
-}));
-
-// Returns a date one month after `from`, clamped to the last day of the target month.
-function nextMonthSameDay(from) {
-  const day = from.getDate();
-  const result = new Date(from);
+         const scored = normalizedCards
+           .filter(c => c.numeros_grade && c.numeros_grade.length > 0)
+           .map(c => {
+             const allNums = c.numeros_grade.flatMap(g => (Array.isArray(g) ? g.filter(n => n !== 0) : []));
+             const score = allNums.filter(n => drawnSet.has(Number(n))).length;
+             return { numero: c.numero, score, nome: c.comprador_nome };
+           });
+         
+         if (scored.length > 0) {
+           scored.sort((a, b) => b.score - a.score);
+           // Group by score, return up to 10 score levels (ties grouped)
+           const resultTop = [];
+           for (const { numero, score, nome } of scored) {
+             if (!score || score === 0) continue;
+             const existing = resultTop.find(r => r.score === score);
+             if (existing) {
+               existing.cartelas.push({ numero, nome });
+             } else {
+               if (resultTop.length < 10) {
+                 resultTop.push({ score, cartelas: [{ numero, nome }] });
+               }
   result.setMonth(result.getMonth() + 1);
   // If month overflowed (e.g. Jan 31 → Mar 2), clamp to last day of intended month.
-  if (result.getDate() !== day) {
-    result.setDate(0);
+           top = resultTop;
+         }
   }
   return result;
 }
