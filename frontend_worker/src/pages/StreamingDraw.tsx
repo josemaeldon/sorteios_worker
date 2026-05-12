@@ -142,7 +142,7 @@ const StreamingDraw: React.FC = () => {
       </header>
 
       {/* Main Content - Responsive Layout */}
-      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-y-auto">
         {/* Left Section: Number + Historico */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Large Current Number */}
