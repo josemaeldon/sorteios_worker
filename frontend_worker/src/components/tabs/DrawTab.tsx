@@ -305,6 +305,7 @@ const DrawTab: React.FC = () => {
       }
       setCardsWithGrade(loadedCardsWithGrade);
 
+
       let poolNumbers: number[];
       if (isRifa) {
         // For rifa: pool is the validated cartela numbers (ticket numbers)
