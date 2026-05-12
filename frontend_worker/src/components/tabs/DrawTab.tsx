@@ -914,15 +914,23 @@ const DrawTab: React.FC = () => {
                       )}
                     </div>
 
-                    {topScoringCartelas.length > 0 && (
-                      <div className="w-96 flex-shrink-0 bg-card rounded-lg p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-2xl font-bold flex items-center gap-2">
-                            <Trophy className="w-6 h-6 text-yellow-500" />
-                            Top 10 Cartelas
-                          </h3>
+                    {/* Top 10 Sidebar in fullscreen */}
+                    <div className="w-96 flex-shrink-0 bg-card rounded-lg p-6 border-2 border-yellow-400/50">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-2xl font-bold flex items-center gap-2">
+                          <Trophy className="w-6 h-6 text-yellow-500" />
+                          Top 10 Cartelas
+                        </h3>
+                      </div>
+                      {topScoringCartelas.length === 0 ? (
+                        <div className="flex items-center justify-center h-40 text-center text-muted-foreground">
+                          <div>
+                            <Trophy className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                            <p>Comece a sortear para ver o ranking</p>
+                          </div>
                         </div>
-                        <div className="divide-y divide-border max-h-[200px] overflow-y-auto">
+                      ) : (
+                        <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
                           {topScoringCartelas.map((entry, idx) => (
                             <div key={entry.score} className="py-3 first:pt-0 last:pb-0">
                               <div className="flex items-center gap-2 mb-1.5">
@@ -945,8 +953,8 @@ const DrawTab: React.FC = () => {
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1015,42 +1023,31 @@ const DrawTab: React.FC = () => {
           )}
         </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total de Números
-                </CardTitle>
+          <div className="grid grid-cols-3 gap-2">
+            <Card className="bg-card/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Total</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{availableNumbers.length}</div>
-                <p className="text-xs text-muted-foreground mt-1">Números na faixa ({selectedRodada.range_start} a {selectedRodada.range_end})</p>
+              <CardContent className="pb-2">
+                <div className="text-2xl font-bold">{availableNumbers.length}</div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Já Sorteados
-                </CardTitle>
+            <Card className="bg-card/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Sorteados</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-primary">{drawnNumbers.length}</div>
-                <p className="text-xs text-muted-foreground mt-1">Números já chamados</p>
+              <CardContent className="pb-2">
+                <div className="text-2xl font-bold text-primary">{drawnNumbers.length}</div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Restantes
-                </CardTitle>
+            <Card className="bg-card/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Restantes</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  {remainingNumbers.length}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Números ainda não sorteados</p>
+              <CardContent className="pb-2">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{remainingNumbers.length}</div>
               </CardContent>
             </Card>
           </div>
@@ -1083,45 +1080,54 @@ const DrawTab: React.FC = () => {
 
           </div>
 
-          {/* RIGHT SIDEBAR */}
-          {(topScoringCartelas.length > 0 || vencedoras.length > 0) && (
-            <div className="w-80 flex-shrink-0">
-              {/* Winner results */}
-              {vencedoras.length > 0 && (
-                <Card className="border-2 border-success mb-4">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-success flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5" />
-                      Cartela(s) Vencedoras
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-3">
-                      {vencedoras.map((num) => (
-                        <div key={num} className="px-4 py-2 rounded-lg bg-success/10 border border-success text-success font-bold text-xl">
-                          Cartela {num.toString().padStart(3, '0')}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              {topScoringCartelas.length > 0 && (
-              <Card className="mb-4">
+          {/* RIGHT SIDEBAR - Top 10 always visible */}
+          <div className="w-80 flex-shrink-0 space-y-4 flex flex-col">
+            {/* Winner results - alert style */}
+            {vencedoras.length > 0 && (
+              <Card className="border-2 border-success bg-success/5">
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-yellow-500" />
-                    Top 10 Cartelas
+                  <CardTitle className="text-success flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5" />
+                    Vencedora(s)!
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="divide-y divide-border">
+                  <div className="space-y-2">
+                    {vencedoras.map((num) => (
+                      <div key={num} className="px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold">
+                        Cartela {num.toString().padStart(3, '0')}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* Top 10 always visible */}
+            <Card className="flex-1 flex flex-col border-2 border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-transparent dark:from-yellow-950/20">
+              <CardHeader className="pb-3 flex-shrink-0">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Trophy className="w-5 h-5 text-yellow-500" />
+                  Top 10 Cartelas
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">Maiores pontuações</p>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden flex flex-col">
+                {topScoringCartelas.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-center text-muted-foreground">
+                    <div>
+                      <Trophy className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Comece a sortear para ver o ranking</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border overflow-y-auto">
                     {topScoringCartelas.map((entry, idx) => (
                       <div key={entry.score} className="py-2.5 first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-bold text-muted-foreground">{idx + 1}º</span>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
                           <span className="text-sm font-semibold text-primary">{entry.score} pts</span>
-                          <span className="ml-auto text-xs text-muted-foreground">{entry.cartelas.length} cartela{entry.cartelas.length !== 1 ? 's' : ''}</span>
+                          <span className="ml-auto text-xs text-muted-foreground">{entry.cartelas.length}</span>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {entry.cartelas.map(({ numero, nome }) => (
@@ -1129,20 +1135,20 @@ const DrawTab: React.FC = () => {
                               key={numero}
                               onClick={() => handleCartelaClick(numero, nome)}
                               aria-label={`Ver números da cartela ${numero.toString().padStart(3, '0')}${nome ? ` - ${nome}` : ''}`}
-                              className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer truncate"
+                              title={nome ? `${numero} - ${nome}` : numero.toString()}
                             >
-                              {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}
+                              {numero.toString().padStart(3, '0')}{nome && ` - ${nome.substring(0, 8)}`}
                             </button>
                           ))}
                         </div>
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-              )}
-            </div>
-          )}
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
       {/* Sortear Cartela Modal */}
