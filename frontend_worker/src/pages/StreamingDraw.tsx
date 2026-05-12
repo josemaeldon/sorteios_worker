@@ -18,9 +18,10 @@ type HistoricoItem = {
   ordem: number;
 };
 
-type Top10Entry = {
+type RankingCartela = {
+  numero: number;
+  nome?: string;
   score: number;
-  cartelas: Array<{ numero: number; nome?: string }>;
 };
 
 const StreamingDraw: React.FC = () => {
@@ -37,7 +38,7 @@ const StreamingDraw: React.FC = () => {
     if (!silent) setIsLoading(true);
     try {
       const result = await callApi('getPublicRodadaSorteio', { rodada_id: rodadaId });
-      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: Top10Entry[] } }).data;
+      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: RankingCartela[] } }).data;
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
       setTop10(data?.top10 ?? []);
@@ -139,23 +140,14 @@ const StreamingDraw: React.FC = () => {
             </div>
             <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
               {top10.map((entry, idx) => (
-                <div key={entry.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
+                <div key={entry.numero} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
                     <span className="font-bold text-yellow-400 w-6">{idx + 1}º</span>
                     <span className="font-semibold text-yellow-300">{entry.score} pts</span>
-                    <span className="ml-auto text-white/60">{entry.cartelas.length}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {entry.cartelas.map(({ numero, nome }) => (
-                      <span
-                        key={numero}
-                        className="px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate"
-                        title={nome ? `${numero} - ${nome}` : numero.toString()}
-                      >
-                        {numero.toString().padStart(3, '0')}
-                      </span>
-                    ))}
-                  </div>
+                  <span className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
+                    {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome}` : ''}
+                  </span>
                 </div>
               ))}
             </div>

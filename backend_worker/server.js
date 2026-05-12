@@ -2596,32 +2596,23 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         let top = [];
         const isRifa = String(rodadaRow.tipo || '') === 'rifa' || !!rodadaRow.apenas_numero_rifa;
         if (isRifa) {
-          // For rifa, top is simply validated cartelas whose numero appears in drawn numbers
-          const winners = normalizedCards.filter(c => drawnSet.has(Number(c.numero))).map(c => ({ numero: c.numero, nome: c.comprador_nome }));
-          if (winners.length > 0) top = [{ score: 1, cartelas: winners }];
+          top = normalizedCards
+            .filter(c => drawnSet.has(Number(c.numero)))
+            .map(c => ({ numero: c.numero, nome: c.comprador_nome, score: 1 }))
+            .sort((a, b) => a.numero - b.numero)
+            .slice(0, 10);
         } else {
-          // For bingo-like games, compute score based on intersection with drawn numbers
-          const scored = normalizedCards.map(c => {
-            const allNums = c.numeros_grade.flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
-            const score = allNums.filter(n => drawnSet.has(Number(n))).length;
-            return { numero: c.numero, score, nome: c.comprador_nome };
-          });
-          scored.sort((a, b) => b.score - a.score);
-
-          // Group by score, return up to 10 score levels (ties grouped)
-          const resultTop = [];
-          for (const { numero, score, nome } of scored) {
-            if (!score || score === 0) continue;
-            const existing = resultTop.find(r => r.score === score);
-            if (existing) {
-              existing.cartelas.push({ numero, nome });
-            } else {
-              if (resultTop.length < 10) {
-                resultTop.push({ score, cartelas: [{ numero, nome }] });
-              }
-            }
-          }
-          top = resultTop;
+          const scored = normalizedCards
+            .filter(c => c.numeros_grade && c.numeros_grade.length > 0)
+            .map(c => {
+              const allNums = c.numeros_grade.flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
+              const score = allNums.filter(n => drawnSet.has(Number(n))).length;
+              return { numero: c.numero, score, nome: c.comprador_nome };
+            })
+            .filter(c => c.score > 0)
+            .sort((a, b) => b.score - a.score || a.numero - b.numero)
+            .slice(0, 10);
+          top = scored;
         }
 
         return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: top } });

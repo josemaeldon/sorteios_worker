@@ -61,6 +61,12 @@ type ValidatedCartelaComGrade = {
   numeros_grade: number[][];
 };
 
+type RankingCartela = {
+  numero: number;
+  nome?: string;
+  score: number;
+};
+
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
@@ -579,60 +585,47 @@ const DrawTab: React.FC = () => {
     loadRodadas();
   };
 
-  // Compute top-10 scoring cartelas: validated cartelas sorted by how many drawn numbers they contain
+  // Compute top-10 cartelas as an individual score ranking
   const topScoringCartelas = useMemo(() => {
     if (drawnNumbers.length === 0) return [];
     const isRifa = sorteioAtivo?.tipo === 'rifa';
 
     if (isRifa) {
-      // For rifa: winner is the validated cartela whose numero matches a drawn number
+      // For rifa: rank cartelas that match drawn numbers
       const drawnSet = new Set(drawnNumbers);
       const winners = cartelasValidadas.filter(cv => drawnSet.has(cv.numero));
       if (winners.length === 0) return [];
-      return [{
-        score: 1,
-        cartelas: winners.map(cv => ({ numero: cv.numero, nome: cv.comprador_nome }))
-      }];
+      return winners
+        .map(cv => ({ numero: cv.numero, nome: cv.comprador_nome, score: 1 }))
+        .sort((a, b) => a.numero - b.numero)
+        .slice(0, 10);
     }
 
     const drawnSet = new Set(drawnNumbers);
     if (validatedCardsWithGrade.length === 0) return [];
 
-    const scored = validatedCardsWithGrade.map(c => {
+    const scored: RankingCartela[] = validatedCardsWithGrade.map(c => {
       const allNums = c.numeros_grade.flatMap(g => g.filter(n => n !== 0));
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
 
-    // Sort descending by score
-    scored.sort((a, b) => b.score - a.score);
-
-    // Find top-10 distinct score levels, grouping ties
-    const result: { score: number; cartelas: { numero: number; nome?: string }[] }[] = [];
-    for (const { numero, score, nome } of scored) {
-      if (score === 0) continue;
-      const existing = result.find(r => r.score === score);
-      if (existing) {
-        existing.cartelas.push({ numero, nome });
-      } else {
-        if (result.length < 10) {
-          result.push({ score, cartelas: [{ numero, nome }] });
-        }
-      }
-    }
-    return result;
+    return scored
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.numero - b.numero)
+      .slice(0, 10);
   }, [drawnNumbers, validatedCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
   useEffect(() => {
-    const winnerEntry = topScoringCartelas.find(entry => entry.score >= winningScore);
-    if (winnerEntry) {
-      const newWinners = winnerEntry.cartelas.filter(c => !ganhadoresPopShownRef.current.has(c.numero));
+    const winnerEntries = topScoringCartelas.filter(entry => entry.score >= winningScore);
+    if (winnerEntries.length > 0) {
+      const newWinners = winnerEntries.filter(c => !ganhadoresPopShownRef.current.has(c.numero));
       if (newWinners.length > 0) {
         newWinners.forEach(c => ganhadoresPopShownRef.current.add(c.numero));
         const loteSize = sorteioAtivo?.tamanho_lote ?? LOTE_SIZE;
-        setGanhadoresPop(winnerEntry.cartelas.map(c => {
+        setGanhadoresPop(winnerEntries.map(c => {
           const idx = cartelasValidadas.findIndex(cv => cv.numero === c.numero);
-          return { ...c, lote: idx !== -1 ? Math.floor(idx / loteSize) + 1 : undefined };
+          return { numero: c.numero, nome: c.nome, lote: idx !== -1 ? Math.floor(idx / loteSize) + 1 : undefined };
         }));
       }
     }
@@ -1123,25 +1116,19 @@ const DrawTab: React.FC = () => {
                 ) : (
                   <div className="divide-y divide-border overflow-y-auto">
                     {topScoringCartelas.map((entry, idx) => (
-                      <div key={entry.score} className="py-2.5 first:pt-0 last:pb-0">
+                      <div key={entry.numero} className="py-2.5 first:pt-0 last:pb-0">
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
                           <span className="text-sm font-semibold text-primary">{entry.score} pts</span>
-                          <span className="ml-auto text-xs text-muted-foreground">{entry.cartelas.length}</span>
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {entry.cartelas.map(({ numero, nome }) => (
-                            <button
-                              key={numero}
-                              onClick={() => handleCartelaClick(numero, nome)}
-                              aria-label={`Ver números da cartela ${numero.toString().padStart(3, '0')}${nome ? ` - ${nome}` : ''}`}
-                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer truncate"
-                              title={nome ? `${numero} - ${nome}` : numero.toString()}
-                            >
-                              {numero.toString().padStart(3, '0')}{nome && ` - ${nome.substring(0, 8)}`}
-                            </button>
-                          ))}
-                        </div>
+                        <button
+                          onClick={() => handleCartelaClick(entry.numero, entry.nome)}
+                          aria-label={`Ver números da cartela ${entry.numero.toString().padStart(3, '0')}${entry.nome ? ` - ${entry.nome}` : ''}`}
+                          className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer truncate"
+                          title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}
+                        >
+                          {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome.substring(0, 8)}` : ''}
+                        </button>
                       </div>
                     ))}
                   </div>
