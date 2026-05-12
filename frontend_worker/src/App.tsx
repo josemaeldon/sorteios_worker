@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useFavicon } from "@/hooks/useFavicon";
 
+const Landing = lazy(() => import("./pages/Landing"));
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -41,8 +42,9 @@ const AppRoutes = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/" element={<Landing />} />
           <Route
-            path="/"
+            path="/app"
             element={
               <ProtectedRoute>
                 <Index />
