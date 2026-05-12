@@ -283,13 +283,23 @@ const DrawTab: React.FC = () => {
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
-        const cardsResult = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
+        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
         loadedCardsWithGrade = (cardsResult.data || [])
-          .filter((card: ValidatedCartelaComGrade) => card.numeros_grade && card.numeros_grade.length > 0)
-          .map((card: ValidatedCartelaComGrade) => ({
-            ...card,
-            comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-          }));
+          .filter(
+            (card: ValidatedCartelaComGrade) =>
+              card.numeros_grade &&
+              card.numeros_grade.length > 0
+          )
+          .map(
+            (card: ValidatedCartelaComGrade) => ({
+              ...card,
+              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+            })
+          );
+        if (loadedCardsWithGrade.length === 0) {
+          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
+          loadedCardsWithGrade = cardsResultFallback.data || [];
+        }
       } catch (err) {
         console.error('Error fetching validated cartelas grids:', err);
       }
