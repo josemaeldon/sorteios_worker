@@ -104,7 +104,7 @@ const DrawTab: React.FC = () => {
   const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[] } | null>(null);
   const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>([]);
   const [manualNumberInput, setManualNumberInput] = useState('');
-  const [validatedCardsWithGrade, setValidatedCardsWithGrade] = useState<ValidatedCartelaComGrade[]>([]);
+  const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>([]);
 
   // Random cartela raffle state
   const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(false);
@@ -281,14 +281,37 @@ const DrawTab: React.FC = () => {
         console.error('Error fetching validated cartelas, using cached data:', err);
       }
 
-      let cardsWithGrade: ValidatedCartelaComGrade[] = [];
+      let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
-        const cardsResult = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-        cardsWithGrade = cardsResult.data || [];
+        const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
+        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
+        loadedCardsWithGrade = (cardsResult.data || [])
+          .filter(
+            (card: ValidatedCartelaComGrade) =>
+              validatedNumbers.has(card.numero) &&
+              card.numeros_grade &&
+              card.numeros_grade.length > 0
+          )
+          .map(
+            (card: ValidatedCartelaComGrade) => ({
+              ...card,
+              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+            })
+          );
+        if (loadedCardsWithGrade.length === 0) {
+          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
+          loadedCardsWithGrade = cardsResultFallback.data || [];
+        }
       } catch (err) {
-        console.error('Error fetching validated grids:', err);
+        console.error('Error fetching validated cartelas grids:', err);
+        try {
+          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
+          loadedCardsWithGrade = cardsResultFallback.data || [];
+        } catch (fallbackErr) {
+          console.error('Error fetching validated grids fallback:', fallbackErr);
+        }
       }
-      setValidatedCardsWithGrade(cardsWithGrade);
+      setCardsWithGrade(loadedCardsWithGrade);
 
       let poolNumbers: number[];
       if (isRifa) {
@@ -299,9 +322,9 @@ const DrawTab: React.FC = () => {
           .sort((a, b) => a - b);
       } else {
         // Build available numbers from validated cartelas' grids only
-        if (cardsWithGrade.length > 0) {
+        if (loadedCardsWithGrade.length > 0) {
           const allNums = new Set<number>(
-            cardsWithGrade.flatMap(c => c.numeros_grade.flatMap(grid => grid.filter(n => n !== 0)))
+            loadedCardsWithGrade.flatMap(c => c.numeros_grade.flatMap(grid => grid.filter(n => n !== 0)))
           );
           poolNumbers = Array.from(allNums).filter(n => n >= rodada.range_start && n <= rodada.range_end).sort((a, b) => a - b);
         } else {
@@ -567,7 +590,7 @@ const DrawTab: React.FC = () => {
   };
 
   const handleCartelaClick = (numero: number, nome?: string) => {
-    const cartela = validatedCardsWithGrade.find(c => c.numero === numero);
+    const cartela = cardsWithGrade.find(c => c.numero === numero);
     if (!cartela || !cartela.numeros_grade || cartela.numeros_grade.length === 0) return;
     setSelectedCartelaModal({ numero, nome, grade: cartela.numeros_grade[0] });
   };
@@ -601,9 +624,9 @@ const DrawTab: React.FC = () => {
     }
 
     const drawnSet = new Set(drawnNumbers);
-    if (validatedCardsWithGrade.length === 0) return [];
+    if (cardsWithGrade.length === 0) return [];
 
-    const scored: RankingCartela[] = validatedCardsWithGrade.map(c => {
+    const scored: RankingCartela[] = cardsWithGrade.map(c => {
       const allNums = [...new Set(c.numeros_grade.flatMap(g => g.filter(n => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
@@ -612,7 +635,7 @@ const DrawTab: React.FC = () => {
     return scored
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || a.numero - b.numero);
-  }, [drawnNumbers, validatedCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
+  }, [drawnNumbers, cardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
   // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
   const groupedTop = useMemo(() => {
