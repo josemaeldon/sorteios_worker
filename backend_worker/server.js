@@ -1855,6 +1855,14 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       // ================== SORTEIOS ==================
       case 'getSorteios':
+        // Limpar cartelas órfãs globalmente (de sorteios deletados)
+        await client.query(`
+          DELETE FROM loja_cartelas
+          WHERE card_set_id NOT IN (
+            SELECT id FROM bingo_card_sets
+          )
+        `);
+        
         if (data.authenticated_role === 'admin') {
           result = await client.query(
             `SELECT s.*, u.nome as owner_nome, u.email as owner_email
@@ -1926,6 +1934,14 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             );
           }
         }
+        
+        // Limpar cartelas órfãs em Minha Loja do usuário (de sorteios deletados)
+        await client.query(`
+          DELETE FROM loja_cartelas
+          WHERE user_id = $1 AND card_set_id NOT IN (
+            SELECT id FROM bingo_card_sets
+          )
+        `, [sorteioOwnerId]);
         
         return res.json({ data: result.rows });
       }
@@ -3878,10 +3894,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           const ownerRes = await client.query('SELECT user_id FROM sorteios WHERE id = $1', [data.sorteio_id]);
           if (ownerRes.rows.length > 0) minhaLojaUserId = ownerRes.rows[0].user_id;
         }
+        
+        // Limpar cartelas órfãs (sem bingo_card_sets válido)
+        await client.query(`
+          DELETE FROM loja_cartelas
+          WHERE user_id = $1 AND card_set_id NOT IN (
+            SELECT id FROM bingo_card_sets
+          )
+        `, [minhaLojaUserId]);
+        
         const minhaLojaResult = await client.query(
           `SELECT lc.id, lc.card_set_id, lc.numero_cartela, lc.preco, lc.status, lc.comprador_nome, lc.card_data, lc.created_at, bcs.nome as card_set_nome
            FROM loja_cartelas lc
-           LEFT JOIN bingo_card_sets bcs ON lc.card_set_id = bcs.id
+           INNER JOIN bingo_card_sets bcs ON lc.card_set_id = bcs.id
            WHERE lc.user_id = $1
            ORDER BY lc.numero_cartela ASC`,
           [minhaLojaUserId]
