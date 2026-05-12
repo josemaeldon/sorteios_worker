@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trophy } from 'lucide-react';
 import { callApi } from '@/lib/apiClient';
 
 type PublicRodada = {
@@ -10,6 +10,7 @@ type PublicRodada = {
   range_start: number;
   range_end: number;
   status: string;
+  tipo?: string;
 };
 
 type HistoricoItem = {
@@ -17,10 +18,16 @@ type HistoricoItem = {
   ordem: number;
 };
 
+type Top10Entry = {
+  score: number;
+  cartelas: Array<{ numero: number; nome?: string }>;
+};
+
 const StreamingDraw: React.FC = () => {
   const { rodadaId } = useParams();
   const [rodada, setRodada] = useState<PublicRodada | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
+  const [top10, setTop10] = useState<Top10Entry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
@@ -30,9 +37,10 @@ const StreamingDraw: React.FC = () => {
     if (!silent) setIsLoading(true);
     try {
       const result = await callApi('getPublicRodadaSorteio', { rodada_id: rodadaId });
-      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[] } }).data;
+      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: Top10Entry[] } }).data;
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
+      setTop10(data?.top10 ?? []);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar sorteio.');
@@ -63,7 +71,7 @@ const StreamingDraw: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-black text-white flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin" />
       </div>
     );
@@ -71,47 +79,89 @@ const StreamingDraw: React.FC = () => {
 
   if (error || !rodada) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-black text-white flex items-center justify-center p-6 text-center">
         <p className="text-2xl font-semibold">{error || 'Rodada não encontrada.'}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col overflow-hidden">
-      <header className="px-8 py-5 border-b border-white/10 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-white/60 text-sm uppercase tracking-wide">{rodada.sorteio_nome}</p>
-          <h1 className="text-3xl font-bold">{rodada.nome}</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-black text-white flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="px-4 md:px-8 py-4 md:py-5 border-b border-white/10 flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="min-w-0 flex-1">
+          <p className="text-white/60 text-xs md:text-sm uppercase tracking-wide truncate">{rodada.sorteio_nome}</p>
+          <h1 className="text-xl md:text-3xl font-bold truncate">{rodada.nome}</h1>
         </div>
-        <div className="text-right text-white/70">
-          <p>{rodada.range_start} a {rodada.range_end}</p>
-          <p>{sortedHistorico.length} sorteado{sortedHistorico.length !== 1 ? 's' : ''}</p>
+        <div className="text-right text-white/70 text-xs md:text-sm flex-shrink-0">
+          <p className="whitespace-nowrap">{rodada.range_start} a {rodada.range_end}</p>
+          <p className="whitespace-nowrap">{sortedHistorico.length} sorteado{sortedHistorico.length !== 1 ? 's' : ''}</p>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6">
-        <p className="text-white/50 text-2xl mb-8">Número sorteado</p>
-        <div
-          className={`font-black leading-none tabular-nums text-center ${isNewNumber ? 'animate-bingo-globe-emerge' : ''}`}
-          style={{ fontSize: 'clamp(9rem, 32vw, 34rem)' }}
-        >
-          {currentNumber ?? '-'}
-        </div>
-      </main>
+      {/* Main Content - Responsive Layout */}
+      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-hidden">
+        {/* Left Section: Number + Historico */}
+        <div className="flex-1 flex flex-col min-w-0 items-center justify-center">
+          {/* Large Current Number */}
+          <p className="text-white/50 text-lg md:text-2xl mb-2 md:mb-4">Número Sorteado</p>
+          <div
+            className={`font-black leading-none tabular-nums text-center mb-6 md:mb-8 ${
+              isNewNumber ? 'animate-bingo-globe-emerge' : ''
+            }`}
+            style={{ fontSize: 'clamp(3rem, 20vw, 20rem)' }}
+          >
+            {currentNumber ?? '-'}
+          </div>
 
-      <footer className="px-8 py-5 border-t border-white/10">
-        <div className="flex gap-3 overflow-hidden">
-          {sortedHistorico.slice(-18).map((item) => (
-            <span
-              key={`${item.ordem}-${item.numero_sorteado}`}
-              className="min-w-14 rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-center text-2xl font-bold"
-            >
-              {item.numero_sorteado}
-            </span>
-          ))}
+          {/* Historico Footer */}
+          <div className="w-full">
+            <p className="text-white/50 text-xs md:text-sm mb-2">Números Sorteados</p>
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {sortedHistorico.slice(-18).map((item) => (
+                <span
+                  key={`${item.ordem}-${item.numero_sorteado}`}
+                  className="min-w-12 md:min-w-14 rounded-lg border border-white/15 bg-white/10 px-2 md:px-4 py-1 md:py-2 text-center text-lg md:text-2xl font-bold flex-shrink-0"
+                >
+                  {item.numero_sorteado}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
-      </footer>
+
+        {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
+        {top10.length > 0 && (
+          <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
+              <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
+            </div>
+            <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
+              {top10.map((entry, idx) => (
+                <div key={entry.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
+                    <span className="font-bold text-yellow-400 w-6">{idx + 1}º</span>
+                    <span className="font-semibold text-yellow-300">{entry.score} pts</span>
+                    <span className="ml-auto text-white/60">{entry.cartelas.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {entry.cartelas.map(({ numero, nome }) => (
+                      <span
+                        key={numero}
+                        className=\"px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate\"
+                        title={nome ? `${numero} - ${nome}` : numero.toString()}
+                      >
+                        {numero.toString().padStart(3, '0')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
