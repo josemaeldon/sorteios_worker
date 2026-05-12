@@ -306,10 +306,23 @@ const DrawTab: React.FC = () => {
               comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
             })
           );
-        if (loadedCardsWithGrade.length === 0) {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
+
+          detailsResults.forEach((item) => {
+            if (!item?.data) return;
+            const normalized = normalizeNumerosGrade(item.data.numeros_grade);
+            if (normalized.length === 0) return;
+            mergedByNumero.set(item.numero, {
+              numero: item.numero,
+              comprador_nome: item.comprador_nome || item.data.comprador_nome,
+              numeros_grade: normalized,
+            });
+          });
         }
+
+        loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
+          ...card,
+          comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+        }));
       } catch (err) {
         console.error('Error fetching validated cartelas grids:', err);
       }
