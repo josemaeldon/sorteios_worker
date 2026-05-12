@@ -67,6 +67,16 @@ type RankingCartela = {
   score: number;
 };
 
+const normalizeNumerosGrade = (raw: unknown): number[][] => {
+  if (!raw) return [];
+  const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
+  if (!Array.isArray(parsed) || parsed.length === 0) return [];
+  if (Array.isArray(parsed[0])) return (parsed as unknown[])
+    .map(row => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
+    .filter((row) => row.length > 0);
+  return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+};
+
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
@@ -284,34 +294,34 @@ const DrawTab: React.FC = () => {
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
         const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
-        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
-        loadedCardsWithGrade = (cardsResult.data || [])
-          .filter(
-            (card: ValidatedCartelaComGrade) =>
-              validatedNumbers.has(card.numero) &&
-              card.numeros_grade &&
-              card.numeros_grade.length > 0
-          )
-          .map(
-            (card: ValidatedCartelaComGrade) => ({
-              ...card,
-              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-            })
-          );
-        if (loadedCardsWithGrade.length === 0) {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
-        }
+        const [validatedWithGradeResult, allCardsResult] = await Promise.all([
+          callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id }).catch(() => ({ data: [] })),
+          callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }).catch(() => ({ data: [] })),
+        ]);
+
+        const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
+
+        const fromValidatedEndpoint = (validatedWithGradeResult.data || []) as ValidatedCartelaComGrade[];
+        fromValidatedEndpoint.forEach((card) => {
+          if (normalizeNumerosGrade(card?.numeros_grade).length > 0) mergedByNumero.set(card.numero, { ...card, numeros_grade: normalizeNumerosGrade(card.numeros_grade) });
+        });
+
+        const fromAllCardsEndpoint = ((allCardsResult.data || []) as ValidatedCartelaComGrade[])
+          .filter((card) => validatedNumbers.has(card.numero) && normalizeNumerosGrade(card?.numeros_grade).length > 0)
+          .map((card) => ({ ...card, numeros_grade: normalizeNumerosGrade(card.numeros_grade) }));
+        fromAllCardsEndpoint.forEach((card) => {
+          if (!mergedByNumero.has(card.numero)) mergedByNumero.set(card.numero, card);
+        });
+
+        loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
+          ...card,
+          comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+        }));
       } catch (err) {
         console.error('Error fetching validated cartelas grids:', err);
-        try {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
-        } catch (fallbackErr) {
-          console.error('Error fetching validated grids fallback:', fallbackErr);
-        }
       }
       setCardsWithGrade(loadedCardsWithGrade);
+
 
       let poolNumbers: number[];
       if (isRifa) {
@@ -321,18 +331,10 @@ const DrawTab: React.FC = () => {
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
           .sort((a, b) => a - b);
       } else {
-        // Build available numbers from validated cartelas' grids only
-        if (loadedCardsWithGrade.length > 0) {
-          const allNums = new Set<number>(
-            loadedCardsWithGrade.flatMap(c => c.numeros_grade.flatMap(grid => grid.filter(n => n !== 0)))
-          );
-          poolNumbers = Array.from(allNums).filter(n => n >= rodada.range_start && n <= rodada.range_end).sort((a, b) => a - b);
-        } else {
-          // Fallback to full range if no validated cartelas with grids found
-          poolNumbers = [];
-          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-            poolNumbers.push(i);
-          }
+        // For bingo: draw must be random over the full rodada range, independent of card distribution
+        poolNumbers = [];
+        for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+          poolNumbers.push(i);
         }
       }
       setAvailableNumbers(poolNumbers);
@@ -627,7 +629,8 @@ const DrawTab: React.FC = () => {
     if (cardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = cardsWithGrade.map(c => {
-      const allNums = [...new Set(c.numeros_grade.flatMap(g => g.filter(n => n !== 0)))];
+      const grids = normalizeNumerosGrade(c.numeros_grade);
+      const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
@@ -962,10 +965,12 @@ const DrawTab: React.FC = () => {
                         <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
                           {groupedTop.map((group, idx) => (
                             <div key={group.score} className="py-3 first:pt-0 last:pb-0">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}º</span>
-                                <span className="text-lg font-semibold text-primary">{group.score} pts</span>
-                                <span className="text-sm text-muted-foreground">
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-2xl font-bold text-muted-foreground/90 w-8">{idx + 1}º</span>
+                                  <span className="text-3xl font-bold text-primary leading-none">{group.score} pts</span>
+                                </div>
+                                <span className="text-lg text-muted-foreground whitespace-nowrap">
                                   {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
                                 </span>
                               </div>
@@ -975,7 +980,7 @@ const DrawTab: React.FC = () => {
                                     key={cartela.numero}
                                     onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
                                     aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
-                                    className="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                                    className="px-2.5 py-1 rounded-md border border-border/70 bg-muted/70 text-foreground text-xs font-mono tracking-wide hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
                                   >
                                     {cartela.numero.toString().padStart(3, '0')}
                                   </button>
@@ -1141,7 +1146,7 @@ const DrawTab: React.FC = () => {
                   <Trophy className="w-5 h-5 text-yellow-500" />
                   Top 10 Cartelas
                 </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">Maiores pontuações</p>
+                <p className="text-xs text-muted-foreground mt-1">Pontuações em tempo real</p>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden flex flex-col">
                 {topScoringCartelas.length === 0 ? (
@@ -1155,10 +1160,12 @@ const DrawTab: React.FC = () => {
                   <div className="divide-y divide-border overflow-y-auto">
                     {groupedTop.map((group, idx) => (
                       <div key={group.score} className="py-2.5 first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
-                          <span className="text-sm font-semibold text-primary">{group.score} pts</span>
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold text-muted-foreground/90 w-7">{idx + 1}º</span>
+                            <span className="text-2xl font-bold text-primary leading-none">{group.score} pts</span>
+                          </div>
+                          <span className="text-base text-muted-foreground whitespace-nowrap">
                             {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
                           </span>
                         </div>
@@ -1168,7 +1175,7 @@ const DrawTab: React.FC = () => {
                               key={cartela.numero}
                               onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
                               aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
-                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded-md border border-border/70 text-xs font-mono tracking-wide bg-muted/70 hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
                               title={cartela.nome ? `${cartela.numero} - ${cartela.nome}` : cartela.numero.toString()}
                             >
                               {cartela.numero.toString().padStart(3, '0')}
