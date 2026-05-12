@@ -302,12 +302,6 @@ const DrawTab: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching validated cartelas grids:', err);
-        try {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
-        } catch (fallbackErr) {
-          console.error('Error fetching validated grids fallback:', fallbackErr);
-        }
       }
       setCardsWithGrade(loadedCardsWithGrade);
 
@@ -617,7 +611,8 @@ const DrawTab: React.FC = () => {
     if (cardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = cardsWithGrade.map(c => {
-      const allNums = [...new Set(c.numeros_grade.flatMap(g => g.filter(n => n !== 0)))];
+      const grids = Array.isArray(c.numeros_grade?.[0]) ? c.numeros_grade : [c.numeros_grade as unknown as number[]];
+      const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
