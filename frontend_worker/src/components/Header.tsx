@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Dice5, Target, LogOut, Settings, User } from 'lucide-react';
 import { useBingo } from '@/contexts/BingoContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,35 +16,8 @@ import {
 
 const Header: React.FC = () => {
   const { sorteioAtivo } = useBingo();
-  const { user, logout, getUserConfiguracoes } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadFavicon = async () => {
-      const cfg = await getUserConfiguracoes();
-      if (!mounted) return;
-      const favicon = cfg['loja_favicon_url'];
-      if (!favicon) return;
-
-      let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
-      link.href = favicon;
-    };
-
-    if (user) {
-      loadFavicon();
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [user, getUserConfiguracoes]);
 
   const getInitials = (name: string) => {
     return name

@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { callApi } from '@/lib/apiClient';
 
+const DEFAULT_FAVICON = '/favicon.ico';
+
 export function useFavicon() {
   useEffect(() => {
     let cancelled = false;
@@ -23,11 +25,25 @@ export function useFavicon() {
 }
 
 export function applyFavicon(url: string | null) {
-  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-  if (!link) {
-    link = document.createElement('link');
-    link.rel = 'icon';
-    document.head.appendChild(link);
+  const href = url || DEFAULT_FAVICON;
+  const ensureLink = (rel: string) => {
+    let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = rel;
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  };
+
+  ensureLink('icon');
+  ensureLink('shortcut icon');
+
+  let appleTouchIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+  if (!appleTouchIcon) {
+    appleTouchIcon = document.createElement('link');
+    appleTouchIcon.rel = 'apple-touch-icon';
+    document.head.appendChild(appleTouchIcon);
   }
-  link.href = url || 'data:,';
+  appleTouchIcon.href = href;
 }
