@@ -43,7 +43,7 @@ const Planos: React.FC = () => {
   useEffect(() => {
     // If user already has access, redirect to home
     if (user?.role === 'admin' || user?.gratuidade_vitalicia || user?.plano_id) {
-      navigate('/', { replace: true });
+      navigate('/app', { replace: true });
       return;
     }
     if (paymentSuccess) {
