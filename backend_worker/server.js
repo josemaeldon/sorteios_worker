@@ -2600,7 +2600,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           if (isRifa) {
             score = drawnSet.has(Number(c.numero)) ? 1 : 0;
           } else {
-            const allNums = (c.numeros_grade || []).flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
+            const allNums = [...new Set((c.numeros_grade || []).flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []))];
             score = allNums.filter(n => drawnSet.has(Number(n))).length;
           }
           return { numero: c.numero, nome: c.comprador_nome, score };

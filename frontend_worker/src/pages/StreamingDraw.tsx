@@ -152,10 +152,13 @@ const StreamingDraw: React.FC = () => {
                     <span className="font-semibold text-yellow-300">{entry.score} pts</span>
                     <span className="text-xs text-white/70">{entry.count} cartela{entry.count !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="text-xs">
-                    <span className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate">
-                      {entry.cartelas.slice(0, 18).map(n => n.toString().padStart(3, '0')).join(', ')}{entry.count > 18 ? '...' : ''}
-                    </span>
+                  <div className="flex flex-wrap gap-2">
+                    {entry.cartelas.slice(0, 18).map(n => (
+                      <span key={n} className="px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90">
+                        {n.toString().padStart(3, '0')}
+                      </span>
+                    ))}
+                    {entry.count > 18 && <span className="text-xs text-white/60">...</span>}
                   </div>
                 </div>
               ))}

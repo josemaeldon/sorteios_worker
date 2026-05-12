@@ -605,7 +605,7 @@ const DrawTab: React.FC = () => {
     if (validatedCardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = validatedCardsWithGrade.map(c => {
-      const allNums = c.numeros_grade.flatMap(g => g.filter(n => n !== 0));
+      const allNums = [...new Set(c.numeros_grade.flatMap(g => g.filter(n => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
