@@ -106,6 +106,7 @@ const DrawTab: React.FC = () => {
   const [fontSize, setFontSize] = useState<number>(300);
   const [fullscreenFontSize, setFullscreenFontSize] = useState<number>(FULLSCREEN_FONT_SIZE_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDrawnHistoryFullscreen, setIsDrawnHistoryFullscreen] = useState(false);
   const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>(null);
   const [showDrawing, setShowDrawing] = useState(false);
   const [justDrawn, setJustDrawn] = useState(false);
@@ -1040,14 +1041,54 @@ const DrawTab: React.FC = () => {
             )}
           </div>
 
+
+
+          {isDrawnHistoryFullscreen && (
+            <div className="fixed inset-0 z-[9998] bg-background/95 backdrop-blur-sm p-4 md:p-8 overflow-auto">
+              <div className="max-w-7xl mx-auto">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <h3 className="text-2xl md:text-3xl font-bold">Números Sorteados</h3>
+                  <Button variant="outline" onClick={() => setIsDrawnHistoryFullscreen(false)} className="gap-2">
+                    <Minimize className="w-4 h-4" />
+                    Fechar tela cheia
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 md:gap-3">
+                  {drawnNumbers.map((num, index) => (
+                    <div
+                      key={`fullscreen-${num}-${index}`}
+                      className={cn(
+                        "relative flex items-center justify-center h-20 md:h-24 rounded-lg font-bold text-2xl md:text-3xl border-2",
+                        num === currentNumber && !isDrawing
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-foreground border-border"
+                      )}
+                    >
+                      <span className="absolute top-1 left-1.5 text-[10px] md:text-xs opacity-60">{index + 1}º</span>
+                      {num}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {!isFullscreen && drawnNumbers.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between gap-2">
                   <span>Números Sorteados</span>
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {drawnNumbers.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-normal text-muted-foreground">{drawnNumbers.length}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => setIsDrawnHistoryFullscreen(true)}
+                    >
+                      <Maximize className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>

@@ -142,7 +142,7 @@ const StreamingDraw: React.FC = () => {
       </header>
 
       {/* Main Content - Responsive Layout */}
-      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-y-auto">
         {/* Left Section: Number + Historico */}
         <div className="flex-1 flex flex-col min-w-0 items-center justify-center">
           {/* Large Current Number */}
@@ -159,11 +159,11 @@ const StreamingDraw: React.FC = () => {
           {/* Historico Footer */}
           <div className="w-full">
             <p className="text-white/50 text-xs md:text-sm mb-2">Números Sorteados</p>
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex flex-wrap gap-2 pb-2">
               {sortedHistorico.slice(-18).map((item) => (
                 <span
                   key={`${item.ordem}-${item.numero_sorteado}`}
-                  className="min-w-12 md:min-w-14 rounded-lg border border-white/15 bg-white/10 px-2 md:px-4 py-1 md:py-2 text-center text-lg md:text-2xl font-bold flex-shrink-0"
+                  className="min-w-12 md:min-w-14 rounded-lg border border-white/15 bg-white/10 px-2 md:px-4 py-1 md:py-2 text-center text-lg md:text-2xl font-bold"
                 >
                   {item.numero_sorteado}
                 </span>
@@ -174,12 +174,12 @@ const StreamingDraw: React.FC = () => {
 
         {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
         {groupedTop10.length > 0 && (
-          <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6">
+          <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6 flex flex-col min-h-[260px] md:h-full">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
             </div>
-            <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-white/10 overflow-y-auto flex-1 min-h-0">
               {groupedTop10.map((group, idx) => (
                 <div key={group.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
