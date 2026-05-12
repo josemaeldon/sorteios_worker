@@ -149,7 +149,7 @@ const StreamingDraw: React.FC = () => {
                     {entry.cartelas.map(({ numero, nome }) => (
                       <span
                         key={numero}
-                        className=\"px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate\"
+                        className="px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate"
                         title={nome ? `${numero} - ${nome}` : numero.toString()}
                       >
                         {numero.toString().padStart(3, '0')}
