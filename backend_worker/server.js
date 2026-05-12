@@ -2593,29 +2593,33 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return { numero: row.numero, comprador_nome: row.comprador_nome, numeros_grade: raw };
         });
 
-        let top = [];
+        // Build Top10 grouped by score (each entry: { score, cartelas: [numero], count })
         const isRifa = String(rodadaRow.tipo || '') === 'rifa' || !!rodadaRow.apenas_numero_rifa;
-        if (isRifa) {
-          top = normalizedCards
-            .filter(c => drawnSet.has(Number(c.numero)))
-            .map(c => ({ numero: c.numero, nome: c.comprador_nome, score: 1 }))
-            .sort((a, b) => a.numero - b.numero)
-            .slice(0, 10);
-        } else {
-          const scored = normalizedCards
-            .filter(c => c.numeros_grade && c.numeros_grade.length > 0)
-            .map(c => {
-              const allNums = c.numeros_grade.flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
-              const score = allNums.filter(n => drawnSet.has(Number(n))).length;
-              return { numero: c.numero, score, nome: c.comprador_nome };
-            })
-            .filter(c => c.score > 0)
-            .sort((a, b) => b.score - a.score || a.numero - b.numero)
-            .slice(0, 10);
-          top = scored;
-        }
+        const perCard = normalizedCards.map(c => {
+          let score = 0;
+          if (isRifa) {
+            score = drawnSet.has(Number(c.numero)) ? 1 : 0;
+          } else {
+            const allNums = (c.numeros_grade || []).flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
+            score = allNums.filter(n => drawnSet.has(Number(n))).length;
+          }
+          return { numero: c.numero, nome: c.comprador_nome, score };
+        }).filter(c => c.score > 0);
 
-        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: top } });
+        // Group by score desc
+        const groups = perCard.reduce((acc, cur) => {
+          const s = String(cur.score);
+          if (!acc[s]) acc[s] = { score: cur.score, cartelas: [] };
+          acc[s].cartelas.push(cur.numero);
+          return acc;
+        }, {});
+
+        const grouped = Object.values(groups)
+          .map(g => ({ score: g.score, cartelas: g.cartelas.sort((a, b) => a - b), count: g.cartelas.length }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 10);
+
+        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: grouped } });
       }
 
       case 'saveRodadaNumero': {
