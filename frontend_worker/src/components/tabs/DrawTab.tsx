@@ -67,6 +67,16 @@ type RankingCartela = {
   score: number;
 };
 
+const normalizeNumerosGrade = (raw: unknown): number[][] => {
+  if (!raw) return [];
+  const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
+  if (!Array.isArray(parsed) || parsed.length === 0) return [];
+  if (Array.isArray(parsed[0])) return (parsed as unknown[])
+    .map(row => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
+    .filter((row) => row.length > 0);
+  return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+};
+
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
