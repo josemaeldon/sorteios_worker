@@ -22,6 +22,8 @@ import {
   Loader2,
   Trophy,
   Ticket,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { callApi } from '@/lib/apiClient';
@@ -108,6 +110,9 @@ const DrawTab: React.FC = () => {
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const ganhadoresPopShownRef = useRef<Set<number>>(new Set());
+  const streamingUrl = selectedRodada
+    ? `${window.location.origin}/sorteio-live/${selectedRodada.id}`
+    : '';
 
   useEffect(() => {
     if (sorteioAtivo) {
@@ -254,6 +259,10 @@ const DrawTab: React.FC = () => {
     try {
       setSelectedRodada(rodada);
       setShowDrawing(true);
+      toast({
+        title: 'Link de transmissão criado',
+        description: `${window.location.origin}/sorteio-live/${rodada.id}`,
+      });
 
       const isRifa = sorteioAtivo?.tipo === 'rifa';
 
@@ -321,6 +330,16 @@ const DrawTab: React.FC = () => {
         description: (error instanceof Error ? error.message : 'Erro inesperado'),
         variant: "destructive"
       });
+    }
+  };
+
+  const copyStreamingUrl = async () => {
+    if (!streamingUrl) return;
+    try {
+      await navigator.clipboard.writeText(streamingUrl);
+      toast({ title: 'Link copiado' });
+    } catch {
+      toast({ title: 'Link de transmissão', description: streamingUrl });
     }
   };
 
@@ -680,6 +699,26 @@ const DrawTab: React.FC = () => {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={copyStreamingUrl}
+              size="lg"
+              variant="outline"
+              className="gap-2"
+            >
+              <Copy className="w-5 h-5" />
+              Copiar link OBS
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="gap-2"
+            >
+              <a href={streamingUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="w-5 h-5" />
+                Abrir transmissão
+              </a>
+            </Button>
             <Button
               onClick={drawNumber}
               disabled={isDrawing || remainingNumbers.length === 0}

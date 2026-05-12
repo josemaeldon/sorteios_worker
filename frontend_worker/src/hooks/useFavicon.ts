@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { callApi } from '@/lib/apiClient';
 
-const DEFAULT_FAVICON = '/favicon.ico';
+const DEFAULT_FAVICON = '/favicon.ico?v=system';
 
 export function useFavicon() {
   useEffect(() => {

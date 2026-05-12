@@ -1005,6 +1005,43 @@ function parseCartelas(raw) {
     .filter((item) => Number.isFinite(item));
 }
 
+async function deleteVendaAndSyncLoja(client, vendaId) {
+  const vendaResult = await client.query(
+    'SELECT id, numeros_cartelas, sorteio_id FROM vendas WHERE id = $1',
+    [vendaId]
+  );
+  const venda = vendaResult.rows[0];
+  if (!venda) return null;
+
+  const numeros = parseCartelas(venda.numeros_cartelas);
+  for (const numero of numeros) {
+    await client.query(
+      "UPDATE cartelas SET status = 'ativa' WHERE sorteio_id = $1 AND numero = $2",
+      [venda.sorteio_id, numero]
+    );
+    await client.query(`
+      UPDATE atribuicao_cartelas SET status = 'ativa', venda_id = NULL
+      WHERE numero_cartela = $1 AND atribuicao_id IN (
+        SELECT id FROM atribuicoes WHERE sorteio_id = $2
+      )
+    `, [numero, venda.sorteio_id]);
+  }
+
+  if (numeros.length > 0) {
+    const placeholders = numeros.map((_, i) => `$${i + 2}`).join(',');
+    await client.query(`
+      DELETE FROM loja_cartelas
+      WHERE numero_cartela IN (${placeholders})
+        AND card_set_id IN (
+          SELECT id FROM bingo_card_sets WHERE sorteio_id = $1
+        )
+    `, [venda.sorteio_id, ...numeros]);
+  }
+  await client.query('DELETE FROM pagamentos WHERE venda_id = $1', [venda.id]);
+  await client.query('DELETE FROM vendas WHERE id = $1', [venda.id]);
+  return venda;
+}
+
 function normalizePagamentos(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
@@ -1436,7 +1473,7 @@ function checkBasicAuth(req, res, next) {
 
 // JWT Auth middleware
 async function checkAuth(req, action) {
-  const publicActions = ['checkFirstAccess', 'setupAdmin', 'login', 'publicRegister', 'getPublicPlanos', 'getLojaPublica', 'getPublicConfiguracoes', 'createStripeCheckoutCartela', 'confirmStripeCheckoutCartela', 'createStripeCheckoutMultiCartela', 'confirmStripeCheckoutMultiCartela', 'createMercadoPagoCheckoutCartela', 'confirmMercadoPagoCheckoutCartela', 'createMercadoPagoCheckoutMultiCartela', 'confirmMercadoPagoCheckoutMultiCartela', 'cadastrarComprador', 'loginComprador', 'getHistoricoComprador', 'emailCartelasPDF', 'solicitarRecuperacaoSenha', 'resetarSenha', 'atualizarComprador', 'deletarComprador'];
+  const publicActions = ['checkFirstAccess', 'setupAdmin', 'login', 'publicRegister', 'getPublicPlanos', 'getLojaPublica', 'getPublicConfiguracoes', 'getPublicRodadaSorteio', 'createStripeCheckoutCartela', 'confirmStripeCheckoutCartela', 'createStripeCheckoutMultiCartela', 'confirmStripeCheckoutMultiCartela', 'createMercadoPagoCheckoutCartela', 'confirmMercadoPagoCheckoutCartela', 'createMercadoPagoCheckoutMultiCartela', 'confirmMercadoPagoCheckoutMultiCartela', 'cadastrarComprador', 'loginComprador', 'getHistoricoComprador', 'emailCartelasPDF', 'solicitarRecuperacaoSenha', 'resetarSenha', 'atualizarComprador', 'deletarComprador'];
   const adminActions = [
     // User management
     'getUsers', 'createUser', 'updateUser', 'deleteUser', 'approveUser', 'rejectUser',
@@ -1943,9 +1980,30 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         return res.json({ data: result.rows });
       }
 
-      case 'deleteSorteio':
+      case 'deleteSorteio': {
+        const blockResult = await client.query(`
+          SELECT
+            COALESCE(SUM(CASE WHEN status = 'ativa' THEN 1 ELSE 0 END), 0) AS atribuidas,
+            COALESCE(SUM(CASE WHEN status = 'vendida' THEN 1 ELSE 0 END), 0) AS vendidas
+          FROM cartelas
+          WHERE sorteio_id = $1
+        `, [data.id]);
+        const validResult = await client.query(
+          'SELECT COUNT(*) AS validadas FROM cartelas_validadas WHERE sorteio_id = $1',
+          [data.id]
+        );
+        const atribuidas = Number(blockResult.rows[0]?.atribuidas || 0);
+        const vendidas = Number(blockResult.rows[0]?.vendidas || 0);
+        const validadas = Number(validResult.rows[0]?.validadas || 0);
+        if (atribuidas > 0 || vendidas > 0 || validadas > 0) {
+          return res.status(409).json({
+            error: `Este sorteio não pode ser excluído porque possui ${atribuidas} cartela(s) atribuída(s), ${vendidas} vendida(s) e ${validadas} validada(s).`,
+            code: 'SORTEIO_COM_MOVIMENTACAO',
+          });
+        }
         await client.query('DELETE FROM sorteios WHERE id = $1', [data.id]);
         return res.json({ data: [{ success: true }] });
+      }
 
       case 'exportSorteioBackup': {
         if (!data.sorteio_id) {
@@ -2435,6 +2493,26 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           [data.rodada_id]
         );
         return res.json({ data: result.rows });
+
+      case 'getPublicRodadaSorteio': {
+        result = await client.query(
+          `SELECT r.id, r.nome, r.range_start, r.range_end, r.status, r.sorteio_id,
+                  s.nome AS sorteio_nome
+           FROM rodadas_sorteio r
+           JOIN sorteios s ON s.id = r.sorteio_id
+           WHERE r.id = $1
+           LIMIT 1`,
+          [data.rodada_id]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Rodada não encontrada.' });
+        }
+        const historico = await client.query(
+          'SELECT numero_sorteado, ordem, data_sorteio FROM sorteio_historico WHERE rodada_id = $1 ORDER BY ordem ASC',
+          [data.rodada_id]
+        );
+        return res.json({ data: { rodada: result.rows[0], historico: historico.rows } });
+      }
 
       case 'saveRodadaNumero': {
         const { rodada_id, numero_sorteado, ordem } = data;
@@ -3429,40 +3507,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'deleteVenda': {
-        const vendaToDeleteResult = await client.query(
-          'SELECT numeros_cartelas, sorteio_id, vendedor_id FROM vendas WHERE id = $1',
-          [data.id]
-        );
-        const vendaToDelete = vendaToDeleteResult.rows[0];
-        
-        if (vendaToDelete) {
-          const numerosToReturn = vendaToDelete.numeros_cartelas.split(',').map(n => parseInt(n.trim()));
-          
-          for (const numero of numerosToReturn) {
-            await client.query(
-              'UPDATE cartelas SET status = \'ativa\' WHERE sorteio_id = $1 AND numero = $2',
-              [vendaToDelete.sorteio_id, numero]
-            );
-            await client.query(`
-              UPDATE atribuicao_cartelas SET status = 'ativa', venda_id = NULL 
-              WHERE numero_cartela = $1 AND atribuicao_id IN (
-                SELECT id FROM atribuicoes WHERE sorteio_id = $2
-              )
-            `, [numero, vendaToDelete.sorteio_id]);
-            // Reset loja_cartelas to disponivel for the returned cards
-            await client.query(`
-              UPDATE loja_cartelas SET status = 'disponivel', comprador_nome = NULL, comprador_email = NULL,
-                comprador_endereco = NULL, comprador_cidade = NULL, comprador_telefone = NULL, updated_at = NOW()
-              WHERE numero_cartela = $1 AND status = 'vendida' AND card_set_id IN (
-                SELECT id FROM bingo_card_sets WHERE sorteio_id = $2
-              )
-            `, [numero, vendaToDelete.sorteio_id]);
-          }
-        }
-        
-        await client.query('DELETE FROM pagamentos WHERE venda_id = $1', [data.id]);
-        await client.query('DELETE FROM vendas WHERE id = $1', [data.id]);
-        
+        await deleteVendaAndSyncLoja(client, data.id);
         return res.json({ data: [{ success: true }] });
       }
 
@@ -3845,32 +3890,77 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
 
-      case 'removerCartelaLoja':
-        if (data.authenticated_role === 'admin') {
-          await client.query('DELETE FROM loja_cartelas WHERE id = $1', [data.id]);
-        } else {
-          await client.query(
-            'DELETE FROM loja_cartelas WHERE id = $1 AND user_id = $2',
-            [data.id, data.authenticated_user_id]
+      case 'removerCartelaLoja': {
+        const lojaResult = data.authenticated_role === 'admin'
+          ? await client.query(
+              `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+               FROM loja_cartelas lc
+               JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
+               WHERE lc.id = $1`,
+              [data.id]
+            )
+          : await client.query(
+              `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+               FROM loja_cartelas lc
+               JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
+               WHERE lc.id = $1 AND lc.user_id = $2`,
+              [data.id, data.authenticated_user_id]
+            );
+        const lojaCartela = lojaResult.rows[0];
+        if (lojaCartela) {
+          const vendasResult = await client.query(
+            'SELECT id, numeros_cartelas FROM vendas WHERE sorteio_id = $1',
+            [lojaCartela.sorteio_id]
           );
+          const vendasRelacionadas = vendasResult.rows.filter(v =>
+            parseCartelas(v.numeros_cartelas).includes(Number(lojaCartela.numero_cartela))
+          );
+          if (vendasRelacionadas.length > 0) {
+            for (const venda of vendasRelacionadas) {
+              await deleteVendaAndSyncLoja(client, venda.id);
+            }
+          } else {
+            await client.query('DELETE FROM loja_cartelas WHERE id = $1', [lojaCartela.id]);
+          }
         }
         return res.json({ success: true });
+      }
 
       case 'removerMultiplasCartelasLoja': {
         const ids = Array.isArray(data.ids) ? data.ids.filter(Boolean) : [];
         if (ids.length === 0) return res.json({ success: true });
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-        if (data.authenticated_role === 'admin') {
-          await client.query(
-            `DELETE FROM loja_cartelas WHERE id IN (${placeholders})`,
-            ids
+        for (const id of ids) {
+          const lojaResult = data.authenticated_role === 'admin'
+            ? await client.query(
+                `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+                 FROM loja_cartelas lc
+                 JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
+                 WHERE lc.id = $1`,
+                [id]
+              )
+            : await client.query(
+                `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+                 FROM loja_cartelas lc
+                 JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
+                 WHERE lc.id = $1 AND lc.user_id = $2`,
+                [id, data.authenticated_user_id]
+              );
+          const lojaCartela = lojaResult.rows[0];
+          if (!lojaCartela) continue;
+          const vendasResult = await client.query(
+            'SELECT id, numeros_cartelas FROM vendas WHERE sorteio_id = $1',
+            [lojaCartela.sorteio_id]
           );
-        } else {
-          const placeholdersUser = ids.map((_, i) => `$${i + 2}`).join(',');
-          await client.query(
-            `DELETE FROM loja_cartelas WHERE user_id = $1 AND id IN (${placeholdersUser})`,
-            [data.authenticated_user_id, ...ids]
+          const vendasRelacionadas = vendasResult.rows.filter(v =>
+            parseCartelas(v.numeros_cartelas).includes(Number(lojaCartela.numero_cartela))
           );
+          if (vendasRelacionadas.length > 0) {
+            for (const venda of vendasRelacionadas) {
+              await deleteVendaAndSyncLoja(client, venda.id);
+            }
+          } else {
+            await client.query('DELETE FROM loja_cartelas WHERE id = $1', [lojaCartela.id]);
+          }
         }
         return res.json({ success: true });
       }

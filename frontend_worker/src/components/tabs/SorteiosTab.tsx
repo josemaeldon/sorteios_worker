@@ -133,16 +133,15 @@ const SorteiosTab: React.FC = () => {
     }
   };
 
-  const confirmDelete = () => {
-    if (deletingSorteioId) {
-      deleteSorteio(deletingSorteioId);
-      toast({
-        title: "Sorteio excluído",
-        description: "O sorteio foi excluído com sucesso."
-      });
+  const confirmDelete = async () => {
+    if (!deletingSorteioId) return;
+    try {
+      await deleteSorteio(deletingSorteioId);
+      setDeleteDialogOpen(false);
+      setDeletingSorteioId(null);
+    } catch {
+      // A mensagem detalhada já é exibida pelo contexto.
     }
-    setDeleteDialogOpen(false);
-    setDeletingSorteioId(null);
   };
 
   const handleNewSorteio = () => {

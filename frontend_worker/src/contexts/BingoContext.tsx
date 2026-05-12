@@ -248,6 +248,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         description: getErrorMessage(error),
         variant: "destructive"
       });
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -680,13 +681,21 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const removerCartelaLoja = useCallback(async (id: string) => {
     await callApi('removerCartelaLoja', { id });
     setLojaCartelas(prev => prev.filter(c => c.id !== id));
-  }, [callApi]);
+    await loadMinhaLoja();
+    await loadVendas();
+    await loadCartelas();
+    await loadAtribuicoes();
+  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes]);
 
   const removerMultiplasCartelasLoja = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
     await callApi('removerMultiplasCartelasLoja', { ids });
     setLojaCartelas(prev => prev.filter(c => !ids.includes(c.id)));
-  }, [callApi]);
+    await loadMinhaLoja();
+    await loadVendas();
+    await loadCartelas();
+    await loadAtribuicoes();
+  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes]);
 
   const atualizarPrecoLojaCartela = useCallback(async (id: string, preco: number) => {
     await callApi('atualizarPrecoLojaCartela', { id, preco });
