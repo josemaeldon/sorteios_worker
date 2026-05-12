@@ -292,40 +292,55 @@ const DrawTab: React.FC = () => {
       }
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
-      try {
-        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
-        loadedCardsWithGrade = (cardsResult.data || [])
-          .filter(
-            (card: ValidatedCartelaComGrade) =>
-              card.numeros_grade &&
-              card.numeros_grade.length > 0
-          )
-          .map(
-            (card: ValidatedCartelaComGrade) => ({
-              ...card,
-              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-            })
-          );
+      const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
 
-          detailsResults.forEach((item) => {
-            if (!item?.data) return;
-            const normalized = normalizeNumerosGrade(item.data.numeros_grade);
-            if (normalized.length === 0) return;
-            mergedByNumero.set(item.numero, {
-              numero: item.numero,
-              comprador_nome: item.comprador_nome || item.data.comprador_nome,
-              numeros_grade: normalized,
-            });
-          });
+      const [validatedWithGradeSettled, allCardsSettled] = await Promise.allSettled([
+        callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id }),
+        callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }),
+      ]);
+
+      const validatedWithGradeData =
+        validatedWithGradeSettled.status === 'fulfilled' ? (validatedWithGradeSettled.value.data || []) as ValidatedCartelaComGrade[] : [];
+      const allCardsData =
+        allCardsSettled.status === 'fulfilled' ? (allCardsSettled.value.data || []) as ValidatedCartelaComGrade[] : [];
+
+      const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
+
+      for (const card of validatedWithGradeData) {
+        const normalized = normalizeNumerosGrade(card?.numeros_grade);
+        if (normalized.length > 0) {
+          mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
         }
-
-        loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
-          ...card,
-          comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-        }));
-      } catch (err) {
-        console.error('Error fetching validated cartelas grids:', err);
       }
+
+      for (const card of allCardsData) {
+        if (!validatedNumbers.has(card.numero)) continue;
+        if (mergedByNumero.has(card.numero)) continue;
+        const normalized = normalizeNumerosGrade(card?.numeros_grade);
+        if (normalized.length === 0) continue;
+        mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
+      }
+
+      const missingValidated = freshValidadas.filter((cv) => !mergedByNumero.has(cv.numero));
+      for (const cv of missingValidated) {
+        try {
+          const res = await callApi('getCartelaDetalhe', { sorteio_id: sorteioAtivo.id, numero: cv.numero });
+          const normalized = normalizeNumerosGrade(res?.data?.numeros_grade);
+          if (normalized.length === 0) continue;
+          mergedByNumero.set(cv.numero, {
+            numero: cv.numero,
+            comprador_nome: cv.comprador_nome || res?.data?.comprador_nome,
+            numeros_grade: normalized,
+          });
+        } catch (_err) {
+          // ignore individual cartela detail failure
+        }
+      }
+
+      loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
+        ...card,
+        comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+      }));
       setCardsWithGrade(loadedCardsWithGrade);
 
 
@@ -635,7 +650,7 @@ const DrawTab: React.FC = () => {
     if (cardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = cardsWithGrade.map(c => {
-      const grids = Array.isArray(c.numeros_grade?.[0]) ? c.numeros_grade : [c.numeros_grade as unknown as number[]];
+      const grids = normalizeNumerosGrade(c.numeros_grade);
       const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
