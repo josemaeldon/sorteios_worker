@@ -283,29 +283,23 @@ const DrawTab: React.FC = () => {
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
-        const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
-        const [validatedWithGradeResult, allCardsResult] = await Promise.all([
-          callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id }).catch(() => ({ data: [] })),
-          callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }).catch(() => ({ data: [] })),
-        ]);
-
-        const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
-
-        const fromValidatedEndpoint = (validatedWithGradeResult.data || []) as ValidatedCartelaComGrade[];
-        fromValidatedEndpoint.forEach((card) => {
-          if (card?.numeros_grade && card.numeros_grade.length > 0) mergedByNumero.set(card.numero, card);
-        });
-
-        const fromAllCardsEndpoint = ((allCardsResult.data || []) as ValidatedCartelaComGrade[])
-          .filter((card) => validatedNumbers.has(card.numero) && card?.numeros_grade && card.numeros_grade.length > 0);
-        fromAllCardsEndpoint.forEach((card) => {
-          if (!mergedByNumero.has(card.numero)) mergedByNumero.set(card.numero, card);
-        });
-
-        loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
-          ...card,
-          comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-        }));
+        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
+        loadedCardsWithGrade = (cardsResult.data || [])
+          .filter(
+            (card: ValidatedCartelaComGrade) =>
+              card.numeros_grade &&
+              card.numeros_grade.length > 0
+          )
+          .map(
+            (card: ValidatedCartelaComGrade) => ({
+              ...card,
+              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+            })
+          );
+        if (loadedCardsWithGrade.length === 0) {
+          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
+          loadedCardsWithGrade = cardsResultFallback.data || [];
+        }
       } catch (err) {
         console.error('Error fetching validated cartelas grids:', err);
       }
