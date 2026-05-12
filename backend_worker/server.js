@@ -1981,27 +1981,65 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'deleteSorteio': {
-        const blockResult = await client.query(`
-          SELECT
-            COALESCE(SUM(CASE WHEN status = 'ativa' THEN 1 ELSE 0 END), 0) AS atribuidas,
-            COALESCE(SUM(CASE WHEN status = 'vendida' THEN 1 ELSE 0 END), 0) AS vendidas
-          FROM cartelas
-          WHERE sorteio_id = $1
+        // Limpar em ordem de dependências (tabelas que referenciam outras primeiro)
+        
+        // 1. Limpar cartelas em Minha Loja
+        await client.query(`
+          DELETE FROM loja_cartelas
+          WHERE card_set_id IN (
+            SELECT id FROM bingo_card_sets WHERE sorteio_id = $1
+          )
         `, [data.id]);
-        const validResult = await client.query(
-          'SELECT COUNT(*) AS validadas FROM cartelas_validadas WHERE sorteio_id = $1',
-          [data.id]
-        );
-        const atribuidas = Number(blockResult.rows[0]?.atribuidas || 0);
-        const vendidas = Number(blockResult.rows[0]?.vendidas || 0);
-        const validadas = Number(validResult.rows[0]?.validadas || 0);
-        if (atribuidas > 0 || vendidas > 0 || validadas > 0) {
-          return res.status(409).json({
-            error: `Este sorteio não pode ser excluído porque possui ${atribuidas} cartela(s) atribuída(s), ${vendidas} vendida(s) e ${validadas} validada(s).`,
-            code: 'SORTEIO_COM_MOVIMENTACAO',
-          });
-        }
+
+        // 2. Limpar validações de cartelas
+        await client.query('DELETE FROM cartelas_validadas WHERE sorteio_id = $1', [data.id]);
+
+        // 3. Limpar pagamentos (referencia vendas)
+        await client.query(`
+          DELETE FROM pagamentos
+          WHERE venda_id IN (
+            SELECT id FROM vendas WHERE sorteio_id = $1
+          )
+        `, [data.id]);
+
+        // 4. Limpar vendas
+        await client.query('DELETE FROM vendas WHERE sorteio_id = $1', [data.id]);
+
+        // 5. Limpar cartelas atribuídas
+        await client.query(`
+          DELETE FROM atribuicao_cartelas
+          WHERE atribuicao_id IN (
+            SELECT id FROM atribuicoes WHERE sorteio_id = $1
+          )
+        `, [data.id]);
+
+        // 6. Limpar atribuições
+        await client.query('DELETE FROM atribuicoes WHERE sorteio_id = $1', [data.id]);
+
+        // 7. Limpar cartelas
+        await client.query('DELETE FROM cartelas WHERE sorteio_id = $1', [data.id]);
+
+        // 8. Limpar histórico de sorteio
+        await client.query('DELETE FROM sorteio_historico WHERE sorteio_id = $1', [data.id]);
+
+        // 9. Limpar rodadas
+        await client.query('DELETE FROM rodadas_sorteio WHERE sorteio_id = $1', [data.id]);
+
+        // 10. Limpar layouts de cartelas
+        await client.query('DELETE FROM cartela_layouts WHERE sorteio_id = $1', [data.id]);
+
+        // 11. Limpar card sets
+        await client.query('DELETE FROM bingo_card_sets WHERE sorteio_id = $1', [data.id]);
+
+        // 12. Limpar vendedores
+        await client.query('DELETE FROM vendedores WHERE sorteio_id = $1', [data.id]);
+
+        // 13. Limpar compartilhamentos
+        await client.query('DELETE FROM sorteio_compartilhado WHERE sorteio_id = $1', [data.id]);
+
+        // 14. Finalmente, deletar o sorteio
         await client.query('DELETE FROM sorteios WHERE id = $1', [data.id]);
+
         return res.json({ data: [{ success: true }] });
       }
 
