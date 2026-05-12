@@ -56,7 +56,7 @@ const Auth: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/');
+      navigate('/app');
     }
   }, [isAuthenticated, navigate]);
 
