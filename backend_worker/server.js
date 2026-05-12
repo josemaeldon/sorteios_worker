@@ -3962,14 +3962,14 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       case 'removerCartelaLoja': {
         const lojaResult = data.authenticated_role === 'admin'
           ? await client.query(
-              `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+              `SELECT lc.id, lc.numero_cartela, lc.preco, bcs.sorteio_id
                FROM loja_cartelas lc
                JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
                WHERE lc.id = $1`,
               [data.id]
             )
           : await client.query(
-              `SELECT lc.id, lc.numero_cartela, bcs.sorteio_id
+              `SELECT lc.id, lc.numero_cartela, lc.preco, bcs.sorteio_id
                FROM loja_cartelas lc
                JOIN bingo_card_sets bcs ON bcs.id = lc.card_set_id
                WHERE lc.id = $1 AND lc.user_id = $2`,
@@ -3978,7 +3978,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const lojaCartela = lojaResult.rows[0];
         if (lojaCartela) {
           const vendasResult = await client.query(
-            'SELECT id, numeros_cartelas FROM vendas WHERE sorteio_id = $1',
+            'SELECT id, numeros_cartelas, valor_total, valor_pago FROM vendas WHERE sorteio_id = $1',
             [lojaCartela.sorteio_id]
           );
           const vendasRelacionadas = vendasResult.rows.filter(v =>
@@ -3986,7 +3986,42 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           );
           if (vendasRelacionadas.length > 0) {
             for (const venda of vendasRelacionadas) {
-              await deleteVendaAndSyncLoja(client, venda.id);
+              const vendaRow = venda;
+              const numeros = parseCartelas(vendaRow.numeros_cartelas);
+              if (numeros.length <= 1) {
+                // If the venda only contains this cartela, delete the whole venda
+                await deleteVendaAndSyncLoja(client, vendaRow.id);
+              } else {
+                // Remove only this cartela from the venda
+                const remaining = numeros.filter(n => n !== Number(lojaCartela.numero_cartela));
+                const remainingStr = remaining.join(',');
+                const precoRemovido = parseFloat(lojaCartela.preco || 0);
+                const newValorTotal = Math.max(0, parseFloat(vendaRow.valor_total || 0) - precoRemovido);
+                const newValorPago = Math.max(0, parseFloat(vendaRow.valor_pago || 0) - precoRemovido);
+                const newStatus = newValorPago >= newValorTotal ? 'concluida' : 'pendente';
+
+                await client.query(
+                  `UPDATE vendas SET numeros_cartelas = $2, valor_total = $3, valor_pago = $4, status = $5, updated_at = NOW() WHERE id = $1`,
+                  [vendaRow.id, remainingStr, newValorTotal, newValorPago, newStatus]
+                );
+
+                // Revert state of the cartela across the system
+                await client.query(
+                  'UPDATE cartelas SET status = $1, comprador_nome = NULL, updated_at = NOW() WHERE sorteio_id = $2 AND numero = $3',
+                  ['disponivel', lojaCartela.sorteio_id, lojaCartela.numero_cartela]
+                );
+                await client.query(
+                  `UPDATE atribuicao_cartelas SET status = 'ativa', venda_id = NULL WHERE numero_cartela = $1 AND atribuicao_id IN (SELECT id FROM atribuicoes WHERE sorteio_id = $2)`,
+                  [lojaCartela.numero_cartela, lojaCartela.sorteio_id]
+                );
+                await client.query('DELETE FROM cartelas_validadas WHERE sorteio_id = $1 AND numero = $2', [lojaCartela.sorteio_id, lojaCartela.numero_cartela]);
+
+                // Re-open the loja cartela
+                await client.query(
+                  `UPDATE loja_cartelas SET status = 'disponivel', comprador_nome = NULL, comprador_email = NULL, comprador_endereco = NULL, comprador_cidade = NULL, comprador_telefone = NULL, stripe_session_id = NULL, updated_at = NOW() WHERE id = $1`,
+                  [lojaCartela.id]
+                );
+              }
             }
           } else {
             await client.query('DELETE FROM loja_cartelas WHERE id = $1', [lojaCartela.id]);
