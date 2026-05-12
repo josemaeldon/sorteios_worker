@@ -67,6 +67,16 @@ type RankingCartela = {
   score: number;
 };
 
+const normalizeNumerosGrade = (raw: unknown): number[][] => {
+  if (!raw) return [];
+  const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
+  if (!Array.isArray(parsed) || parsed.length === 0) return [];
+  if (Array.isArray(parsed[0])) return (parsed as unknown[])
+    .map(row => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
+    .filter((row) => row.length > 0);
+  return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+};
+
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
@@ -96,6 +106,7 @@ const DrawTab: React.FC = () => {
   const [fontSize, setFontSize] = useState<number>(300);
   const [fullscreenFontSize, setFullscreenFontSize] = useState<number>(FULLSCREEN_FONT_SIZE_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDrawnHistoryFullscreen, setIsDrawnHistoryFullscreen] = useState(false);
   const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>(null);
   const [showDrawing, setShowDrawing] = useState(false);
   const [justDrawn, setJustDrawn] = useState(false);
@@ -282,36 +293,57 @@ const DrawTab: React.FC = () => {
       }
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
-      try {
-        const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
-        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
-        loadedCardsWithGrade = (cardsResult.data || [])
-          .filter(
-            (card: ValidatedCartelaComGrade) =>
-              validatedNumbers.has(card.numero) &&
-              card.numeros_grade &&
-              card.numeros_grade.length > 0
-          )
-          .map(
-            (card: ValidatedCartelaComGrade) => ({
-              ...card,
-              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
-            })
-          );
-        if (loadedCardsWithGrade.length === 0) {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
-        }
-      } catch (err) {
-        console.error('Error fetching validated cartelas grids:', err);
-        try {
-          const cardsResultFallback = await callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id });
-          loadedCardsWithGrade = cardsResultFallback.data || [];
-        } catch (fallbackErr) {
-          console.error('Error fetching validated grids fallback:', fallbackErr);
+      const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
+
+      const [validatedWithGradeSettled, allCardsSettled] = await Promise.allSettled([
+        callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id }),
+        callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }),
+      ]);
+
+      const validatedWithGradeData =
+        validatedWithGradeSettled.status === 'fulfilled' ? (validatedWithGradeSettled.value.data || []) as ValidatedCartelaComGrade[] : [];
+      const allCardsData =
+        allCardsSettled.status === 'fulfilled' ? (allCardsSettled.value.data || []) as ValidatedCartelaComGrade[] : [];
+
+      const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
+
+      for (const card of validatedWithGradeData) {
+        const normalized = normalizeNumerosGrade(card?.numeros_grade);
+        if (normalized.length > 0) {
+          mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
         }
       }
+
+      for (const card of allCardsData) {
+        if (!validatedNumbers.has(card.numero)) continue;
+        if (mergedByNumero.has(card.numero)) continue;
+        const normalized = normalizeNumerosGrade(card?.numeros_grade);
+        if (normalized.length === 0) continue;
+        mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
+      }
+
+      const missingValidated = freshValidadas.filter((cv) => !mergedByNumero.has(cv.numero));
+      for (const cv of missingValidated) {
+        try {
+          const res = await callApi('getCartelaDetalhe', { sorteio_id: sorteioAtivo.id, numero: cv.numero });
+          const normalized = normalizeNumerosGrade(res?.data?.numeros_grade);
+          if (normalized.length === 0) continue;
+          mergedByNumero.set(cv.numero, {
+            numero: cv.numero,
+            comprador_nome: cv.comprador_nome || res?.data?.comprador_nome,
+            numeros_grade: normalized,
+          });
+        } catch (_err) {
+          // ignore individual cartela detail failure
+        }
+      }
+
+      loadedCardsWithGrade = Array.from(mergedByNumero.values()).map((card) => ({
+        ...card,
+        comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+      }));
       setCardsWithGrade(loadedCardsWithGrade);
+
 
       let poolNumbers: number[];
       if (isRifa) {
@@ -321,18 +353,10 @@ const DrawTab: React.FC = () => {
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
           .sort((a, b) => a - b);
       } else {
-        // Build available numbers from validated cartelas' grids only
-        if (loadedCardsWithGrade.length > 0) {
-          const allNums = new Set<number>(
-            loadedCardsWithGrade.flatMap(c => c.numeros_grade.flatMap(grid => grid.filter(n => n !== 0)))
-          );
-          poolNumbers = Array.from(allNums).filter(n => n >= rodada.range_start && n <= rodada.range_end).sort((a, b) => a - b);
-        } else {
-          // Fallback to full range if no validated cartelas with grids found
-          poolNumbers = [];
-          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-            poolNumbers.push(i);
-          }
+        // For bingo: draw must be random over the full rodada range, independent of card distribution
+        poolNumbers = [];
+        for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+          poolNumbers.push(i);
         }
       }
       setAvailableNumbers(poolNumbers);
@@ -627,7 +651,8 @@ const DrawTab: React.FC = () => {
     if (cardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = cardsWithGrade.map(c => {
-      const allNums = [...new Set(c.numeros_grade.flatMap(g => g.filter(n => n !== 0)))];
+      const grids = normalizeNumerosGrade(c.numeros_grade);
+      const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
@@ -817,7 +842,7 @@ const DrawTab: React.FC = () => {
         <div className="flex gap-6 items-start">
           <div className="flex-1 min-w-0 space-y-6">
             <div className="grid grid-cols-1 gap-6">
-          <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-8 min-h-screen flex flex-col")}>
+          <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-3 md:p-8 min-h-screen flex flex-col")}>
             <Card className="border-2 flex-1 flex flex-col relative z-0">
               <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
                 <CardTitle>Número Sorteado</CardTitle>
@@ -928,7 +953,7 @@ const DrawTab: React.FC = () => {
                               <div
                                 key={num}
                                 className={cn(
-                                  "relative flex items-center justify-center w-20 h-20 rounded-lg font-bold text-2xl border-2 transition-all duration-300",
+                                  "relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg font-bold text-lg sm:text-xl md:text-2xl border-2 transition-all duration-300",
                                   num === currentNumber && !isDrawing
                                     ? "bg-primary text-primary-foreground border-primary scale-110"
                                     : "bg-muted text-foreground border-border"
@@ -944,7 +969,7 @@ const DrawTab: React.FC = () => {
                     </div>
 
                     {/* Top 10 Sidebar in fullscreen */}
-                    <div className="w-96 flex-shrink-0 bg-card rounded-lg p-6 border-2 border-yellow-400/50">
+                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-2xl font-bold flex items-center gap-2">
                           <Trophy className="w-6 h-6 text-yellow-500" />
@@ -962,10 +987,12 @@ const DrawTab: React.FC = () => {
                         <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
                           {groupedTop.map((group, idx) => (
                             <div key={group.score} className="py-3 first:pt-0 last:pb-0">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}º</span>
-                                <span className="text-lg font-semibold text-primary">{group.score} pts</span>
-                                <span className="text-sm text-muted-foreground">
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-2xl font-bold text-muted-foreground/90 w-8">{idx + 1}º</span>
+                                  <span className="text-3xl font-bold text-primary leading-none">{group.score} pts</span>
+                                </div>
+                                <span className="text-lg text-muted-foreground whitespace-nowrap">
                                   {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
                                 </span>
                               </div>
@@ -975,7 +1002,7 @@ const DrawTab: React.FC = () => {
                                     key={cartela.numero}
                                     onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
                                     aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
-                                    className="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                                    className="px-2.5 py-1 rounded-md border border-border/70 bg-muted/70 text-foreground text-xs font-mono tracking-wide hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
                                   >
                                     {cartela.numero.toString().padStart(3, '0')}
                                   </button>
@@ -1014,14 +1041,54 @@ const DrawTab: React.FC = () => {
             )}
           </div>
 
+
+
+          {isDrawnHistoryFullscreen && (
+            <div className="fixed inset-0 z-[9998] bg-background/95 backdrop-blur-sm p-4 md:p-8 overflow-auto">
+              <div className="max-w-7xl mx-auto">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <h3 className="text-2xl md:text-3xl font-bold">Números Sorteados</h3>
+                  <Button variant="outline" onClick={() => setIsDrawnHistoryFullscreen(false)} className="gap-2">
+                    <Minimize className="w-4 h-4" />
+                    Fechar tela cheia
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 md:gap-3">
+                  {drawnNumbers.map((num, index) => (
+                    <div
+                      key={`fullscreen-${num}-${index}`}
+                      className={cn(
+                        "relative flex items-center justify-center h-20 md:h-24 rounded-lg font-bold text-2xl md:text-3xl border-2",
+                        num === currentNumber && !isDrawing
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-foreground border-border"
+                      )}
+                    >
+                      <span className="absolute top-1 left-1.5 text-[10px] md:text-xs opacity-60">{index + 1}º</span>
+                      {num}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {!isFullscreen && drawnNumbers.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between gap-2">
                   <span>Números Sorteados</span>
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {drawnNumbers.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-normal text-muted-foreground">{drawnNumbers.length}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => setIsDrawnHistoryFullscreen(true)}
+                    >
+                      <Maximize className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1054,7 +1121,7 @@ const DrawTab: React.FC = () => {
           )}
         </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Card className="bg-card/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Total</CardTitle>
@@ -1112,7 +1179,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-80 flex-shrink-0 space-y-4 flex flex-col">
+          <div className="w-full md:w-80 flex-shrink-0 space-y-4 flex flex-col">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className="border-2 border-success bg-success/5">
@@ -1141,7 +1208,7 @@ const DrawTab: React.FC = () => {
                   <Trophy className="w-5 h-5 text-yellow-500" />
                   Top 10 Cartelas
                 </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">Maiores pontuações</p>
+                <p className="text-xs text-muted-foreground mt-1">Pontuações em tempo real</p>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden flex flex-col">
                 {topScoringCartelas.length === 0 ? (
@@ -1155,10 +1222,12 @@ const DrawTab: React.FC = () => {
                   <div className="divide-y divide-border overflow-y-auto">
                     {groupedTop.map((group, idx) => (
                       <div key={group.score} className="py-2.5 first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-bold bg-primary/10 px-2 py-0.5 rounded text-primary w-6 text-center">{idx + 1}º</span>
-                          <span className="text-sm font-semibold text-primary">{group.score} pts</span>
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold text-muted-foreground/90 w-7">{idx + 1}º</span>
+                            <span className="text-2xl font-bold text-primary leading-none">{group.score} pts</span>
+                          </div>
+                          <span className="text-base text-muted-foreground whitespace-nowrap">
                             {group.count} {group.count === 1 ? 'cartela' : 'cartelas'}
                           </span>
                         </div>
@@ -1168,7 +1237,7 @@ const DrawTab: React.FC = () => {
                               key={cartela.numero}
                               onClick={() => handleCartelaClick(cartela.numero, cartela.nome)}
                               aria-label={`Ver números da cartela ${cartela.numero.toString().padStart(3, '0')}${cartela.nome ? ` - ${cartela.nome}` : ''}`}
-                              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded-md border border-border/70 text-xs font-mono tracking-wide bg-muted/70 hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
                               title={cartela.nome ? `${cartela.numero} - ${cartela.nome}` : cartela.numero.toString()}
                             >
                               {cartela.numero.toString().padStart(3, '0')}
