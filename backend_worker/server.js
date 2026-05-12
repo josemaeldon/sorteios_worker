@@ -2041,19 +2041,17 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         // 9. Limpar rodadas
         await client.query('DELETE FROM rodadas_sorteio WHERE sorteio_id = $1', [data.id]);
 
-        // 10. Limpar layouts de cartelas
-        await client.query('DELETE FROM cartela_layouts WHERE sorteio_id = $1', [data.id]);
 
-        // 11. Limpar card sets
+          // 10. Limpar card sets
         await client.query('DELETE FROM bingo_card_sets WHERE sorteio_id = $1', [data.id]);
 
-        // 12. Limpar vendedores
+          // 11. Limpar vendedores
         await client.query('DELETE FROM vendedores WHERE sorteio_id = $1', [data.id]);
 
-        // 13. Limpar compartilhamentos
+          // 12. Limpar compartilhamentos
         await client.query('DELETE FROM sorteio_compartilhado WHERE sorteio_id = $1', [data.id]);
 
-        // 14. Finalmente, deletar o sorteio
+          // 13. Finalmente, deletar o sorteio
         await client.query('DELETE FROM sorteios WHERE id = $1', [data.id]);
 
         return res.json({ data: [{ success: true }] });
