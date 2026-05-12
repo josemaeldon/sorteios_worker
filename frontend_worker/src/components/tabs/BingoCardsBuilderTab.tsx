@@ -404,6 +404,7 @@ const BingoCardsBuilderTab: React.FC = () => {
   // Cards
   const [cards, setCards] = useState<BingoCardGrid[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewJumpValue, setPreviewJumpValue] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
@@ -548,6 +549,20 @@ const BingoCardsBuilderTab: React.FC = () => {
         return { cartelaNumero: c.numero, grids };
       });
   }, [cartelas, gridCols, gridRows]);
+
+  useEffect(() => {
+    setPreviewJumpValue(previewCard ? String(previewCard.cartelaNumero) : '');
+  }, [previewCard]);
+
+  const handlePreviewJump = (value: string) => {
+    setPreviewJumpValue(value);
+    const numero = Number(value);
+    if (!Number.isInteger(numero) || numero < 1) return;
+    const index = cards.findIndex(card => card.cartelaNumero === numero);
+    if (index >= 0) {
+      setPreviewIndex(index);
+    }
+  };
 
   // ─── Restore saved cards from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -1508,6 +1523,20 @@ const BingoCardsBuilderTab: React.FC = () => {
                   onClick={() => setPreviewIndex((i) => Math.min(cards.length - 1, i + 1))} disabled={previewIndex === cards.length - 1}>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="preview-card-number" className="text-xs text-muted-foreground">
+                  Ir para
+                </Label>
+                <Input
+                  id="preview-card-number"
+                  type="number"
+                  min={1}
+                  value={previewJumpValue}
+                  onChange={(e) => handlePreviewJump(e.target.value)}
+                  placeholder="Número da cartela"
+                  className="h-8 text-xs"
+                />
               </div>
               {activeLayoutId && previewCard && (
                 <Button

@@ -2665,7 +2665,29 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(404).json({ error: 'Cartela não encontrada' });
         }
         const row = result.rows[0];
-        if (!row.numeros_grade) {
+        if (!row.numeros_grade || (Array.isArray(row.numeros_grade) && row.numeros_grade.length === 0)) {
+          const layoutResult = await client.query(
+            'SELECT cards_data FROM bingo_card_sets WHERE sorteio_id = $1 ORDER BY updated_at DESC, created_at DESC LIMIT 1',
+            [data.sorteio_id]
+          );
+          const cardsData = layoutResult.rows[0]?.cards_data;
+          if (cardsData) {
+            try {
+              const cards = Array.isArray(cardsData) ? cardsData : JSON.parse(cardsData);
+              const card = Array.isArray(cards)
+                ? cards.find(c => Number(c?.cartelaNumero) === Number(row.numero))
+                : null;
+              if (card?.grids && Array.isArray(card.grids)) {
+                row.numeros_grade = card.grids.map(grid => Array.isArray(grid) ? grid.flat() : []);
+                await client.query(
+                  'UPDATE cartelas SET numeros_grade = $1, updated_at = NOW() WHERE sorteio_id = $2 AND numero = $3',
+                  [JSON.stringify(row.numeros_grade), data.sorteio_id, row.numero]
+                );
+              }
+            } catch {
+              // Keep row without numeros_grade if the saved layout cannot be parsed.
+            }
+          }
           return res.json({ data: row });
         }
         try {

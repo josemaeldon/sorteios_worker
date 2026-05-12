@@ -972,7 +972,7 @@ const CartelasTab: React.FC = () => {
             </div>
           ) : (
             /* ── View mode ── */
-            selectedCartela?.numeros_grade ? (
+            selectedCartela?.numeros_grade && selectedCartela.numeros_grade.length > 0 ? (
               <div className="space-y-3">
                 {selectedCartela.numeros_grade.map((flat, premioIdx) => (
                   <div key={premioIdx}>
@@ -1027,7 +1027,7 @@ const CartelasTab: React.FC = () => {
                     <Trash2 className="w-3.5 h-3.5" /> Excluir
                   </Button>
                 )}
-                {selectedCartela?.numeros_grade && (
+                {selectedCartela?.numeros_grade && selectedCartela.numeros_grade.length > 0 && (
                   <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint} disabled={isPrinting}>
                     {isPrinting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
                     Imprimir
