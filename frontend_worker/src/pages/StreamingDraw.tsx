@@ -144,20 +144,20 @@ const StreamingDraw: React.FC = () => {
       {/* Main Content - Responsive Layout */}
       <main className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 p-4 md:p-8 overflow-y-auto">
         {/* Left Section: Number + Historico */}
-        <div className="flex-1 flex flex-col min-w-0 items-center justify-center">
+        <div className="flex-1 flex flex-col min-w-0">
           {/* Large Current Number */}
-          <p className="text-white/50 text-lg md:text-2xl mb-2 md:mb-4">Número Sorteado</p>
+          <p className="text-white/50 text-lg md:text-2xl mb-2 md:mb-4 text-center">Número Sorteado</p>
           <div
-            className={`font-black leading-none tabular-nums text-center mb-6 md:mb-8 ${
+            className={`font-black leading-none tabular-nums text-center flex-1 flex items-center justify-center mb-4 md:mb-6 ${
               isNewNumber ? 'animate-bingo-globe-emerge' : ''
             }`}
-            style={{ fontSize: 'clamp(3rem, 20vw, 20rem)' }}
+            style={{ fontSize: 'clamp(5rem, 24vw, 24rem)' }}
           >
             {currentNumber ?? '-'}
           </div>
 
           {/* Historico Footer */}
-          <div className="w-full">
+          <div className="w-full flex-shrink-0">
             <p className="text-white/50 text-xs md:text-sm mb-2">Números Sorteados</p>
             <div className="flex flex-wrap gap-2 pb-2">
               {sortedHistorico.slice(-18).map((item) => (
@@ -174,12 +174,12 @@ const StreamingDraw: React.FC = () => {
 
         {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
         {groupedTop10.length > 0 && (
-          <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6 flex flex-col min-h-[260px] md:h-full">
+          <div className="w-full md:w-[22rem] md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6 flex flex-col min-h-[260px] md:h-full overflow-hidden">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
             </div>
-            <div className="divide-y divide-white/10 overflow-y-auto flex-1 min-h-0">
+            <div className="divide-y divide-white/10 overflow-y-auto flex-1 min-h-0 pr-1">
               {groupedTop10.map((group, idx) => (
                 <div key={group.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
