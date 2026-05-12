@@ -321,18 +321,10 @@ const DrawTab: React.FC = () => {
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
           .sort((a, b) => a - b);
       } else {
-        // Build available numbers from validated cartelas' grids only
-        if (loadedCardsWithGrade.length > 0) {
-          const allNums = new Set<number>(
-            loadedCardsWithGrade.flatMap(c => c.numeros_grade.flatMap(grid => grid.filter(n => n !== 0)))
-          );
-          poolNumbers = Array.from(allNums).filter(n => n >= rodada.range_start && n <= rodada.range_end).sort((a, b) => a - b);
-        } else {
-          // Fallback to full range if no validated cartelas with grids found
-          poolNumbers = [];
-          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-            poolNumbers.push(i);
-          }
+        // For bingo: draw must be random over the full rodada range, independent of card distribution
+        poolNumbers = [];
+        for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+          poolNumbers.push(i);
         }
       }
       setAvailableNumbers(poolNumbers);

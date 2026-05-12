@@ -35,6 +35,7 @@ const StreamingDraw: React.FC = () => {
   const [rodada, setRodada] = useState<PublicRodada | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [top10, setTop10] = useState<TopCartelaEntry[]>([]);
+  const [top10GroupedFromApi, setTop10GroupedFromApi] = useState<GroupedTopEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
@@ -48,6 +49,7 @@ const StreamingDraw: React.FC = () => {
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
       setTop10(data?.top10_cartelas ?? []);
+      setTop10GroupedFromApi(data?.top10 ?? []);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar sorteio.');
@@ -73,6 +75,20 @@ const StreamingDraw: React.FC = () => {
   const isNewNumber = sortedHistorico.length !== lastCountRef.current;
 
   const groupedTop10 = useMemo(() => {
+    if (top10GroupedFromApi.length > 0) {
+      return top10GroupedFromApi
+        .map(group => ({
+          score: group.score,
+          count: group.count,
+          cartelas: (group.cartelas || [])
+            .slice()
+            .sort((a, b) => a - b)
+            .map(numero => ({ numero, score: group.score })),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    }
+
     const groups = top10.reduce((acc, entry) => {
       const key = String(entry.score);
       if (!acc[key]) acc[key] = { score: entry.score, count: 0, cartelas: [] as TopCartelaEntry[] };
@@ -89,7 +105,7 @@ const StreamingDraw: React.FC = () => {
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
-  }, [top10]);
+  }, [top10, top10GroupedFromApi]);
 
   useEffect(() => {
     lastCountRef.current = sortedHistorico.length;
