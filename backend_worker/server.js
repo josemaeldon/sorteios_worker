@@ -2606,6 +2606,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return { numero: c.numero, nome: c.comprador_nome, score };
         }).filter(c => c.score > 0);
 
+        // Build per-card top10 (individual cartelas ranking)
+        const perCardTop10 = perCard
+          .slice()
+          .sort((a, b) => b.score - a.score || a.numero - b.numero)
+          .slice(0, 10);
+
         // Group by score desc
         const groups = perCard.reduce((acc, cur) => {
           const s = String(cur.score);
@@ -2619,7 +2625,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           .sort((a, b) => b.score - a.score)
           .slice(0, 10);
 
-        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: grouped } });
+        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: grouped, top10_cartelas: perCardTop10 } });
       }
 
       case 'saveRodadaNumero': {

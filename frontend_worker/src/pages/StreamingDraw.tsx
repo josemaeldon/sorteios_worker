@@ -30,11 +30,17 @@ type GroupedTopEntry = {
   count: number;
 };
 
+type TopCartelaEntry = {
+  numero: number;
+  nome?: string;
+  score: number;
+};
+
 const StreamingDraw: React.FC = () => {
   const { rodadaId } = useParams();
   const [rodada, setRodada] = useState<PublicRodada | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
-  const [top10, setTop10] = useState<GroupedTopEntry[]>([]);
+  const [top10, setTop10] = useState<TopCartelaEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
@@ -44,10 +50,10 @@ const StreamingDraw: React.FC = () => {
     if (!silent) setIsLoading(true);
     try {
       const result = await callApi('getPublicRodadaSorteio', { rodada_id: rodadaId });
-      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: GroupedTopEntry[] } }).data;
+      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: GroupedTopEntry[]; top10_cartelas?: TopCartelaEntry[] } }).data;
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
-      setTop10(data?.top10 ?? []);
+      setTop10(data?.top10_cartelas ?? []);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar sorteio.');
@@ -145,21 +151,15 @@ const StreamingDraw: React.FC = () => {
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
             </div>
             <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
-              {top10.map((entry, idx) => (
-                <div key={`${entry.score}-${idx}`} className="py-2 md:py-3 first:pt-0 last:pb-0">
+              {top10.slice(0, 10).map((entry, idx) => (
+                <div key={entry.numero} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
                     <span className="font-bold text-yellow-400 w-6">{idx + 1}º</span>
                     <span className="font-semibold text-yellow-300">{entry.score} pts</span>
-                    <span className="text-xs text-white/70">{entry.count} cartela{entry.count !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {entry.cartelas.slice(0, 18).map(n => (
-                      <span key={n} className="px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90">
-                        {n.toString().padStart(3, '0')}
-                      </span>
-                    ))}
-                    {entry.count > 18 && <span className="text-xs text-white/60">...</span>}
-                  </div>
+                  <span className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
+                    {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome}` : ''}
+                  </span>
                 </div>
               ))}
             </div>
