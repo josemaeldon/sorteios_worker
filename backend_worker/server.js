@@ -2549,7 +2549,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       case 'getPublicRodadaSorteio': {
         result = await client.query(
           `SELECT r.id, r.nome, r.range_start, r.range_end, r.status, r.sorteio_id,
-                  s.nome AS sorteio_nome
+                  s.nome AS sorteio_nome, s.tipo, s.grade_colunas, s.grade_linhas, s.apenas_numero_rifa
            FROM rodadas_sorteio r
            JOIN sorteios s ON s.id = r.sorteio_id
            WHERE r.id = $1
@@ -2559,11 +2559,72 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (result.rows.length === 0) {
           return res.status(404).json({ error: 'Rodada não encontrada.' });
         }
+        const rodadaRow = result.rows[0];
         const historico = await client.query(
           'SELECT numero_sorteado, ordem, data_sorteio FROM sorteio_historico WHERE rodada_id = $1 ORDER BY ordem ASC',
           [data.rodada_id]
         );
-        return res.json({ data: { rodada: result.rows[0], historico: historico.rows } });
+
+        // Build drawn numbers set
+        const drawnNumbers = historico.rows.map(h => Number(h.numero_sorteado));
+        const drawnSet = new Set(drawnNumbers);
+
+        // Fetch validated cartelas with grade (if any)
+        const cardsRes = await client.query(
+          `SELECT cv.numero, cv.comprador_nome, c.numeros_grade
+           FROM cartelas_validadas cv
+           INNER JOIN cartelas c ON c.sorteio_id = cv.sorteio_id AND c.numero = cv.numero
+           WHERE cv.sorteio_id = $1
+           ORDER BY cv.created_at ASC`,
+          [rodadaRow.sorteio_id]
+        );
+
+        const normalizedCards = cardsRes.rows.map((row) => {
+          let raw = row.numeros_grade;
+          if (!raw) return { numero: row.numero, comprador_nome: row.comprador_nome, numeros_grade: [] };
+          try {
+            raw = Array.isArray(raw) ? raw : JSON.parse(raw);
+          } catch {
+            raw = [];
+          }
+          if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'number') {
+            return { numero: row.numero, comprador_nome: row.comprador_nome, numeros_grade: [raw] };
+          }
+          return { numero: row.numero, comprador_nome: row.comprador_nome, numeros_grade: raw };
+        });
+
+        let top = [];
+        const isRifa = String(rodadaRow.tipo || '') === 'rifa' || !!rodadaRow.apenas_numero_rifa;
+        if (isRifa) {
+          // For rifa, top is simply validated cartelas whose numero appears in drawn numbers
+          const winners = normalizedCards.filter(c => drawnSet.has(Number(c.numero))).map(c => ({ numero: c.numero, nome: c.comprador_nome }));
+          if (winners.length > 0) top = [{ score: 1, cartelas: winners }];
+        } else {
+          // For bingo-like games, compute score based on intersection with drawn numbers
+          const scored = normalizedCards.map(c => {
+            const allNums = c.numeros_grade.flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []);
+            const score = allNums.filter(n => drawnSet.has(Number(n))).length;
+            return { numero: c.numero, score, nome: c.comprador_nome };
+          });
+          scored.sort((a, b) => b.score - a.score);
+
+          // Group by score, return up to 10 score levels (ties grouped)
+          const resultTop = [];
+          for (const { numero, score, nome } of scored) {
+            if (!score || score === 0) continue;
+            const existing = resultTop.find(r => r.score === score);
+            if (existing) {
+              existing.cartelas.push({ numero, nome });
+            } else {
+              if (resultTop.length < 10) {
+                resultTop.push({ score, cartelas: [{ numero, nome }] });
+              }
+            }
+          }
+          top = resultTop;
+        }
+
+        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: top } });
       }
 
       case 'saveRodadaNumero': {
