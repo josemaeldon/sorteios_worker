@@ -46,14 +46,15 @@ const Landing: React.FC = () => {
 
         <section className="grid md:grid-cols-3 gap-4">
           {[
-            { icon: BarChart3, title: 'Gestão total', text: 'Controle sorteios, cartelas, vendedores e pagamentos no mesmo painel.' },
-            { icon: ShieldCheck, title: 'Segurança e transparência', text: 'Histórico completo, validações e rastreabilidade de cada número sorteado.' },
-            { icon: Smartphone, title: 'Funciona em qualquer tela', text: 'Administre do desktop ou celular com layout responsivo e rápido.' },
-            { icon: Clock3, title: 'Economia de tempo', text: 'Processos automatizados para você focar em vender mais e crescer.' },
-            { icon: Ticket, title: 'Rifas e bingo', text: 'Suporte aos dois formatos com regras, faixas e rodadas configuráveis.' },
-            { icon: CheckCircle2, title: 'Escala profissional', text: 'Ideal para quem quer sair do controle manual e profissionalizar operação.' },
+            { icon: BarChart3, title: 'Gestão total', image: '/landing/gestao-total.svg', text: 'Controle sorteios, cartelas, vendedores e pagamentos no mesmo painel.' },
+            { icon: ShieldCheck, title: 'Segurança e transparência', image: '/landing/seguranca-transparencia.svg', text: 'Histórico completo, validações e rastreabilidade de cada número sorteado.' },
+            { icon: Smartphone, title: 'Funciona em qualquer tela', image: '/landing/funciona-qualquer-tela.svg', text: 'Administre do desktop ou celular com layout responsivo e rápido.' },
+            { icon: Clock3, title: 'Economia de tempo', image: '/landing/economia-tempo.svg', text: 'Processos automatizados para você focar em vender mais e crescer.' },
+            { icon: Ticket, title: 'Rifas e bingo', image: '/landing/rifas-bingo.svg', text: 'Suporte aos dois formatos com regras, faixas e rodadas configuráveis.' },
+            { icon: CheckCircle2, title: 'Escala profissional', image: '/landing/escala-profissional.svg', text: 'Ideal para quem quer sair do controle manual e profissionalizar operação.' },
           ].map((item) => (
-            <Card key={item.title}>
+            <Card key={item.title} className="overflow-hidden">
+              <img src={item.image} alt={item.title} className="w-full h-28 object-cover border-b" />
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg"><item.icon className="w-5 h-5 text-primary" />{item.title}</CardTitle>
               </CardHeader>
@@ -81,6 +82,13 @@ const Landing: React.FC = () => {
           </div>
         </section>
       </main>
+
+      <footer className='border-t border-border/60 bg-background/80'>
+        <div className='container mx-auto px-4 py-6 text-center text-sm text-muted-foreground'>
+          <p className='font-medium text-foreground'>CloudBR - Sistemas e Gerenciamento Web</p>
+          <p>Contato: <a className='text-primary underline' href='mailto:admin@cloudbr.app'>admin@cloudbr.app</a></p>
+        </div>
+      </footer>
     </div>
   );
 };
