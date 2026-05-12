@@ -293,37 +293,18 @@ const DrawTab: React.FC = () => {
 
       let loadedCardsWithGrade: ValidatedCartelaComGrade[] = [];
       try {
-        const validatedNumbers = new Set(freshValidadas.map((cv: CartelaValidada) => cv.numero));
-        const [validatedWithGradeResult, allCardsResult] = await Promise.all([
-          callApi('getCartelasValidadasComGrade', { sorteio_id: sorteioAtivo.id }).catch(() => ({ data: [] })),
-          callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }).catch(() => ({ data: [] })),
-        ]);
-
-        const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
-
-        const fromValidatedEndpoint = (validatedWithGradeResult.data || []) as ValidatedCartelaComGrade[];
-        fromValidatedEndpoint.forEach((card) => {
-          const normalized = normalizeNumerosGrade(card?.numeros_grade);
-          if (normalized.length > 0) {
-            mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
-          }
-        });
-
-        const fromAllCardsEndpoint = ((allCardsResult.data || []) as ValidatedCartelaComGrade[])
-          .filter((card) => validatedNumbers.has(card.numero) && normalizeNumerosGrade(card?.numeros_grade).length > 0)
-          .map((card) => ({ ...card, numeros_grade: normalizeNumerosGrade(card.numeros_grade) }));
-        fromAllCardsEndpoint.forEach((card) => {
-          if (!mergedByNumero.has(card.numero)) mergedByNumero.set(card.numero, card);
-        });
-
-        const missingValidated = freshValidadas.filter((cv) => !mergedByNumero.has(cv.numero));
-        if (missingValidated.length > 0) {
-          const detailsResults = await Promise.all(
-            missingValidated.map((cv) =>
-              callApi('getCartelaDetalhe', { sorteio_id: sorteioAtivo.id, numero: cv.numero })
-                .then((res) => ({ numero: cv.numero, comprador_nome: cv.comprador_nome, data: res?.data }))
-                .catch(() => null)
-            )
+        const cardsResult = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true });
+        loadedCardsWithGrade = (cardsResult.data || [])
+          .filter(
+            (card: ValidatedCartelaComGrade) =>
+              card.numeros_grade &&
+              card.numeros_grade.length > 0
+          )
+          .map(
+            (card: ValidatedCartelaComGrade) => ({
+              ...card,
+              comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
+            })
           );
 
           detailsResults.forEach((item) => {
@@ -654,7 +635,7 @@ const DrawTab: React.FC = () => {
     if (cardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = cardsWithGrade.map(c => {
-      const grids = normalizeNumerosGrade(c.numeros_grade);
+      const grids = Array.isArray(c.numeros_grade?.[0]) ? c.numeros_grade : [c.numeros_grade as unknown as number[]];
       const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
