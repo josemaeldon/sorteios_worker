@@ -160,7 +160,7 @@ const StreamingDraw: React.FC = () => {
           <div className="w-full flex-shrink-0 max-h-[28vh] md:max-h-[32vh] overflow-y-auto pr-1">
             <p className="text-white/50 text-xs md:text-sm mb-1.5">Números Sorteados</p>
             <div className="flex flex-wrap gap-1.5 pb-2">
-              {sortedHistorico.slice(-18).map((item) => (
+              {sortedHistorico.map((item) => (
                 <span
                   key={`${item.ordem}-${item.numero_sorteado}`}
                   className="min-w-10 md:min-w-12 rounded-lg border border-white/15 bg-white/10 px-2 md:px-3 py-1 md:py-1.5 text-center text-sm md:text-xl font-bold"
