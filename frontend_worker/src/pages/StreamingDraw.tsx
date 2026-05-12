@@ -18,12 +18,6 @@ type HistoricoItem = {
   ordem: number;
 };
 
-type RankingCartela = {
-  numero: number;
-  nome?: string;
-  score: number;
-};
-
 type GroupedTopEntry = {
   score: number;
   cartelas: number[];
@@ -77,6 +71,25 @@ const StreamingDraw: React.FC = () => {
     ? sortedHistorico[sortedHistorico.length - 1].numero_sorteado
     : null;
   const isNewNumber = sortedHistorico.length !== lastCountRef.current;
+
+  const groupedTop10 = useMemo(() => {
+    const groups = top10.reduce((acc, entry) => {
+      const key = String(entry.score);
+      if (!acc[key]) acc[key] = { score: entry.score, count: 0, cartelas: [] as TopCartelaEntry[] };
+      acc[key].count += 1;
+      acc[key].cartelas.push(entry);
+      return acc;
+    }, {} as Record<string, { score: number; count: number; cartelas: TopCartelaEntry[] }>);
+
+    return Object.values(groups)
+      .map(group => ({
+        score: group.score,
+        count: group.count,
+        cartelas: group.cartelas.sort((a, b) => a.numero - b.numero),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }, [top10]);
 
   useEffect(() => {
     lastCountRef.current = sortedHistorico.length;
@@ -144,22 +157,27 @@ const StreamingDraw: React.FC = () => {
         </div>
 
         {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
-        {top10.length > 0 && (
+        {groupedTop10.length > 0 && (
           <div className="w-full md:w-80 md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-4 md:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
             </div>
             <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
-              {top10.slice(0, 10).map((entry, idx) => (
-                <div key={entry.numero} className="py-2 md:py-3 first:pt-0 last:pb-0">
+              {groupedTop10.map((group, idx) => (
+                <div key={group.score} className="py-2 md:py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1.5 text-xs md:text-sm">
                     <span className="font-bold text-yellow-400 w-6">{idx + 1}º</span>
-                    <span className="font-semibold text-yellow-300">{entry.score} pts</span>
+                    <span className="font-semibold text-yellow-300">{group.score} pts</span>
+                    <span className="text-white/70">{group.count} {group.count === 1 ? 'cartela' : 'cartelas'}</span>
                   </div>
-                  <span className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
-                    {entry.numero.toString().padStart(3, '0')}{entry.nome ? ` - ${entry.nome}` : ''}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {group.cartelas.map((entry) => (
+                      <span key={entry.numero} className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
+                        {entry.numero.toString().padStart(3, '0')}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
