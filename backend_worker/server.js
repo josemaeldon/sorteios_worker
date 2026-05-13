@@ -2473,6 +2473,60 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           ),
         ]);
 
+        const parseJsonArray = (value) => {
+          if (Array.isArray(value)) return value;
+          if (typeof value === 'string' && value.trim()) {
+            try {
+              const parsed = JSON.parse(value);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        };
+
+        const cartelasGeradas = [];
+        for (const cartela of cartelasResult.rows || []) {
+          if (!cartela || !cartela.numeros_grade) continue;
+          const rawGrades = typeof cartela.numeros_grade === 'string'
+            ? parseJsonArray(cartela.numeros_grade)
+            : cartela.numeros_grade;
+          if (!Array.isArray(rawGrades) || rawGrades.length === 0) continue;
+          cartelasGeradas.push({
+            numero: Number(cartela.numero),
+            numeros_grade: rawGrades,
+            vendedor_id: cartela.vendedor_id || null,
+            status: cartela.status || 'disponivel',
+            comprador_nome: cartela.comprador_nome || null,
+            created_at: cartela.created_at || null,
+            updated_at: cartela.updated_at || null,
+          });
+        }
+        if (cartelasGeradas.length === 0) {
+          for (const cardSet of cardSetsResult.rows || []) {
+            const cardsData = parseJsonArray(cardSet.cards_data);
+            for (const card of cardsData) {
+              if (!card || typeof card !== 'object') continue;
+              const numero = Number(card.cartelaNumero ?? card.numero);
+              if (!Number.isFinite(numero) || numero < 1) continue;
+              const rawGrades = Array.isArray(card.grids)
+                ? card.grids.map((grid) => Array.isArray(grid) ? grid.flat().filter((n) => n !== undefined) : [])
+                : [];
+              cartelasGeradas.push({
+                numero,
+                numeros_grade: rawGrades,
+                vendedor_id: null,
+                status: 'disponivel',
+                comprador_nome: null,
+                created_at: null,
+                updated_at: null,
+              });
+            }
+          }
+        }
+        cartelasGeradas.sort((a, b) => a.numero - b.numero);
+
         return res.json({
           data: {
             version: 1,
@@ -2488,6 +2542,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             sorteio_historico: historicoResult.rows || [],
             cartelas_validadas: cartelasValidadasResult.rows || [],
             cartela_layouts: cardSetsResult.rows || [],
+            cartelas_geradas: cartelasGeradas,
             loja_cartelas: lojaCartelasResult.rows || [],
           }
         });
@@ -2551,6 +2606,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const cartelasValidadas = normalizeArray(backup.cartelas_validadas);
         const cardSets = normalizeArray(backup.cartela_layouts);
         const lojaCartelas = normalizeArray(backup.loja_cartelas);
+        const cartelasGeradas = normalizeArray(backup.cartelas_geradas);
+        const cartelasImportSource = cartelasGeradas.length > 0 ? cartelasGeradas : cartelas;
 
         await client.query('BEGIN');
         try {
@@ -2700,8 +2757,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
 
           const cartelaBatchSize = CARTELA_IMPORT_BATCH_SIZE;
-          for (let batch = 0; batch < Math.ceil(cartelas.length / cartelaBatchSize); batch++) {
-            const slice = cartelas.slice(batch * cartelaBatchSize, (batch + 1) * cartelaBatchSize);
+          for (let batch = 0; batch < Math.ceil(cartelasImportSource.length / cartelaBatchSize); batch++) {
+            const slice = cartelasImportSource.slice(batch * cartelaBatchSize, (batch + 1) * cartelaBatchSize);
             if (slice.length === 0) continue;
 
             const values = [];
@@ -2714,7 +2771,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
                 crypto.randomUUID(),
                 newSorteioId,
                 cartela.vendedor_id ? vendedorIdMap.get(cartela.vendedor_id) ?? null : null,
-                cartela.numero,
+                Number(cartela.numero ?? cartela.cartelaNumero),
                 cartela.status || 'disponivel',
                 cartela.numeros_grade
                   ? (typeof cartela.numeros_grade === 'string' ? cartela.numeros_grade : JSON.stringify(cartela.numeros_grade))
