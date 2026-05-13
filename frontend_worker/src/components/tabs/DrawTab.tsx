@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBingo } from '@/contexts/BingoContext';
 import { RodadaSorteio, CartelaValidada } from '@/types/bingo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +79,7 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
 };
 
 const DrawTab: React.FC = () => {
+  const navigate = useNavigate();
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
 
@@ -620,16 +622,7 @@ const DrawTab: React.FC = () => {
   };
 
   const goBackToList = () => {
-    setShowDrawing(false);
-    setSelectedRodada(null);
-    setCurrentNumber(null);
-    setDrawnNumbers([]);
-    setAvailableNumbers([]);
-    setJustDrawn(false);
-    setVencedoras([]);
-    setGanhadoresPop([]);
-    ganhadoresPopShownRef.current.clear();
-    loadRodadas();
+    navigate('/app');
   };
 
   // Compute all scored cartelas; the UI groups them by score and shows the top 10 scores.
