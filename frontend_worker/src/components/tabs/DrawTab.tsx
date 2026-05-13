@@ -1280,24 +1280,24 @@ const DrawTab: React.FC = () => {
       <Dialog open={isCartelaSorteioModalOpen} onOpenChange={(open) => {
         if (!isCartelaSorteioAnimating) setIsCartelaSorteioModalOpen(open);
       }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="w-[90vw] h-[90vh] max-w-[90vw] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Ticket className="w-5 h-5" />
               Sortear Cartela Aleatória
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 py-2">
+          <div className="space-y-4 py-2 flex-1 flex flex-col">
             <p className="text-sm text-muted-foreground text-center">
               Serão consideradas apenas as <span className="font-semibold text-foreground">{cartelasValidadas.length}</span> cartela(s) validada(s).
             </p>
 
-            <div className="flex flex-col items-center justify-center min-h-[140px]">
+            <div className="flex flex-col items-center justify-center h-[80%] min-h-0">
               {cartelaSorteioPreview !== null ? (
                 <div className={cn(
-                  "text-7xl font-black text-primary transition-all duration-150",
+                  "font-black text-primary transition-all duration-150 leading-none",
                   isCartelaSorteioAnimating && "animate-pulse"
-                )}>
+                )} style={{ fontSize: 'clamp(8rem, 40vh, 40vw)' }}>
                   {cartelaSorteioPreview.toString().padStart(3, '0')}
                 </div>
               ) : (
@@ -1633,24 +1633,24 @@ const DrawTab: React.FC = () => {
       <Dialog open={isCartelaSorteioModalOpen} onOpenChange={(open) => {
         if (!isCartelaSorteioAnimating) setIsCartelaSorteioModalOpen(open);
       }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="w-[90vw] h-[90vh] max-w-[90vw] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Ticket className="w-5 h-5" />
               Sortear Cartela Aleatória
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 py-2">
+          <div className="space-y-4 py-2 flex-1 flex flex-col">
             <p className="text-sm text-muted-foreground text-center">
               Serão consideradas apenas as <span className="font-semibold text-foreground">{cartelasValidadas.length}</span> cartela(s) validada(s).
             </p>
 
-            <div className="flex flex-col items-center justify-center min-h-[140px]">
+            <div className="flex flex-col items-center justify-center h-[80%] min-h-0">
               {cartelaSorteioPreview !== null ? (
                 <div className={cn(
-                  "text-7xl font-black text-primary transition-all duration-150",
+                  "font-black text-primary transition-all duration-150 leading-none",
                   isCartelaSorteioAnimating && "animate-pulse"
-                )}>
+                )} style={{ fontSize: 'clamp(8rem, 40vh, 40vw)' }}>
                   {cartelaSorteioPreview.toString().padStart(3, '0')}
                 </div>
               ) : (
