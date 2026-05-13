@@ -54,7 +54,7 @@ const passwordSchema = z.object({
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, updateProfile, isAuthenticated, getPublicPlanos, createStripeCheckout, refreshUser, getUserConfiguracoes, updateUserConfiguracoes, getLojaCompradores, getCartelasComprador, createLojaComprador, updateLojaComprador, deleteLojaComprador } = useAuth();
+  const { user, updateProfile, isAuthenticated, getPublicPlanos, createStripeCheckout, confirmStripeCheckout, refreshUser, getUserConfiguracoes, updateUserConfiguracoes, getLojaCompradores, getCartelasComprador, createLojaComprador, updateLojaComprador, deleteLojaComprador } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -69,6 +69,7 @@ const Profile: React.FC = () => {
   const [checkoutLoadingId, setCheckoutLoadingId] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const paymentSuccess = searchParams.get('payment') === 'success';
+  const sessionId = searchParams.get('session_id');
   const defaultTab = searchParams.get('tab') === 'assinatura' ? 'assinatura'
     : searchParams.get('tab') === 'pagamentos' ? 'pagamentos'
     : searchParams.get('tab') === 'aparencia' ? 'aparencia'
@@ -109,18 +110,28 @@ const Profile: React.FC = () => {
   // new plano_id is reflected in the local state.
   useEffect(() => {
     if (paymentSuccess) {
-      refreshUser()
-        .then(() => {
-          toast({ title: 'Assinatura ativada', description: 'Seu plano foi ativado com sucesso!' });
-        })
-        .catch(() => {
-          toast({ title: 'Plano ativado', description: 'Atualize a página para ver seu plano atualizado.', variant: 'destructive' });
-        })
-        .finally(() => {
+      const finalizePayment = async () => {
+        try {
+          const result: { success: boolean; pending?: boolean; message?: string; error?: string } = sessionId
+            ? await confirmStripeCheckout(sessionId)
+            : { success: false, error: 'Sessão de pagamento não encontrada.' };
+          await refreshUser();
+          if (result.success && result.pending) {
+            toast({ title: 'Boleto emitido', description: result.message || 'Aguardando a confirmação do pagamento pela Stripe.' });
+          } else if (result.success) {
+            toast({ title: 'Assinatura ativada', description: 'Seu plano foi ativado com sucesso!' });
+          } else {
+            toast({ title: 'Pagamento em análise', description: result.error || 'Atualize a página para ver o status do pagamento.', variant: 'destructive' });
+          }
+        } catch {
+          toast({ title: 'Pagamento em análise', description: 'Atualize a página para ver o status do pagamento.', variant: 'destructive' });
+        } finally {
           navigate('/profile?tab=assinatura', { replace: true });
-        });
+        }
+      };
+      finalizePayment();
     }
-  }, [paymentSuccess, refreshUser, toast, navigate]);
+  }, [paymentSuccess, sessionId, confirmStripeCheckout, refreshUser, toast, navigate]);
   
   const [formData, setFormData] = useState({
     nome: user?.nome || '',
@@ -134,6 +145,8 @@ const Profile: React.FC = () => {
     nova_senha: '',
     confirmar_senha: '',
   });
+
+  const isPaymentPending = user?.plano_pagamento_status === 'pending';
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -761,6 +774,25 @@ const Profile: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {isPaymentPending && (
+                  <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">Pagamento pendente</p>
+                        <p className="text-sm">
+                          {user?.plano_pagamento_metodo === 'boleto'
+                            ? 'Seu boleto foi gerado. O plano será ativado quando a Stripe confirmar o pagamento.'
+                            : 'Seu pagamento está em processamento. O plano será ativado assim que a Stripe confirmar.'}
+                        </p>
+                      </div>
+                      {user?.plano_pagamento_voucher_url && (
+                        <Button size="sm" variant="outline" onClick={() => window.open(user.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
+                          Ver boleto
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {user?.gratuidade_vitalicia ? (
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-sm px-3 py-1">Gratuidade Vitalícia</Badge>

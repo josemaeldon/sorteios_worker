@@ -26,7 +26,9 @@ const Planos: React.FC = () => {
     const confirm = async () => {
       if (sessionId) {
         const result = await confirmStripeCheckout(sessionId);
-        if (!result.success) {
+        if (result.success && result.pending) {
+          setCheckoutError(null);
+        } else if (!result.success) {
           setCheckoutError(result.error || 'Não foi possível confirmar o pagamento. Contate o suporte.');
         }
       } else {
@@ -61,7 +63,7 @@ const Planos: React.FC = () => {
   const handleCheckout = async (plano: Plan) => {
     setCheckoutError(null);
     setCheckoutLoadingId(plano.id);
-    const result = await createStripeCheckout(plano.id, '/planos?payment=success', '/planos');
+    const result = await createStripeCheckout(plano.id, '/profile?tab=assinatura&payment=success', '/planos');
     if (result.url) {
       window.location.href = result.url;
     } else {
@@ -77,6 +79,7 @@ const Planos: React.FC = () => {
     if (tipo === 'anual') return `Renovação anual a cada ${dias || 365} dias`;
     return `Renovação mensal a cada ${dias || 30} dias`;
   };
+  const hasPendingPayment = user?.plano_pagamento_status === 'pending';
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -97,6 +100,26 @@ const Planos: React.FC = () => {
         {checkoutError && (
           <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm text-center">
             {checkoutError}
+          </div>
+        )}
+
+        {hasPendingPayment && (
+          <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">Pagamento pendente</p>
+                <p className="text-sm">
+                  {user?.plano_pagamento_metodo === 'boleto'
+                    ? 'Seu boleto foi emitido. O plano será ativado quando a Stripe confirmar o pagamento.'
+                    : 'Seu pagamento está em processamento.'}
+                </p>
+              </div>
+              {user?.plano_pagamento_voucher_url && (
+                <Button size="sm" variant="outline" onClick={() => window.open(user.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
+                  Ver boleto
+                </Button>
+              )}
+            </div>
           </div>
         )}
 

@@ -78,6 +78,49 @@ function resolvePlanVencimentoFromPlan(planLike, startedAt) {
   return result;
 }
 
+async function getStripeBoletoVoucherUrl(stripe, session) {
+  try {
+    const paymentIntentId = typeof session?.payment_intent === 'string'
+      ? session.payment_intent
+      : session?.payment_intent?.id;
+    if (!paymentIntentId) return null;
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    return paymentIntent?.next_action?.boleto_display_details?.hosted_voucher_url || null;
+  } catch (err) {
+    console.warn('Could not resolve boleto voucher URL:', err?.message || err);
+    return null;
+  }
+}
+
+async function updateUserPlanPaymentState(dbClient, userId, payload) {
+  const fields = [];
+  const values = [];
+  let idx = 1;
+  if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+    fields.push(`plano_pagamento_status = $${idx++}`);
+    values.push(payload.status);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'method')) {
+    fields.push(`plano_pagamento_metodo = $${idx++}`);
+    values.push(payload.method);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'sessionId')) {
+    fields.push(`plano_pagamento_sessao_id = $${idx++}`);
+    values.push(payload.sessionId);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'voucherUrl')) {
+    fields.push(`plano_pagamento_voucher_url = $${idx++}`);
+    values.push(payload.voucherUrl);
+  }
+  if (fields.length === 0) return;
+  values.push(userId);
+  await dbClient.query(
+    `UPDATE usuarios SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx}`,
+    values
+  );
+}
+
 // Stripe webhook must receive raw body — register before express.json()
 app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -111,7 +154,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
       event = JSON.parse(req.body.toString());
     }
 
-    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded' || event.type === 'checkout.session.async_payment_failed') {
       const session = event.data.object;
       const userId = session.metadata && session.metadata.user_id;
       const planoId = session.metadata && session.metadata.plano_id;
@@ -130,10 +173,30 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
           const vencimento = plano
             ? resolvePlanVencimentoFromPlan(plano, now)
             : await resolvePlanVencimentoFromStripeSession(stripe, session, now);
-          await updateClient.query(
-            'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
-            [planoId, now, vencimento, userId]
-          );
+          const isPaid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+          const isFailed = event.type === 'checkout.session.async_payment_failed';
+          const isPendingBoleto = !isPaid && !isFailed;
+          const method = isPendingBoleto || event.type === 'checkout.session.async_payment_succeeded' || event.type === 'checkout.session.async_payment_failed'
+            ? 'boleto'
+            : 'card';
+
+          if (isPaid) {
+            await updateClient.query(
+              'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, plano_pagamento_status = $4, plano_pagamento_metodo = $5, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $6',
+              [planoId, now, vencimento, 'paid', method, userId]
+            );
+          } else if (isPendingBoleto) {
+            const voucherUrl = await getStripeBoletoVoucherUrl(stripe, session);
+            await updateClient.query(
+              'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = $4, updated_at = NOW() WHERE id = $5',
+              ['pending', method, session.id, voucherUrl, userId]
+            );
+          } else {
+            await updateClient.query(
+              'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $4',
+              ['failed', method, session.id, userId]
+            );
+          }
         } finally {
           updateClient.release();
         }
@@ -609,6 +672,34 @@ async function initSchema() {
           }
         }
         try {
+          await client.query(`ALTER TABLE usuarios ADD COLUMN plano_pagamento_status VARCHAR(30) DEFAULT NULL`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add plano_pagamento_status column (unexpected error):', e.message);
+          }
+        }
+        try {
+          await client.query(`ALTER TABLE usuarios ADD COLUMN plano_pagamento_metodo VARCHAR(30) DEFAULT NULL`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add plano_pagamento_metodo column (unexpected error):', e.message);
+          }
+        }
+        try {
+          await client.query(`ALTER TABLE usuarios ADD COLUMN plano_pagamento_sessao_id VARCHAR(255) DEFAULT NULL`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add plano_pagamento_sessao_id column (unexpected error):', e.message);
+          }
+        }
+        try {
+          await client.query(`ALTER TABLE usuarios ADD COLUMN plano_pagamento_voucher_url TEXT DEFAULT NULL`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add plano_pagamento_voucher_url column (unexpected error):', e.message);
+          }
+        }
+        try {
           await client.query(`ALTER TABLE planos ADD COLUMN stripe_price_id VARCHAR(255)`);
         } catch (e) {
           if (!e.message || !e.message.includes('Duplicate column')) {
@@ -972,6 +1063,10 @@ async function initSchema() {
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_inicio TIMESTAMP WITH TIME ZONE`);
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_vencimento TIMESTAMP WITH TIME ZONE`);
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS trial_gratis_usado BOOLEAN NOT NULL DEFAULT false`);
+        await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_pagamento_status VARCHAR(30)`);
+        await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_pagamento_metodo VARCHAR(30)`);
+        await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_pagamento_sessao_id VARCHAR(255)`);
+        await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_pagamento_voucher_url TEXT`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(255)`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS tipo_plano VARCHAR(30) NOT NULL DEFAULT 'mensal'`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS ciclo_dias_renovacao INT NOT NULL DEFAULT 30`);
@@ -1843,7 +1938,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'login': {
         const userResult = await client.query(`
-          SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, senha_hash, created_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento
+          SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, senha_hash, created_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url
           FROM usuarios WHERE email = $1
         `, [data.email]);
         
@@ -1876,7 +1971,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'getUsers':
         result = await client.query(`
-          SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento
+          SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url
           FROM usuarios ORDER BY nome
         `);
         return res.json({ users: result.rows });
@@ -1922,7 +2017,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const regResult = await client.query(`
           INSERT INTO usuarios (email, senha_hash, nome, role, ativo, titulo_sistema)
           VALUES ($1, $2, $3, 'user', true, $4)
-          RETURNING id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento
+          RETURNING id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url
         `, [data.email, regHash, data.nome, data.titulo_sistema || 'Sorteios']);
         const newUser = regResult.rows[0];
         const token = await createJwt({
@@ -2030,7 +2125,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'getMyProfile': {
         const myProfileResult = await client.query(
-          'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento FROM usuarios WHERE id = $1',
+          'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url FROM usuarios WHERE id = $1',
           [data.authenticated_user_id]
         );
         if (myProfileResult.rows.length === 0) {
@@ -4036,7 +4131,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           const now = new Date();
           const vencimento = addDaysFromNow(totalDays);
           await client.query(
-            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, updated_at = NOW() WHERE id = $1',
+            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, plano_pagamento_status = NULL, plano_pagamento_metodo = NULL, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $1',
             [data.user_id, planoId, now, vencimento]
           );
           if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
@@ -4044,7 +4139,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
         } else {
           await client.query(
-            'UPDATE usuarios SET plano_id = NULL, plano_inicio = NULL, plano_vencimento = NULL, updated_at = NOW() WHERE id = $1',
+            'UPDATE usuarios SET plano_id = NULL, plano_inicio = NULL, plano_vencimento = NULL, plano_pagamento_status = NULL, plano_pagamento_metodo = NULL, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $1',
             [data.user_id]
           );
         }
@@ -4068,8 +4163,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           const now = new Date();
           const vencimento = resolvePlanVencimentoFromPlan(plano, now);
           await client.query(
-            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, trial_gratis_usado = $5, updated_at = NOW() WHERE id = $1',
-            [data.authenticated_user_id, plano.id, now, vencimento, normalizePlanType(plano.tipo_plano) === 'teste_gratis' ? true : false]
+            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, trial_gratis_usado = $5, plano_pagamento_status = $6, plano_pagamento_metodo = $7, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $1',
+            [data.authenticated_user_id, plano.id, now, vencimento, normalizePlanType(plano.tipo_plano) === 'teste_gratis' ? true : false, 'paid', 'free']
           );
           return res.json({ url: '/app' });
         }
@@ -4088,37 +4183,24 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           ? `${baseUrl}${successPath}&session_id={CHECKOUT_SESSION_ID}`
           : `${baseUrl}${successPath}?session_id={CHECKOUT_SESSION_ID}`;
 
-        let checkoutMode = 'payment';
-        if (plano.stripe_price_id) {
-          try {
-            const stripePrice = await stripe.prices.retrieve(plano.stripe_price_id);
-            if (stripePrice?.recurring) checkoutMode = 'subscription';
-          } catch (err) {
-            console.warn('Could not inspect Stripe price for recurring mode:', err?.message || err);
-          }
-        }
-
         let sessionParams = {
-          mode: checkoutMode,
+          mode: 'payment',
           success_url: successUrl,
           cancel_url: `${baseUrl}${cancelPath}`,
           metadata: { user_id: data.authenticated_user_id, plano_id: plano.id },
           client_reference_id: data.authenticated_user_id,
+          payment_method_types: ['card', 'boleto'],
         };
 
-        if (plano.stripe_price_id) {
-          sessionParams.line_items = [{ price: plano.stripe_price_id, quantity: 1 }];
-        } else {
-          const valorCentavos = Math.round(Number(plano.valor) * 100);
-          sessionParams.line_items = [{
-            price_data: {
-              currency: 'brl',
-              product_data: { name: plano.nome },
-              unit_amount: valorCentavos,
-            },
-            quantity: 1,
-          }];
-        }
+        const valorCentavos = Math.round(Number(plano.valor) * 100);
+        sessionParams.line_items = [{
+          price_data: {
+            currency: 'brl',
+            product_data: { name: plano.nome },
+            unit_amount: valorCentavos,
+          },
+          quantity: 1,
+        }];
 
         try {
           const session = await stripe.checkout.sessions.create(sessionParams);
@@ -4173,15 +4255,26 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const confirmVencimento = confirmPlano
           ? resolvePlanVencimentoFromPlan(confirmPlano, confirmNow)
           : await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
+        if (checkoutSession.payment_status === 'unpaid') {
+          await client.query(
+            'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = $4, updated_at = NOW() WHERE id = $5',
+            ['pending', 'boleto', checkoutSession.id, await getStripeBoletoVoucherUrl(confirmStripe, checkoutSession), data.authenticated_user_id]
+          );
+          const pendingUserResult = await client.query(
+            'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url FROM usuarios WHERE id = $1',
+            [data.authenticated_user_id]
+          );
+          return res.json({ user: pendingUserResult.rows[0], pending: true, message: 'Boleto emitido. Aguarde a compensação do pagamento.' });
+        }
         await client.query(
-          'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, updated_at = NOW() WHERE id = $4',
-          [sessionPlanoId, confirmNow, confirmVencimento, data.authenticated_user_id]
+          'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, plano_pagamento_status = $4, plano_pagamento_metodo = $5, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $6',
+          [sessionPlanoId, confirmNow, confirmVencimento, 'paid', 'card', data.authenticated_user_id]
         );
         if (normalizePlanType(sessionPlano.tipo_plano) === 'teste_gratis') {
           await client.query('UPDATE usuarios SET trial_gratis_usado = $2, updated_at = NOW() WHERE id = $1', [data.authenticated_user_id, true]);
         }
         const confirmedUserResult = await client.query(
-          'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento FROM usuarios WHERE id = $1',
+          'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url FROM usuarios WHERE id = $1',
           [data.authenticated_user_id]
         );
         return res.json({ user: confirmedUserResult.rows[0] });
@@ -4189,7 +4282,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'grantLifetimeAccess':
         await client.query(
-          'UPDATE usuarios SET gratuidade_vitalicia = $2, updated_at = NOW() WHERE id = $1',
+          'UPDATE usuarios SET gratuidade_vitalicia = $2, plano_pagamento_status = NULL, plano_pagamento_metodo = NULL, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $1',
           [data.user_id, data.gratuidade_vitalicia ? true : false]
         );
         return res.json({ success: true });

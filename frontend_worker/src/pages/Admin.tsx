@@ -779,6 +779,30 @@ const Admin: React.FC = () => {
                           )
                           : <span className="text-muted-foreground text-sm">—</span>
                         }
+                        {u.plano_pagamento_status === 'pending' && (
+                          <div className="mt-1 flex flex-col gap-1">
+                            <Badge variant="secondary" className="w-fit bg-amber-100 text-amber-900 hover:bg-amber-100">
+                              Boleto pendente
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Aguardando confirmação da Stripe
+                            </span>
+                            {u.plano_pagamento_voucher_url && (
+                              <Button
+                                variant="link"
+                                className="h-auto w-fit p-0 text-xs"
+                                onClick={() => window.open(u.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}
+                              >
+                                Abrir boleto
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {u.plano_pagamento_status === 'failed' && (
+                          <div className="mt-1">
+                            <Badge variant="destructive">Pagamento vencido</Badge>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

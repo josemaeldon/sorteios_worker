@@ -3,6 +3,7 @@ import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
@@ -44,7 +45,7 @@ interface AuthContextType extends AuthState {
   createStripeCheckout: (planoId: string, successPath?: string, cancelPath?: string) => Promise<{ url?: string; error?: string }>;
   createStripeConnectOnboardingLink: () => Promise<{ url?: string; error?: string }>;
   refreshUser: () => Promise<void>;
-  confirmStripeCheckout: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  confirmStripeCheckout: (sessionId: string) => Promise<{ success: boolean; pending?: boolean; message?: string; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -62,6 +63,7 @@ const getErrorMessage = (error: unknown): string => {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -110,7 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       description: `Seu plano vence em ${diffDays} dia(s). Renove para evitar interrupção.`,
       variant: 'destructive',
       action: (
-        <ToastAction altText="Renovar assinatura" onClick={() => { window.location.href = '/planos'; }}>
+        <ToastAction altText="Renovar assinatura" onClick={() => { navigate('/profile?tab=assinatura'); }}>
           Renovar agora
         </ToastAction>
       ),
@@ -676,13 +678,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [token, refreshUser]);
 
-  const confirmStripeCheckout = useCallback(async (sessionId: string): Promise<{ success: boolean; error?: string }> => {
+  const confirmStripeCheckout = useCallback(async (sessionId: string): Promise<{ success: boolean; pending?: boolean; message?: string; error?: string }> => {
     try {
       const result = await callApi('confirmStripeCheckout', { session_id: sessionId });
       if (result.user) {
         setUser(result.user);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
-        return { success: true };
+        return { success: true, pending: !!result.pending, message: result.message };
       }
       return { success: false, error: result.error || 'Erro ao confirmar pagamento' };
     } catch (error: unknown) {
