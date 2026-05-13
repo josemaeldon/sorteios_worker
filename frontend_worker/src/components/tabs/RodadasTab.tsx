@@ -320,7 +320,7 @@ const RodadasTab: React.FC = () => {
                   size="sm"
                 >
                   <Play className="w-4 h-4" />
-                  Sortear
+                  Abrir Rodada
                 </Button>
                 <Button
                   onClick={() => handleEdit(rodada)}

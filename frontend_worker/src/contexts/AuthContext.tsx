@@ -148,14 +148,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return result.isFirstAccess === true;
     } catch (error: unknown) {
       console.error('Error checking first access:', error);
-      // Check if the error is due to database not being configured
-      if (getErrorMessage(error)?.includes('Banco de dados não configurado') || 
-          getErrorMessage(error)?.includes('503')) {
-        // Redirect to setup page
+      const message = getErrorMessage(error);
+      if (message.includes('Banco de dados não configurado')) {
         window.location.href = '/setup';
         return true;
       }
-      return true; // Assume first access if error
+      return false;
     }
   }, []);
 
