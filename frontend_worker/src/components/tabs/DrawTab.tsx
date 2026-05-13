@@ -1367,15 +1367,15 @@ const DrawTab: React.FC = () => {
       </Dialog>
 
       <Dialog open={isQrCodeModalOpen} onOpenChange={setIsQrCodeModalOpen}>
-        <DialogContent className="w-screen h-screen max-w-none rounded-none p-3">
+        <DialogContent className="w-[85vw] h-[85vh] max-w-[85vw] p-4">
           <DialogHeader>
             <DialogTitle>QR Code da Transmissão</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 flex items-center justify-center overflow-auto">
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=1400x1400&data=${encodeURIComponent(streamingUrl)}`}
               alt="QR Code da transmissão"
-              className="w-full h-auto max-w-[95vh] object-contain"
+              className="w-auto h-auto max-w-full max-h-full object-contain rounded-md bg-white p-2"
             />
           </div>
           <div className="flex justify-center">
