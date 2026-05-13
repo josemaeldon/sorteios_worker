@@ -74,7 +74,7 @@ const AdminUsuarios: React.FC = () => {
       setIsLoading(false);
     };
     load();
-  }, [isAuthenticated, user, navigate, getAllUsers, getPlanos]);
+  }, [isAuthenticated, user?.id, user?.role, navigate, getAllUsers, getPlanos]);
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();

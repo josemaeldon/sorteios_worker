@@ -217,7 +217,7 @@ const Admin: React.FC = () => {
     loadSorteios();
     loadPlanos();
     loadConfig();
-  }, [isAuthenticated, user, navigate, loadUsers, loadSorteios, loadPlanos, loadConfig]);
+  }, [isAuthenticated, user?.id, user?.role, navigate, loadUsers, loadSorteios, loadPlanos, loadConfig]);
 
   const handleSaveConfig = async () => {
     setIsSavingConfig(true);
