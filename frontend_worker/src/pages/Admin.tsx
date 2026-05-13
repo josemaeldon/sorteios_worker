@@ -1447,6 +1447,59 @@ const Admin: React.FC = () => {
                   <button type="button" onClick={() => setGatewayUserConfig(prev => ({ ...prev, payment_gateway: 'mercado_pago' }))} className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-semibold ${gatewayUserConfig['payment_gateway'] === 'mercado_pago' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200'}`}>Mercado Pago</button>
                 </div>
               </div>
+              {(gatewayUserConfig['payment_gateway'] || 'stripe') === 'stripe' && (
+                <>
+                  <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+                    <div>
+                      <p className="font-semibold text-orange-800 text-sm">Modo Sandbox (Testes)</p>
+                      <p className="text-xs text-orange-600 mt-0.5">Ativado: usa as chaves de teste. Desativado: usa as chaves de produção.</p>
+                    </div>
+                    <Switch checked={gatewayUserConfig['stripe_sandbox_mode'] === 'true'} onCheckedChange={(checked) => setGatewayUserConfig(prev => ({ ...prev, stripe_sandbox_mode: checked ? 'true' : 'false' }))} />
+                  </div>
+                  {gatewayUserConfig['stripe_sandbox_mode'] === 'true' ? (
+                    <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_sandbox_public_key">Chave Pública Sandbox</Label><Input id="usr_stripe_sandbox_public_key" value={gatewayUserConfig['stripe_sandbox_public_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_sandbox_public_key: e.target.value }))} placeholder="pk_test_..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_sandbox_secret_key">Chave Secreta Sandbox</Label><Input id="usr_stripe_sandbox_secret_key" type="password" value={gatewayUserConfig['stripe_sandbox_secret_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_sandbox_secret_key: e.target.value }))} placeholder="sk_test_..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_sandbox_webhook_secret">Webhook Secret (Sandbox)</Label><Input id="usr_stripe_sandbox_webhook_secret" type="password" value={gatewayUserConfig['stripe_sandbox_webhook_secret'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_sandbox_webhook_secret: e.target.value }))} placeholder="whsec_..." /></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-green-200 bg-green-50/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_public_key">Chave Pública (Publishable Key)</Label><Input id="usr_stripe_public_key" value={gatewayUserConfig['stripe_public_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_public_key: e.target.value }))} placeholder="pk_live_..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_secret_key">Chave Secreta (Secret Key)</Label><Input id="usr_stripe_secret_key" type="password" value={gatewayUserConfig['stripe_secret_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_stripe_webhook_secret">Webhook Secret (Produção)</Label><Input id="usr_stripe_webhook_secret" type="password" value={gatewayUserConfig['stripe_webhook_secret'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, stripe_webhook_secret: e.target.value }))} placeholder="whsec_..." /></div>
+                    </div>
+                  )}
+                </>
+              )}
+              {gatewayUserConfig['payment_gateway'] === 'mercado_pago' && (
+                <>
+                  <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+                    <div>
+                      <p className="font-semibold text-orange-800 text-sm">Modo Sandbox (Testes)</p>
+                      <p className="text-xs text-orange-600 mt-0.5">Ativado: usa as chaves de teste. Desativado: usa as chaves de produção.</p>
+                    </div>
+                    <Switch checked={gatewayUserConfig['mp_sandbox_mode'] === 'true'} onCheckedChange={(checked) => setGatewayUserConfig(prev => ({ ...prev, mp_sandbox_mode: checked ? 'true' : 'false' }))} />
+                  </div>
+                  {gatewayUserConfig['mp_sandbox_mode'] === 'true' ? (
+                    <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_sandbox_public_key">Chave Pública Sandbox</Label><Input id="usr_mp_sandbox_public_key" value={gatewayUserConfig['mp_sandbox_public_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_sandbox_public_key: e.target.value }))} placeholder="TEST-..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_sandbox_access_token">Access Token Sandbox</Label><Input id="usr_mp_sandbox_access_token" type="password" value={gatewayUserConfig['mp_sandbox_access_token'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_sandbox_access_token: e.target.value }))} placeholder="TEST-..." /></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-green-200 bg-green-50/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_public_key">Chave Pública</Label><Input id="usr_mp_public_key" value={gatewayUserConfig['mp_public_key'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_public_key: e.target.value }))} placeholder="APP_USR-..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_access_token">Access Token</Label><Input id="usr_mp_access_token" type="password" value={gatewayUserConfig['mp_access_token'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_access_token: e.target.value }))} placeholder="APP_USR-..." /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_client_id">Client ID</Label><Input id="usr_mp_client_id" value={gatewayUserConfig['mp_client_id'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_client_id: e.target.value }))} /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_client_secret">Client Secret</Label><Input id="usr_mp_client_secret" type="password" value={gatewayUserConfig['mp_client_secret'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_client_secret: e.target.value }))} /></div>
+                      <div className="space-y-2"><Label htmlFor="usr_mp_webhook_secret">Webhook Secret</Label><Input id="usr_mp_webhook_secret" type="password" value={gatewayUserConfig['mp_webhook_secret'] || ''} onChange={(e) => setGatewayUserConfig(prev => ({ ...prev, mp_webhook_secret: e.target.value }))} /></div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
           <DialogFooter>
