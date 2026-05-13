@@ -7,6 +7,7 @@ import {
   isOfflineModeEnabled,
   OFFLINE_EVENT_NAMES,
   patchOfflineAppState,
+  isOfflineSyncing,
   setOfflineQueue,
   setOfflineSyncing,
 } from './offlineMode';
