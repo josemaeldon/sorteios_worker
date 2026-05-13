@@ -14,10 +14,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Settings, User } from 'lucide-react';
+import { LogOut, Settings, User } from 'lucide-react';
 
 const Landing: React.FC = () => {
-  const { getPublicPlanos, isAuthenticated, user } = useAuth();
+  const { getPublicPlanos, isAuthenticated, user, logout } = useAuth();
   const [planos, setPlanos] = useState<Plan[]>([]);
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
@@ -61,6 +61,9 @@ const Landing: React.FC = () => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/app">Sorteios</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut className="h-4 w-4 mr-2" />Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
