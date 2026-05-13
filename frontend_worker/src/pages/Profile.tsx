@@ -462,7 +462,7 @@ const Profile: React.FC = () => {
               variant="ghost"
               size="icon"
               className="text-primary-foreground hover:bg-primary-foreground/10"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/app')}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -919,6 +919,36 @@ const Profile: React.FC = () => {
                               {isConnectingStripe ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                               {gatewayConfig['stripe_account_id'] ? 'Reconectar Stripe' : 'Conectar com Stripe'}
                             </Button>
+                          </div>
+                          <div className="space-y-4 rounded-lg border border-green-200 bg-green-50/30 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_public_key">Chave Pública (Publishable Key)</Label>
+                              <Input id="stripe_public_key" value={gatewayConfig['stripe_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_public_key: e.target.value }))} placeholder="pk_live_..." />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_secret_key">Chave Secreta (Secret Key)</Label>
+                              <Input id="stripe_secret_key" type="password" value={gatewayConfig['stripe_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_webhook_secret">Webhook Secret (Produção)</Label>
+                              <Input id="stripe_webhook_secret" type="password" value={gatewayConfig['stripe_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_webhook_secret: e.target.value }))} placeholder="whsec_..." />
+                            </div>
+                          </div>
+                          <div className="space-y-4 rounded-lg border border-orange-200 bg-orange-50/30 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_sandbox_public_key">Chave Pública Sandbox</Label>
+                              <Input id="stripe_sandbox_public_key" value={gatewayConfig['stripe_sandbox_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_public_key: e.target.value }))} placeholder="pk_test_..." />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_sandbox_secret_key">Chave Secreta Sandbox</Label>
+                              <Input id="stripe_sandbox_secret_key" type="password" value={gatewayConfig['stripe_sandbox_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_secret_key: e.target.value }))} placeholder="sk_test_..." />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="stripe_sandbox_webhook_secret">Webhook Secret (Sandbox)</Label>
+                              <Input id="stripe_sandbox_webhook_secret" type="password" value={gatewayConfig['stripe_sandbox_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_webhook_secret: e.target.value }))} placeholder="whsec_..." />
+                            </div>
                           </div>
                         </>
                       )}
