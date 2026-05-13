@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, Trophy } from 'lucide-react';
+import { CheckCircle, Loader2, Trophy } from 'lucide-react';
 import { callApi } from '@/lib/apiClient';
 
 type PublicRodada = {
@@ -11,6 +11,8 @@ type PublicRodada = {
   range_end: number;
   status: string;
   tipo?: string;
+  grade_colunas?: number;
+  grade_linhas?: number;
 };
 
 type HistoricoItem = {
@@ -39,6 +41,8 @@ const StreamingDraw: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
+  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string }[]>([]);
+  const ganhadoresPopShownRef = useRef<Set<number>>(new Set());
 
   const loadData = async (silent = false) => {
     if (!rodadaId) return;
@@ -110,6 +114,24 @@ const StreamingDraw: React.FC = () => {
   useEffect(() => {
     lastCountRef.current = sortedHistorico.length;
   }, [sortedHistorico.length]);
+
+  const winningScore = (rodada?.grade_colunas ?? 5) * (rodada?.grade_linhas ?? 5);
+
+  useEffect(() => {
+    if (!rodada) return;
+
+    const winnerEntries = groupedTop10
+      .filter(group => group.score >= winningScore)
+      .flatMap(group => group.cartelas);
+
+    if (winnerEntries.length === 0) return;
+
+    const newWinners = winnerEntries.filter(entry => !ganhadoresPopShownRef.current.has(entry.numero));
+    if (newWinners.length === 0) return;
+
+    newWinners.forEach(entry => ganhadoresPopShownRef.current.add(entry.numero));
+    setGanhadoresPop(winnerEntries.map(({ numero, nome }) => ({ numero, nome })));
+  }, [groupedTop10, winningScore, rodada]);
 
   if (isLoading) {
     return (
@@ -200,6 +222,31 @@ const StreamingDraw: React.FC = () => {
           </div>
         )}
       </main>
+
+      {ganhadoresPop.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
+          <div className="bg-card rounded-2xl p-10 text-center shadow-2xl max-w-lg w-full mx-4 border-4 border-yellow-400">
+            <Trophy className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
+            <h2 className="text-4xl font-black mb-2 text-foreground">Temos um Ganhador! 🎉</h2>
+            <p className="text-muted-foreground mb-6">Cartela(s) com todos os números sorteados</p>
+            <div className="space-y-2 mb-8">
+              {ganhadoresPop.map(({ numero, nome }) => (
+                <div key={numero} className="text-2xl font-bold text-primary">
+                  Cartela {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setGanhadoresPop([])}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
+            >
+              <CheckCircle className="w-5 h-5" />
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
