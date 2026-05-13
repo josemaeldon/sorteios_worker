@@ -2573,6 +2573,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         };
 
         const sorteioData = backup.sorteio || {};
+        const importedNome = typeof data.imported_nome === 'string' ? data.imported_nome.trim() : '';
         const premiosImport = normalizeJsonArray(sorteioData.premios);
         const premioFallback = typeof sorteioData.premio === 'string' ? sorteioData.premio : '';
         const premiosFinal = premiosImport.length > 0 ? premiosImport : (premioFallback ? [premioFallback] : []);
@@ -2617,7 +2618,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             [
               newSorteioId,
               sorteioOwnerId,
-              sorteioData.nome || 'Sorteio importado',
+              importedNome || sorteioData.nome || 'Sorteio importado',
               sorteioData.data_sorteio || null,
               premioImport,
               JSON.stringify(premiosFinal),

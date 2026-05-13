@@ -53,7 +53,7 @@ interface BingoContextType {
   updateSorteio: (id: string, sorteio: Partial<Sorteio>) => Promise<void>;
   deleteSorteio: (id: string) => Promise<void>;
   exportSorteioBackup: (sorteioId: string) => Promise<Record<string, unknown>>;
-  importSorteioBackup: (backup: Record<string, unknown>, targetUserId?: string) => Promise<void>;
+  importSorteioBackup: (backup: Record<string, unknown>, targetUserId?: string, importedNome?: string) => Promise<void>;
   
   // CRUD Operations - Vendedores
   loadVendedores: () => Promise<void>;
@@ -272,11 +272,12 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [callApi, toast]);
 
-  const importSorteioBackup = useCallback(async (backup: Record<string, unknown>, targetUserId?: string) => {
+  const importSorteioBackup = useCallback(async (backup: Record<string, unknown>, targetUserId?: string, importedNome?: string) => {
     try {
       setIsLoading(true);
       await callApi('importSorteioBackup', {
         backup,
+        ...(importedNome ? { imported_nome: importedNome } : {}),
         ...(targetUserId ? { target_user_id: targetUserId } : {})
       });
       await loadSorteios();

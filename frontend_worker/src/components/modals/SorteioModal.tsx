@@ -71,6 +71,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
   const [progress, setProgress] = useState(0);
   const [creationMode, setCreationMode] = useState<'novo' | 'backup'>('novo');
   const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [importedNome, setImportedNome] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
   // Load active users list for admin and reset targetUserId on close
@@ -82,6 +83,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       setTargetUserId('');
       setCreationMode('novo');
       setBackupFile(null);
+      setImportedNome('');
       setIsImporting(false);
     }
   }, [isOpen, isAdmin, getAllUsers]);
@@ -183,7 +185,11 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
         return;
       }
 
-      await importSorteioBackup(parsed, isAdmin && targetUserId ? targetUserId : undefined);
+      await importSorteioBackup(
+        parsed,
+        isAdmin && targetUserId ? targetUserId : undefined,
+        importedNome.trim() || undefined
+      );
       toast({
         title: "Backup importado",
         description: "O sorteio foi importado com sucesso."
@@ -451,6 +457,15 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
               </div>
             )}
             <div className="space-y-2">
+              <Label htmlFor="imported_name">Nome do sorteio importado *</Label>
+              <Input
+                id="imported_name"
+                value={importedNome}
+                onChange={(e) => setImportedNome(e.target.value)}
+                placeholder="Ex.: Sorteio Copa de Maio"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="backup_file">Arquivo de Backup *</Label>
               <Input
                 id="backup_file"
@@ -466,7 +481,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
               type="button"
               className="w-full gap-2"
               onClick={handleImportBackup}
-              disabled={isImporting || (isAdmin && !targetUserId)}
+              disabled={isImporting || (isAdmin && !targetUserId) || !importedNome.trim()}
             >
               {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               {isImporting ? 'Importando...' : 'Importar Backup'}
