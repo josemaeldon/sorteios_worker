@@ -107,6 +107,19 @@ const AdminUsuarios: React.FC = () => {
     [planos, selectedPlanId],
   );
 
+  function getUserPlanValue(u: User) {
+    if (u.gratuidade_vitalicia || !u.plano_id) return 0;
+    const plan = planos.find((p) => p.id === u.plano_id);
+    return Number(plan?.valor || 0);
+  }
+
+  function getUserPaymentMethod(u: User) {
+    if (u.plano_pagamento_metodo) return u.plano_pagamento_metodo;
+    if (u.gratuidade_vitalicia) return 'free';
+    if (!u.plano_id) return 'none';
+    return 'manual';
+  }
+
   const activePlanUsers = users.filter((u) => {
     if (!u.plano_id || u.gratuidade_vitalicia) return false;
     if (!u.plano_vencimento) return true;
@@ -138,19 +151,6 @@ const AdminUsuarios: React.FC = () => {
     if (u.gratuidade_vitalicia) return 'Gratuidade vitalícia';
     if (!u.plano_id) return 'Sem plano';
     return planos.find((p) => p.id === u.plano_id)?.nome || 'Plano';
-  };
-
-  const getUserPlanValue = (u: User) => {
-    if (u.gratuidade_vitalicia || !u.plano_id) return 0;
-    const plan = planos.find((p) => p.id === u.plano_id);
-    return Number(plan?.valor || 0);
-  };
-
-  const getUserPaymentMethod = (u: User) => {
-    if (u.plano_pagamento_metodo) return u.plano_pagamento_metodo;
-    if (u.gratuidade_vitalicia) return 'free';
-    if (!u.plano_id) return 'none';
-    return 'manual';
   };
 
   const getPaymentBadge = (u: User) => {

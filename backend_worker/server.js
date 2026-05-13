@@ -4152,6 +4152,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(404).json({ error: 'Plano não encontrado.' });
         }
         const plano = planoResult.rows[0];
+        const userResult = await client.query('SELECT email FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
+        const userEmail = userResult.rows[0]?.email || undefined;
         if (Number(plano.valor) <= 0 || normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
           if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
             const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
@@ -4189,7 +4191,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           cancel_url: `${baseUrl}${cancelPath}`,
           metadata: { user_id: data.authenticated_user_id, plano_id: plano.id },
           client_reference_id: data.authenticated_user_id,
-          payment_method_types: ['card', 'boleto'],
+          customer_email: userEmail,
+          automatic_payment_methods: { enabled: true },
         };
 
         const valorCentavos = Math.round(Number(plano.valor) * 100);
@@ -4207,7 +4210,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.json({ url: session.url });
         } catch (err) {
           console.error('Stripe checkout creation failed:', err);
-          return res.status(400).json({ error: err?.message || 'Não foi possível iniciar o checkout na Stripe.' });
+          const stripeErrMsg = err?.raw?.message || err?.raw?.error?.message || err?.message || 'Não foi possível iniciar o checkout na Stripe.';
+          return res.status(400).json({ error: stripeErrMsg });
         }
       }
 
