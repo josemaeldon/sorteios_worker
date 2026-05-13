@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Ticket, Loader2, ShieldCheck, LogIn, UserPlus, CheckCircle2, Shuffle } from 'lucide-react';
+import { Ticket, Loader2, ShieldCheck, LogIn, UserPlus, Shuffle } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -45,7 +45,6 @@ const Auth: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({});
-  const [registerSuccess, setRegisterSuccess] = useState(false);
   
   // Login form
   const [loginData, setLoginData] = useState({ email: '', senha: '' });
@@ -150,7 +149,7 @@ const Auth: React.FC = () => {
     setIsSubmitting(false);
     
     if (result.success) {
-      setRegisterSuccess(true);
+      navigate('/planos');
     } else {
       setRegisterErrors({ form: result.error || 'Erro ao realizar cadastro' });
     }
@@ -341,18 +340,6 @@ const Auth: React.FC = () => {
 
               {/* ── REGISTER TAB ── */}
               <TabsContent value="cadastro">
-                {registerSuccess ? (
-                  <div className="flex flex-col items-center gap-4 py-6 text-center">
-                    <CheckCircle2 className="h-12 w-12 text-green-500" />
-                    <div>
-                      <p className="font-semibold text-lg">Cadastro realizado com sucesso!</p>
-                      <p className="text-muted-foreground text-sm mt-1">
-                        Seu cadastro está aguardando aprovação do administrador.<br />
-                        Você receberá um e-mail quando for aprovado.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
                   <>
                     {registerErrors.form && (
                       <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
@@ -422,7 +409,6 @@ const Auth: React.FC = () => {
                       </Button>
                     </form>
                   </>
-                )}
               </TabsContent>
             </Tabs>
           )}

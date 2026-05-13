@@ -1883,32 +1883,16 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const regHash = await hashPassword(data.senha);
         const regResult = await client.query(`
           INSERT INTO usuarios (email, senha_hash, nome, role, ativo, titulo_sistema)
-          VALUES ($1, $2, $3, 'user', false, $4)
-          RETURNING id, email, nome, role, ativo, titulo_sistema, created_at
+          VALUES ($1, $2, $3, 'user', true, $4)
+          RETURNING id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento
         `, [data.email, regHash, data.nome, data.titulo_sistema || 'Sorteios']);
         const newUser = regResult.rows[0];
-
-        // Notify admin by email (fire and forget)
-        try {
-          const adminResult = await client.query("SELECT email FROM usuarios WHERE role = 'admin' LIMIT 1");
-          const adminEmail = adminResult.rows[0]?.email;
-          if (adminEmail) {
-            const tplSubjectResult = await client.query("SELECT valor FROM configuracoes WHERE chave = 'email_admin_novo_cadastro_assunto'");
-            const tplBodyResult   = await client.query("SELECT valor FROM configuracoes WHERE chave = 'email_admin_novo_cadastro_corpo'");
-            const tituloResult    = await client.query("SELECT valor FROM configuracoes WHERE chave = 'titulo_sistema'");
-            const defaultSubject  = 'Novo cadastro aguardando aprovação';
-            const defaultBody     = 'Olá Administrador,\n\nUm novo usuário se cadastrou e aguarda sua aprovação:\n\nNome: {{nome_usuario}}\nEmail: {{email_usuario}}\n\nAcesse o painel de administração para aprovar ou rejeitar o cadastro.\n\nAtenciosamente,\n{{titulo_sistema}}';
-            const subject = tplSubjectResult.rows[0]?.valor || defaultSubject;
-            const bodyTpl = tplBodyResult.rows[0]?.valor || defaultBody;
-            const titulo  = tituloResult.rows[0]?.valor || 'Sistema';
-            const body = applyTemplateVars(bodyTpl, { nome_usuario: newUser.nome, email_usuario: newUser.email, titulo_sistema: titulo });
-            sendEmail(client, { to: adminEmail, subject, text: body });
-          }
-        } catch (e) {
-          console.warn('Could not send admin notification email:', e.message);
-        }
-
-        return res.json({ success: true });
+        const token = await createJwt({
+          user_id: newUser.id,
+          role: newUser.role,
+          email: newUser.email
+        });
+        return res.json({ success: true, user: newUser, token });
       }
 
       case 'approveUser': {
@@ -4009,19 +3993,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             return res.status(404).json({ error: 'Plano não encontrado.' });
           }
           const plano = planoResult.rows[0];
-          if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
-            const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.user_id]);
-            const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
-            if (trialUsed) {
-              return res.status(400).json({ error: 'Este usuário já utilizou o plano Teste Grátis uma vez.' });
-            }
-          }
           const { cycleDays } = getPlanCycleDays(plano);
           const totalDays = cycleDays + extensionDays;
           const now = new Date();
           const vencimento = addDaysFromNow(totalDays);
           await client.query(
-            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, updated_at = NOW() WHERE id = $1',
+            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, updated_at = NOW() WHERE id = $1',
             [data.user_id, planoId, now, vencimento]
           );
           if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
@@ -4156,7 +4133,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const confirmNow = new Date();
         const confirmVencimento = await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
         await client.query(
-          'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
+          'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, updated_at = NOW() WHERE id = $4',
           [sessionPlanoId, confirmNow, confirmVencimento, data.authenticated_user_id]
         );
         if (normalizePlanType(sessionPlano.tipo_plano) === 'teste_gratis') {

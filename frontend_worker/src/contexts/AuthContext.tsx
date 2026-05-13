@@ -186,14 +186,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const registerUser = useCallback(async (data: { nome: string; email: string; senha: string }) => {
     try {
       const result = await callApi('publicRegister', data);
-      if (result.success) {
+      if (result.success && result.user && result.token) {
+        setUser(result.user);
+        setToken(result.token);
+        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        setStoredToken(result.token);
+        toast({
+          title: "Cadastro realizado",
+          description: "Escolha seu plano para continuar.",
+        });
         return { success: true };
       }
       return { success: false, error: result.error || 'Erro ao realizar cadastro' };
     } catch (error: unknown) {
       return { success: false, error: getErrorMessage(error) || 'Erro ao realizar cadastro' };
     }
-  }, []);
+  }, [toast]);
 
   const approveUser = useCallback(async (id: string) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
