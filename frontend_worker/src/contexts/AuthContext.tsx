@@ -147,7 +147,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('checkFirstAccess');
       return result.isFirstAccess === true;
     } catch (error: unknown) {
-      console.error('Error checking first access:', error);
       const message = getErrorMessage(error);
       if (message.includes('Banco de dados não configurado')) {
         window.location.href = '/setup';
@@ -199,7 +198,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       return { success: false, error: result.error || 'Credenciais inválidas' };
     } catch (error: unknown) {
-      console.error('Login error:', error);
       return { success: false, error: getErrorMessage(error) || 'Erro ao fazer login' };
     } finally {
       setIsLoading(false);
@@ -489,7 +487,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       return result.data || [];
     } catch (error) {
-      console.error('Get public planos error:', error);
       return [];
     }
   }, []);

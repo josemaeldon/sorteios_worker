@@ -16,7 +16,6 @@ export function useFavicon() {
         applyFavicon(faviconUrl || null);
       })
       .catch((err) => {
-        console.error('useFavicon: failed to load public config', err);
         applyFavicon(null);
       });
 
