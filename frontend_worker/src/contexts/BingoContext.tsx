@@ -1249,6 +1249,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     sorteios,
     vendedores,
     cartelas,
+    cartelasComGrade,
     atribuicoes,
     vendas,
     cartelaLayouts,
