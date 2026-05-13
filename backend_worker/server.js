@@ -4192,10 +4192,14 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           metadata: { user_id: data.authenticated_user_id, plano_id: plano.id },
           client_reference_id: data.authenticated_user_id,
           customer_email: userEmail,
-          automatic_payment_methods: { enabled: true },
         };
 
         const valorCentavos = Math.round(Number(plano.valor) * 100);
+        const paymentMethodTypes = ['card'];
+        if (valorCentavos >= 500) {
+          paymentMethodTypes.push('boleto');
+        }
+        sessionParams.payment_method_types = paymentMethodTypes;
         sessionParams.line_items = [{
           price_data: {
             currency: 'brl',
