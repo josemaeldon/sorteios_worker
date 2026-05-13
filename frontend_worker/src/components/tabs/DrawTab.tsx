@@ -189,6 +189,7 @@ const DrawTab: React.FC = () => {
   }, [persistDrawTabState]);
 
   useEffect(() => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
     persistDrawTabState({
       rodadas,
       selectedRodada,
@@ -209,8 +210,15 @@ const DrawTab: React.FC = () => {
       isCartelaSorteioAnimating,
       cartelaSorteioPreview,
     });
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        cartelasComGrade: cardsWithGrade,
+      },
+    });
   }, [
     persistDrawTabState,
+    cardsWithGrade,
     rodadas,
     selectedRodada,
     showDrawing,

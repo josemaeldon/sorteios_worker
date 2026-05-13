@@ -101,6 +101,13 @@ const getOfflineResponse = (action: string, data: Record<string, unknown> = {}):
   const bingo = (state.bingo || {}) as Record<string, unknown>;
   const auth = (state.auth || {}) as Record<string, unknown>;
   const asArray = (value: unknown) => (Array.isArray(value) ? value : []);
+  const drawTab = (bingo.drawTab || {}) as Record<string, unknown>;
+  const drawTabCardsWithGrade = asArray(drawTab.cardsWithGrade);
+  const cartelasWithGrade = asArray(bingo.cartelasComGrade);
+  const findCartelaWithGrade = (numero: number): Record<string, unknown> | undefined => {
+    const found = cartelasWithGrade.find((item) => Number((item as Record<string, unknown>).numero) === Number(numero));
+    return found && typeof found === 'object' ? (found as Record<string, unknown>) : undefined;
+  };
 
   switch (action) {
     case 'getMyProfile':
@@ -111,6 +118,9 @@ const getOfflineResponse = (action: string, data: Record<string, unknown> = {}):
     case 'getVendedores':
       return { data: asArray(bingo.vendedores) };
     case 'getCartelas':
+      if (data.include_grades) {
+        return { data: cartelasWithGrade.length > 0 ? cartelasWithGrade : drawTabCardsWithGrade };
+      }
       return { data: asArray(bingo.cartelas) };
     case 'getAtribuicoes':
       return { data: asArray(bingo.atribuicoes) };
@@ -120,6 +130,19 @@ const getOfflineResponse = (action: string, data: Record<string, unknown> = {}):
       return { data: asArray(bingo.cartelaLayouts) };
     case 'getCartelasValidadas':
       return { data: asArray(bingo.cartelasValidadas) };
+    case 'getCartelasValidadasComGrade': {
+      const validated = asArray(bingo.cartelasValidadas);
+      const validatedNumbers = new Set(validated.map((item) => Number((item as Record<string, unknown>).numero)));
+      const source = cartelasWithGrade.length > 0 ? cartelasWithGrade : drawTabCardsWithGrade;
+      return {
+        data: source.filter((item) => validatedNumbers.has(Number((item as Record<string, unknown>).numero))),
+      };
+    }
+    case 'getCartelaDetalhe': {
+      const numero = Number(data.numero);
+      const found = findCartelaWithGrade(numero) || drawTabCardsWithGrade.find((item) => Number((item as Record<string, unknown>).numero) === numero) as Record<string, unknown> | undefined;
+      return found ? { data: found } : null;
+    }
     case 'getMinhaLoja':
       return { data: asArray(bingo.lojaCartelas) };
     case 'getAllUsers':
