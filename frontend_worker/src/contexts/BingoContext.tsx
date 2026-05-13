@@ -161,8 +161,10 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 
   useEffect(() => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
     patchOfflineAppState({
       bingo: {
+        ...currentBingo,
         sorteioAtivo,
         sorteios,
         vendedores,

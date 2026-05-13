@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
 import { RodadaSorteio, CartelaValidada } from '@/types/bingo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +30,7 @@ import { callApi } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 import { formatarData } from '@/lib/utils/formatters';
 import { getBingoMaxNumber } from '@/lib/utils/bingoCardUtils';
-import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
+import { getOfflineAppState, getOfflineQueue, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,12 +82,13 @@ const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
   const drawTabSnapshot = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
+  const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
 
   // Winning score = total cells in the grid (cols × rows), defaults to 25 (5×5)
   const winningScore = (sorteioAtivo?.grade_colunas ?? 5) * (sorteioAtivo?.grade_linhas ?? 5);
   
   // Rodadas state
-  const [rodadas, setRodadas] = useState<RodadaSorteio[]>((drawTabSnapshot.rodadas as RodadaSorteio[]) || []);
+  const [rodadas, setRodadas] = useState<RodadaSorteio[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.rodadas as RodadaSorteio[]) || []) : []);
   const [isLoadingRodadas, setIsLoadingRodadas] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRodada, setEditingRodada] = useState<RodadaSorteio | null>(null);
@@ -101,30 +102,30 @@ const DrawTab: React.FC = () => {
   });
   
   // Drawing state
-  const [currentNumber, setCurrentNumber] = useState<number | null>((drawTabSnapshot.currentNumber as number | null) ?? null);
-  const [drawnNumbers, setDrawnNumbers] = useState<number[]>((drawTabSnapshot.drawnNumbers as number[]) || []);
-  const [isDrawing, setIsDrawing] = useState<boolean>(!!drawTabSnapshot.isDrawing);
-  const [availableNumbers, setAvailableNumbers] = useState<number[]>((drawTabSnapshot.availableNumbers as number[]) || []);
+  const [currentNumber, setCurrentNumber] = useState<number | null>(shouldHydrateOfflineState ? ((drawTabSnapshot.currentNumber as number | null) ?? null) : null);
+  const [drawnNumbers, setDrawnNumbers] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.drawnNumbers as number[]) || []) : []);
+  const [isDrawing, setIsDrawing] = useState<boolean>(shouldHydrateOfflineState ? !!drawTabSnapshot.isDrawing : false);
+  const [availableNumbers, setAvailableNumbers] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.availableNumbers as number[]) || []) : []);
   const [fontSize, setFontSize] = useState<number>(300);
   const [fullscreenFontSize, setFullscreenFontSize] = useState<number>(FULLSCREEN_FONT_SIZE_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDrawnHistoryFullscreen, setIsDrawnHistoryFullscreen] = useState(false);
-  const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>((drawTabSnapshot.selectedRodada as RodadaSorteio | null) || null);
-  const [showDrawing, setShowDrawing] = useState(!!drawTabSnapshot.showDrawing);
-  const [justDrawn, setJustDrawn] = useState(!!drawTabSnapshot.justDrawn);
-  const [vencedoras, setVencedoras] = useState<number[]>((drawTabSnapshot.vencedoras as number[]) || []);
-  const [isVerifying, setIsVerifying] = useState<boolean>(!!drawTabSnapshot.isVerifying);
+  const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>(shouldHydrateOfflineState ? ((drawTabSnapshot.selectedRodada as RodadaSorteio | null) || null) : null);
+  const [showDrawing, setShowDrawing] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.showDrawing : false);
+  const [justDrawn, setJustDrawn] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.justDrawn : false);
+  const [vencedoras, setVencedoras] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.vencedoras as number[]) || []) : []);
+  const [isVerifying, setIsVerifying] = useState<boolean>(shouldHydrateOfflineState ? !!drawTabSnapshot.isVerifying : false);
   const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[] } | null>(null);
-  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []);
-  const [manualNumberInput, setManualNumberInput] = useState((drawTabSnapshot.manualNumberInput as string) || '');
-  const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>((drawTabSnapshot.cardsWithGrade as ValidatedCartelaComGrade[]) || []);
-  const [isQrCodeModalOpen, setIsQrCodeModalOpen] = useState(!!drawTabSnapshot.isQrCodeModalOpen);
+  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []) : []);
+  const [manualNumberInput, setManualNumberInput] = useState(shouldHydrateOfflineState ? ((drawTabSnapshot.manualNumberInput as string) || '') : '');
+  const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.cardsWithGrade as ValidatedCartelaComGrade[]) || []) : []);
+  const [isQrCodeModalOpen, setIsQrCodeModalOpen] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.isQrCodeModalOpen : false);
 
   // Random cartela raffle state
-  const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(!!drawTabSnapshot.isCartelaSorteioModalOpen);
-  const [cartelasSorteadasHistory, setCartelasSorteadasHistory] = useState<{ numero: number; nome?: string }[]>((drawTabSnapshot.cartelasSorteadasHistory as { numero: number; nome?: string }[]) || []);
-  const [isCartelaSorteioAnimating, setIsCartelaSorteioAnimating] = useState(!!drawTabSnapshot.isCartelaSorteioAnimating);
-  const [cartelaSorteioPreview, setCartelaSorteioPreview] = useState<number | null>((drawTabSnapshot.cartelaSorteioPreview as number | null) ?? null);
+  const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.isCartelaSorteioModalOpen : false);
+  const [cartelasSorteadasHistory, setCartelasSorteadasHistory] = useState<{ numero: number; nome?: string }[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.cartelasSorteadasHistory as { numero: number; nome?: string }[]) || []) : []);
+  const [isCartelaSorteioAnimating, setIsCartelaSorteioAnimating] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.isCartelaSorteioAnimating : false);
+  const [cartelaSorteioPreview, setCartelaSorteioPreview] = useState<number | null>(shouldHydrateOfflineState ? ((drawTabSnapshot.cartelaSorteioPreview as number | null) ?? null) : null);
   const cartelaSorteioIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -235,7 +236,7 @@ const DrawTab: React.FC = () => {
 
     const offlineDrawTab = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
     const snapshotSorteioId = offlineDrawTab.sorteioId as string | undefined;
-    const matchesSnapshot = !snapshotSorteioId || snapshotSorteioId === sorteioAtivo.id;
+    const matchesSnapshot = shouldHydrateOfflineState && (!snapshotSorteioId || snapshotSorteioId === sorteioAtivo.id);
 
     if (matchesSnapshot) {
       if (Array.isArray(offlineDrawTab.rodadas)) setRodadas(offlineDrawTab.rodadas as RodadaSorteio[]);
@@ -263,7 +264,7 @@ const DrawTab: React.FC = () => {
     void loadRodadas();
     void loadCartelasValidadas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorteioAtivo?.id]);
+  }, [sorteioAtivo?.id, shouldHydrateOfflineState, resetDrawTabState]);
 
   const loadRodadas = async () => {
     if (!sorteioAtivo) return;
