@@ -5205,17 +5205,38 @@ ${numerosCartelas ? `<p><strong>Cartelas:</strong> ${numerosCartelas}</p>` : ''}
       }
 
       case 'updateUserConfiguracoes': {
+        if (data.authenticated_role !== 'admin') {
+          return res.status(403).json({ error: 'Somente admin pode configurar gateway por usuário.' });
+        }
+        return res.status(400).json({ error: 'Use a ação updateUserConfiguracoesAdmin.' });
+      }
+
+      case 'getUserConfiguracoesAdmin': {
+        if (data.authenticated_role !== 'admin') return res.status(403).json({ error: 'Apenas administradores podem acessar.' });
+        if (!data.user_id) return res.status(400).json({ error: 'user_id é obrigatório.' });
+        const ucResult = await client.query(
+          'SELECT chave, valor FROM user_configuracoes WHERE user_id = $1',
+          [data.user_id]
+        );
+        const ucConfig = {};
+        ucResult.rows.forEach(row => { ucConfig[row.chave] = row.valor; });
+        return res.json({ data: ucConfig });
+      }
+
+      case 'updateUserConfiguracoesAdmin': {
+        if (data.authenticated_role !== 'admin') return res.status(403).json({ error: 'Apenas administradores podem alterar.' });
+        if (!data.user_id) return res.status(400).json({ error: 'user_id é obrigatório.' });
         const ucEntries = Object.entries(data.config || {});
         for (const [chave, valor] of ucEntries) {
           if (dbConfig.type === 'mysql') {
             await client.query(
               `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()`,
-              [data.authenticated_user_id, chave, valor]
+              [data.user_id, chave, valor]
             );
           } else {
             await client.query(
               `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES ($1, $2, $3) ON CONFLICT (user_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW()`,
-              [data.authenticated_user_id, chave, valor]
+              [data.user_id, chave, valor]
             );
           }
         }
