@@ -342,11 +342,20 @@ const DrawTab: React.FC = () => {
       setCardsWithGrade(loadedCardsWithGrade);
       let poolNumbers: number[];
       if (isRifa) {
-        // For rifa: pool is the validated cartela numbers (ticket numbers)
-        poolNumbers = freshValidadas
+        // For rifa: prefer validated cartelas; fallback para faixa completa quando
+        // ainda não houver validações (evita travar botão Sortear em usuários).
+        const validatedPool = freshValidadas
           .map((cv: CartelaValidada) => cv.numero)
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
           .sort((a, b) => a - b);
+        if (validatedPool.length > 0) {
+          poolNumbers = validatedPool;
+        } else {
+          poolNumbers = [];
+          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+            poolNumbers.push(i);
+          }
+        }
       } else {
         // For bingo: draw must be random over the full rodada range, independent of card distribution
         poolNumbers = [];
