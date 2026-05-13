@@ -14,6 +14,7 @@ try { nodemailer = require('nodemailer'); } catch (e) { nodemailer = null; }
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const stripeConnectStates = new Map();
 
 // CORS configuration
 app.use(cors({
@@ -307,6 +308,42 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   } catch (err) {
     console.error('Stripe webhook error:', err.message);
     res.status(500).send('Internal error');
+  }
+});
+
+app.get('/stripe/connect/callback', async (req, res) => {
+  const code = req.query.code;
+  const state = req.query.state;
+  const denied = req.query.error;
+  const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+  const stateData = stripeConnectStates.get(state);
+  if (!stateData) return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=error`);
+  stripeConnectStates.delete(state);
+  if (denied || !code) return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=denied`);
+  const client = await dbAdapter.getConnection();
+  try {
+    const stripeSecretKey = await getStripeSecretKey(client);
+    if (!stripeSecretKey) return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=error`);
+    const response = await fetch('https://connect.stripe.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: String(code), client_secret: stripeSecretKey }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.stripe_user_id) return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=error`);
+    await client.query(
+      `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES ($1, $2, $3) ON CONFLICT (user_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW()`,
+      [stateData.userId, 'stripe_account_id', payload.stripe_user_id]
+    );
+    await client.query(
+      `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES ($1, $2, $3) ON CONFLICT (user_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW()`,
+      [stateData.userId, 'payment_gateway', 'stripe']
+    );
+    return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=success`);
+  } catch (error) {
+    return res.redirect(`${baseUrl}/profile?tab=pagamentos&stripe_connect=error`);
+  } finally {
+    client.release();
   }
 });
 
@@ -3867,6 +3904,17 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
         const session = await stripe.checkout.sessions.create(sessionParams);
         return res.json({ url: session.url });
+      }
+
+      case 'createStripeConnectOnboardingLink': {
+        const stripeClientId = process.env.STRIPE_CONNECT_CLIENT_ID;
+        if (!stripeClientId) return res.status(400).json({ error: 'Stripe Connect não configurado no servidor.' });
+        const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+        const state = crypto.randomBytes(24).toString('hex');
+        stripeConnectStates.set(state, { userId: data.authenticated_user_id, createdAt: Date.now() });
+        const redirectUri = `${baseUrl}/stripe/connect/callback`;
+        const url = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${encodeURIComponent(stripeClientId)}&scope=read_write&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        return res.json({ url });
       }
 
       case 'confirmStripeCheckout': {

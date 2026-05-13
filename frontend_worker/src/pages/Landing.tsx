@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Plan } from '@/types/auth';
 
 const Landing: React.FC = () => {
-  const { getPublicPlanos } = useAuth();
+  const { getPublicPlanos, isAuthenticated } = useAuth();
   const [planos, setPlanos] = useState<Plan[]>([]);
 
   useEffect(() => {
@@ -19,8 +19,14 @@ const Landing: React.FC = () => {
       <header className="container mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2 font-bold text-xl"><Ticket className="w-6 h-6 text-primary" /> Sorteios Pro</div>
         <div className="flex gap-2">
-          <Button asChild variant="outline"><Link to="/auth">Fazer login</Link></Button>
-          <Button asChild><Link to="/auth?tab=register">Criar conta</Link></Button>
+          {isAuthenticated ? (
+            <Button asChild><Link to="/">Sorteios</Link></Button>
+          ) : (
+            <>
+              <Button asChild variant="outline"><Link to="/auth">Fazer login</Link></Button>
+              <Button asChild><Link to="/auth?tab=register">Criar conta</Link></Button>
+            </>
+          )}
         </div>
       </header>
 
@@ -53,11 +59,11 @@ const Landing: React.FC = () => {
             { icon: Ticket, title: 'Rifas e bingo', text: 'Suporte aos dois formatos com regras, faixas e rodadas configuráveis.' },
             { icon: CheckCircle2, title: 'Escala profissional', text: 'Ideal para quem quer sair do controle manual e profissionalizar operação.' },
           ].map((item) => (
-            <Card key={item.title} className="transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/15 hover:border-primary/40">
+            <Card key={item.title} className="p-2 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/25 hover:border-primary/60">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg"><item.icon className="w-5 h-5 text-primary" />{item.title}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-xl"><item.icon className="w-6 h-6 text-primary" />{item.title}</CardTitle>
               </CardHeader>
-              <CardContent><p className="text-sm text-muted-foreground">{item.text}</p></CardContent>
+              <CardContent><p className="text-base font-medium text-foreground/90">{item.text}</p></CardContent>
             </Card>
           ))}
         </section>
@@ -66,10 +72,12 @@ const Landing: React.FC = () => {
           <h2 className="text-3xl font-bold text-center">Planos de assinatura</h2>
           <p className="text-center text-muted-foreground">Os planos abaixo são os mesmos configurados pelo administrador.</p>
           <div className="grid md:grid-cols-3 gap-4">
-            {planos.map((plano) => (
-              <Card key={plano.id} className="border-2">
+            {planos.map((plano) => {
+              const isAnual = /anual|ano/i.test(`${plano.nome} ${plano.descricao || ''}`);
+              return (
+              <Card key={plano.id} className={`border-2 transition-all duration-300 hover:scale-[1.04] hover:shadow-2xl ${isAnual ? 'ring-2 ring-primary shadow-xl scale-[1.02]' : ''}`}>
                 <CardHeader>
-                  <CardTitle>{plano.nome}</CardTitle>
+                  <CardTitle className="flex items-center justify-between">{plano.nome} {isAnual ? <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">Recomendado</span> : null}</CardTitle>
                   {plano.descricao && <CardDescription>{plano.descricao}</CardDescription>}
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -77,7 +85,7 @@ const Landing: React.FC = () => {
                   <Button className="w-full" asChild><Link to="/auth">Assinar este plano</Link></Button>
                 </CardContent>
               </Card>
-            ))}
+            );})}
           </div>
         </section>
       </main>
