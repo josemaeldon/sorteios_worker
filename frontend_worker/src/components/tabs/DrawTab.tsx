@@ -340,10 +340,10 @@ const DrawTab: React.FC = () => {
         comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
       }));
       setCardsWithGrade(loadedCardsWithGrade);
+      const validatedCardsWithGrade = loadedCardsWithGrade.filter((card) => validatedNumbers.has(card.numero));
       let poolNumbers: number[];
       if (isRifa) {
-        // For rifa: prefer validated cartelas; fallback para faixa completa quando
-        // ainda não houver validações (evita travar botão Sortear em usuários).
+        // Para rifa: sorteia apenas entre cartelas validadas.
         const validatedPool = freshValidadas
           .map((cv: CartelaValidada) => cv.numero)
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
@@ -357,10 +357,24 @@ const DrawTab: React.FC = () => {
           }
         }
       } else {
-        // For bingo: draw must be random over the full rodada range, independent of card distribution
-        poolNumbers = [];
-        for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-          poolNumbers.push(i);
+        // Para bingo: quando houver cartelas validadas, o sorteio considera apenas
+        // os números que existem nessas cartelas validadas.
+        if (validatedCardsWithGrade.length > 0) {
+          const uniq = new Set<number>();
+          validatedCardsWithGrade.forEach((card) => {
+            const grids = normalizeNumerosGrade(card.numeros_grade);
+            grids.forEach((grid) => {
+              grid.forEach((n) => {
+                if (n !== 0 && n >= rodada.range_start && n <= rodada.range_end) uniq.add(n);
+              });
+            });
+          });
+          poolNumbers = Array.from(uniq).sort((a, b) => a - b);
+        } else {
+          poolNumbers = [];
+          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+            poolNumbers.push(i);
+          }
         }
       }
       setAvailableNumbers(poolNumbers);
