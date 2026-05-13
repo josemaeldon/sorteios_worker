@@ -689,6 +689,17 @@ async function initSchema() {
             }
           }
         }
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS rodada_cartela_historico (
+            id CHAR(36) PRIMARY KEY,
+            rodada_id CHAR(36) NOT NULL,
+            numero_cartela INT NOT NULL,
+            comprador_nome VARCHAR(255) DEFAULT NULL,
+            ordem INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_rodada_cartela_historico_ordem (rodada_id, ordem)
+          )
+        `);
       } else {
         // Create core base tables if they don't exist (first-run without SQL init file)
         await client.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
@@ -1005,6 +1016,17 @@ async function initSchema() {
         for (const sql of pgIndexes) {
           await client.query(sql);
         }
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS public.rodada_cartela_historico (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            rodada_id UUID NOT NULL REFERENCES public.rodadas_sorteio(id) ON DELETE CASCADE,
+            numero_cartela INTEGER NOT NULL,
+            comprador_nome VARCHAR(255),
+            ordem INTEGER NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            UNIQUE (rodada_id, ordem)
+          )
+        `);
       }
       console.log('Schema initialized: sorteio_compartilhado table ready');
     } finally {
@@ -2747,6 +2769,33 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'clearRodadaHistorico':
         await client.query('DELETE FROM sorteio_historico WHERE rodada_id = $1', [data.rodada_id]);
+        return res.json({ data: [{ success: true }] });
+
+      case 'getRodadaCartelaHistorico': {
+        result = await client.query(
+          'SELECT numero_cartela AS numero, comprador_nome, ordem, created_at FROM rodada_cartela_historico WHERE rodada_id = $1 ORDER BY ordem DESC',
+          [data.rodada_id]
+        );
+        return res.json({ data: result.rows });
+      }
+
+      case 'saveRodadaCartelaHistorico': {
+        const nextOrderRes = await client.query(
+          'SELECT COALESCE(MAX(ordem), 0) + 1 AS next_ordem FROM rodada_cartela_historico WHERE rodada_id = $1',
+          [data.rodada_id]
+        );
+        const nextOrdem = Number(nextOrderRes.rows[0]?.next_ordem || 1);
+        result = await client.query(
+          `INSERT INTO rodada_cartela_historico (rodada_id, numero_cartela, comprador_nome, ordem)
+           VALUES ($1, $2, $3, $4)
+           RETURNING numero_cartela AS numero, comprador_nome, ordem, created_at`,
+          [data.rodada_id, Number(data.numero_cartela), data.comprador_nome || null, nextOrdem]
+        );
+        return res.json({ data: result.rows[0] });
+      }
+
+      case 'clearRodadaCartelaHistorico':
+        await client.query('DELETE FROM rodada_cartela_historico WHERE rodada_id = $1', [data.rodada_id]);
         return res.json({ data: [{ success: true }] });
 
       case 'deleteRodadaNumero':

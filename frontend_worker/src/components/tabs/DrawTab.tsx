@@ -395,6 +395,16 @@ const DrawTab: React.FC = () => {
         setDrawnNumbers([]);
         setCurrentNumber(null);
       }
+
+      try {
+        const cartelaHistory = await callApi('getRodadaCartelaHistorico', { rodada_id: rodada.id });
+        setCartelasSorteadasHistory((cartelaHistory.data || []).map((item: { numero: number; comprador_nome?: string }) => ({
+          numero: item.numero,
+          nome: item.comprador_nome,
+        })));
+      } catch {
+        setCartelasSorteadasHistory([]);
+      }
     } catch (error: unknown) {
       console.error('Error loading rodada:', error);
       toast({
@@ -601,6 +611,13 @@ const DrawTab: React.FC = () => {
         const finalCartela = cartelasValidadas[finalIndex];
         setCartelaSorteioPreview(finalCartela.numero);
         setCartelasSorteadasHistory(prev => [{ numero: finalCartela.numero, nome: finalCartela.comprador_nome }, ...prev]);
+        if (selectedRodada) {
+          void callApi('saveRodadaCartelaHistorico', {
+            rodada_id: selectedRodada.id,
+            numero_cartela: finalCartela.numero,
+            comprador_nome: finalCartela.comprador_nome || null,
+          });
+        }
         setIsCartelaSorteioAnimating(false);
       }
     }, ANIMATION_INTERVAL_MS);
@@ -1313,7 +1330,11 @@ const DrawTab: React.FC = () => {
               {cartelasSorteadasHistory.length > 0 && (
                 <Button
                   variant="outline"
-                  onClick={() => { setCartelasSorteadasHistory([]); setCartelaSorteioPreview(null); }}
+                  onClick={async () => {
+                    if (selectedRodada) await callApi('clearRodadaCartelaHistorico', { rodada_id: selectedRodada.id });
+                    setCartelasSorteadasHistory([]);
+                    setCartelaSorteioPreview(null);
+                  }}
                   disabled={isCartelaSorteioAnimating}
                   className="gap-2"
                   title="Reiniciar histórico para que as mesmas cartelas possam participar novamente"
@@ -1662,7 +1683,11 @@ const DrawTab: React.FC = () => {
               {cartelasSorteadasHistory.length > 0 && (
                 <Button
                   variant="outline"
-                  onClick={() => { setCartelasSorteadasHistory([]); setCartelaSorteioPreview(null); }}
+                  onClick={async () => {
+                    if (selectedRodada) await callApi('clearRodadaCartelaHistorico', { rodada_id: selectedRodada.id });
+                    setCartelasSorteadasHistory([]);
+                    setCartelaSorteioPreview(null);
+                  }}
                   disabled={isCartelaSorteioAnimating}
                   className="gap-2"
                   title="Reiniciar histórico para que as mesmas cartelas possam participar novamente"
