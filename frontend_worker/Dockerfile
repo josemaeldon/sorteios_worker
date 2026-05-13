@@ -1,6 +1,6 @@
 # =====================================================
 # BINGO SYSTEM - Frontend Docker Image
-# Suporta modo Lovable Cloud (VITE_SUPABASE_URL) e modo Selfhosted (VITE_API_BASE_URL)
+# Suporta modo Supabase (VITE_SUPABASE_URL) e modo Selfhosted (VITE_API_BASE_URL)
 # =====================================================
 
 # Build stage
