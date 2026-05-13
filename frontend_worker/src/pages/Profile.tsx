@@ -905,66 +905,39 @@ const Profile: React.FC = () => {
                               onCheckedChange={(checked) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_mode: checked ? 'true' : 'false' }))}
                             />
                           </div>
-                          <div className={`space-y-4 rounded-lg border p-4 ${gatewayConfig['stripe_sandbox_mode'] === 'true' ? 'border-gray-200 opacity-60' : 'border-green-200 bg-green-50/30'}`}>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_public_key">Chave Pública (Publishable Key)</Label>
-                              <Input id="stripe_public_key" value={gatewayConfig['stripe_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_public_key: e.target.value }))} placeholder="pk_live_..." />
+                          {gatewayConfig['stripe_sandbox_mode'] === 'true' ? (
+                            <div className="space-y-4 rounded-lg border border-orange-200 bg-orange-50/30 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_sandbox_public_key">Chave Pública Sandbox</Label>
+                                <Input id="stripe_sandbox_public_key" value={gatewayConfig['stripe_sandbox_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_public_key: e.target.value }))} placeholder="pk_test_..." />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_sandbox_secret_key">Chave Secreta Sandbox</Label>
+                                <Input id="stripe_sandbox_secret_key" type="password" value={gatewayConfig['stripe_sandbox_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_secret_key: e.target.value }))} placeholder="sk_test_..." />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_sandbox_webhook_secret">Webhook Secret (Sandbox)</Label>
+                                <Input id="stripe_sandbox_webhook_secret" type="password" value={gatewayConfig['stripe_sandbox_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_webhook_secret: e.target.value }))} placeholder="whsec_..." />
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_secret_key">Chave Secreta (Secret Key)</Label>
-                              <Input id="stripe_secret_key" type="password" value={gatewayConfig['stripe_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." />
+                          ) : (
+                            <div className="space-y-4 rounded-lg border border-green-200 bg-green-50/30 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_public_key">Chave Pública (Publishable Key)</Label>
+                                <Input id="stripe_public_key" value={gatewayConfig['stripe_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_public_key: e.target.value }))} placeholder="pk_live_..." />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_secret_key">Chave Secreta (Secret Key)</Label>
+                                <Input id="stripe_secret_key" type="password" value={gatewayConfig['stripe_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="stripe_webhook_secret">Webhook Secret (Produção)</Label>
+                                <Input id="stripe_webhook_secret" type="password" value={gatewayConfig['stripe_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_webhook_secret: e.target.value }))} placeholder="whsec_..." />
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_webhook_secret">Webhook Secret (Produção)</Label>
-                              <Input id="stripe_webhook_secret" type="password" value={gatewayConfig['stripe_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_webhook_secret: e.target.value }))} placeholder="whsec_..." />
-                            </div>
-                          </div>
-                          <div className={`space-y-4 rounded-lg border p-4 ${gatewayConfig['stripe_sandbox_mode'] === 'true' ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200 opacity-60'}`}>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_public_key">Chave Pública Sandbox</Label>
-                              <Input id="stripe_sandbox_public_key" value={gatewayConfig['stripe_sandbox_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_public_key: e.target.value }))} placeholder="pk_test_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_secret_key">Chave Secreta Sandbox</Label>
-                              <Input id="stripe_sandbox_secret_key" type="password" value={gatewayConfig['stripe_sandbox_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_secret_key: e.target.value }))} placeholder="sk_test_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_webhook_secret">Webhook Secret (Sandbox)</Label>
-                              <Input id="stripe_sandbox_webhook_secret" type="password" value={gatewayConfig['stripe_sandbox_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_webhook_secret: e.target.value }))} placeholder="whsec_..." />
-                            </div>
-                          </div>
-                          <div className="space-y-4 rounded-lg border border-green-200 bg-green-50/30 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Chaves de Produção (Live)</p>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_public_key">Chave Pública (Publishable Key)</Label>
-                              <Input id="stripe_public_key" value={gatewayConfig['stripe_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_public_key: e.target.value }))} placeholder="pk_live_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_secret_key">Chave Secreta (Secret Key)</Label>
-                              <Input id="stripe_secret_key" type="password" value={gatewayConfig['stripe_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_secret_key: e.target.value }))} placeholder="sk_live_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_webhook_secret">Webhook Secret (Produção)</Label>
-                              <Input id="stripe_webhook_secret" type="password" value={gatewayConfig['stripe_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_webhook_secret: e.target.value }))} placeholder="whsec_..." />
-                            </div>
-                          </div>
-                          <div className="space-y-4 rounded-lg border border-orange-200 bg-orange-50/30 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Chaves de Sandbox (Testes)</p>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_public_key">Chave Pública Sandbox</Label>
-                              <Input id="stripe_sandbox_public_key" value={gatewayConfig['stripe_sandbox_public_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_public_key: e.target.value }))} placeholder="pk_test_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_secret_key">Chave Secreta Sandbox</Label>
-                              <Input id="stripe_sandbox_secret_key" type="password" value={gatewayConfig['stripe_sandbox_secret_key'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_secret_key: e.target.value }))} placeholder="sk_test_..." />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="stripe_sandbox_webhook_secret">Webhook Secret (Sandbox)</Label>
-                              <Input id="stripe_sandbox_webhook_secret" type="password" value={gatewayConfig['stripe_sandbox_webhook_secret'] || ''} onChange={(e) => setGatewayConfig(prev => ({ ...prev, stripe_sandbox_webhook_secret: e.target.value }))} placeholder="whsec_..." />
-                            </div>
-                          </div>
+                          )}
                         </>
                       )}
 
