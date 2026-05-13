@@ -70,15 +70,29 @@ const BingoGridPublic: React.FC<{ grid: number[][] }> = ({ grid }) => (
   </div>
 );
 
+function getLojaGridColumns(width: number) {
+  if (width >= 1024) return 4;
+  if (width >= 768) return 3;
+  return 2;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 // ─── Individual card card ─────────────────────────────────────────────────────
 const CartelaCard: React.FC<{
   cartela: LojaCartela;
   onBuy: (cartela: LojaCartela) => void;
   inCart: boolean;
   onToggleCart: (cartela: LojaCartela) => void;
-}> = ({ cartela, onBuy, inCart, onToggleCart }) => {
-  const [revealed, setRevealed] = useState(false);
-
+  revealed: boolean;
+  onToggleReveal: () => void;
+}> = ({ cartela, onBuy, inCart, onToggleCart, revealed, onToggleReveal }) => {
   const cardData: BingoCardGrid | null = React.useMemo(() => {
     try { return JSON.parse(cartela.card_data); } catch { return null; }
   }, [cartela.card_data]);
@@ -90,7 +104,7 @@ const CartelaCard: React.FC<{
       {/* Header — click to reveal/hide the grid */}
       <button
         className="w-full bg-gradient-to-r from-blue-900 to-blue-700 px-4 py-3 flex items-center justify-between focus:outline-none"
-        onClick={() => setRevealed(r => !r)}
+        onClick={onToggleReveal}
         aria-expanded={revealed}
         title={revealed ? 'Ocultar números' : 'Ver números da cartela'}
       >
@@ -231,6 +245,10 @@ const LojaPublica: React.FC = () => {
   const isFetchingRef = useRef(false);
   // Cart cache: keeps full LojaCartela data for items added to cart across pages
   const [cartCache, setCartCache] = useState<Map<string, LojaCartela>>(new Map());
+  const [gridColumns, setGridColumns] = useState(() => (
+    typeof window !== 'undefined' ? getLojaGridColumns(window.innerWidth) : 4
+  ));
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Payment confirmation state
   const paymentSuccess = searchParams.get('payment') === 'success';
@@ -329,6 +347,19 @@ const LojaPublica: React.FC = () => {
   const [quickAddSuccess, setQuickAddSuccess] = useState<string | null>(null);
   const [showAvailableNumbers, setShowAvailableNumbers] = useState(false);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setGridColumns(getLojaGridColumns(window.innerWidth));
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    setExpandedRows(new Set());
+  }, [gridColumns]);
+
   // Derived cart data — use cartCache so items from other pages are included
   const cartItems = React.useMemo(
     () => Array.from(cartIds).map(id => cartCache.get(id)).filter((c): c is LojaCartela => !!c),
@@ -363,6 +394,23 @@ const LojaPublica: React.FC = () => {
     () => availableCartelas.map(c => c.numero_cartela).sort((a, b) => a - b),
     [availableCartelas]
   );
+
+  const getRowKey = useCallback((groupIndex: number, rowIndex: number) => `${groupIndex}:${rowIndex}`, []);
+
+  const isRowExpanded = useCallback(
+    (groupIndex: number, rowIndex: number) => expandedRows.has(getRowKey(groupIndex, rowIndex)),
+    [expandedRows, getRowKey]
+  );
+
+  const toggleRowExpanded = useCallback((groupIndex: number, rowIndex: number) => {
+    const key = getRowKey(groupIndex, rowIndex);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, [getRowKey]);
 
   const loadLoja = useCallback(async () => {
     if (!userId && !shortId) return;
@@ -1187,8 +1235,8 @@ const LojaPublica: React.FC = () => {
                 groups[groupMap.get(key)!].cartelas.push(c);
               }
               const multipleGroups = groups.length > 1;
-              return groups.map((group) => (
-                <div key={group.sorteio_id} className={multipleGroups ? 'mb-10' : ''}>
+              return groups.map((group, groupIndex) => (
+                <div key={group.sorteio_id || String(groupIndex)} className={multipleGroups ? 'mb-10' : ''}>
                   {multipleGroups && (
                     <div className="flex items-center gap-3 mb-4 pb-2 border-b-2 border-blue-100">
                       <Ticket className="w-5 h-5 text-blue-700 flex-shrink-0" />
@@ -1203,15 +1251,25 @@ const LojaPublica: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {group.cartelas.map((c) => (
-                      <CartelaCard
-                        key={c.id}
-                        cartela={c}
-                        onBuy={handleBuy}
-                        inCart={cartIds.has(c.id)}
-                        onToggleCart={handleToggleCart}
-                      />
+                  <div className="space-y-5">
+                    {chunkArray(group.cartelas, gridColumns).map((rowCartelas, rowIndex) => (
+                      <div
+                        key={`${group.sorteio_id || 'grupo'}-${rowIndex}`}
+                        className="grid gap-5"
+                        style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
+                      >
+                        {rowCartelas.map((c) => (
+                          <CartelaCard
+                            key={c.id}
+                            cartela={c}
+                            onBuy={handleBuy}
+                            inCart={cartIds.has(c.id)}
+                            onToggleCart={handleToggleCart}
+                            revealed={isRowExpanded(groupIndex, rowIndex)}
+                            onToggleReveal={() => toggleRowExpanded(groupIndex, rowIndex)}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 </div>
