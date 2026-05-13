@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
-import { OFFLINE_EVENT_NAMES, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
+import { OFFLINE_EVENT_NAMES, getOfflineAppState, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { useNavigate } from 'react-router-dom';
@@ -60,6 +60,26 @@ const getErrorMessage = (error: unknown): string => {
   }
   if (typeof error === 'string') return error;
   return '';
+};
+
+const updateOfflineAuthSnapshot = (patch: Record<string, unknown>): void => {
+  const current = (getOfflineAppState().auth || {}) as Record<string, unknown>;
+  patchOfflineAppState({
+    auth: {
+      ...current,
+      ...patch,
+    },
+  });
+};
+
+const updateOfflineAuthArray = <T,>(key: string, value: T[]): void => {
+  updateOfflineAuthSnapshot({ [key]: value });
+};
+
+const updateOfflineAuthMap = (key: string, value: Record<string, unknown>): void => {
+  const current = (getOfflineAppState().auth || {}) as Record<string, unknown>;
+  const prevMap = (current[key] || {}) as Record<string, unknown>;
+  updateOfflineAuthSnapshot({ [key]: { ...prevMap, ...value } });
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -146,6 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.user) {
         setUser(result.user);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        updateOfflineAuthSnapshot({ user: result.user });
         toast({
           title: "Administrador criado",
           description: "Você está logado como administrador.",
@@ -170,6 +191,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setToken(result.token);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
         setStoredToken(result.token);
+        updateOfflineAuthSnapshot({ user: result.user });
         toast({
           title: "Login realizado",
           description: `Bem-vindo, ${result.user.nome}!`,
@@ -205,6 +227,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setToken(result.token);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
         setStoredToken(result.token);
+        updateOfflineAuthSnapshot({ user: result.user });
         toast({
           title: "Cadastro realizado",
           description: "Escolha seu plano para continuar.",
@@ -222,6 +245,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('approveUser', { id });
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === id ? { ...current, ativo: true } : current));
         toast({ title: 'Cadastro aprovado', description: 'O usuário foi aprovado e notificado.' });
         return { success: true };
       }
@@ -236,6 +261,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('rejectUser', { id });
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.filter((current) => current.id !== id));
         toast({ title: 'Cadastro rejeitado', description: 'O cadastro pendente foi removido.' });
         return { success: true };
       }
@@ -254,9 +281,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('createUser', data);
       
       if (result.user) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', [...currentUsers.filter((item) => item.id !== result.user.id), result.user]);
         toast({
           title: "Usuário criado",
           description: `${result.user.nome} foi criado com sucesso.`,
+        });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        const tempUser = {
+          id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          nome: data.nome,
+          email: data.email,
+          role: data.role || 'user',
+          titulo_sistema: data.titulo_sistema || 'Sorteios',
+          ativo: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as User;
+        updateOfflineAuthArray('users', [...currentUsers.filter((item) => item.email !== tempUser.email), tempUser]);
+        toast({
+          title: "Usuário criado",
+          description: `${tempUser.nome} foi criado com sucesso.`,
         });
         return { success: true };
       }
@@ -277,6 +325,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('updateUser', { id, ...data });
       
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === id ? { ...current, ...data } : current));
         toast({
           title: "Usuário atualizado",
           description: "As alterações foram salvas.",
@@ -304,6 +354,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('deleteUser', { id });
       
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.filter((item) => item.id !== id));
         toast({
           title: "Usuário excluído",
           description: "O usuário foi removido do sistema.",
@@ -325,6 +377,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       const result = await callApi('getUsers');
+      if (Array.isArray(result.users)) {
+        updateOfflineAuthArray('users', result.users);
+      }
       return result.users || [];
     } catch (error) {
       console.error('Get users error:', error);
@@ -358,6 +413,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setUser(updatedUser);
         localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+        updateOfflineAuthSnapshot({ user: updatedUser });
         return { success: true };
       }
       
@@ -372,6 +428,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user?.role !== 'admin') return [];
     try {
       const result = await callApi('getAllSorteiosAdmin');
+      if (Array.isArray(result.data)) {
+        patchOfflineAppState({
+          bingo: {
+            ...(getOfflineAppState().bingo || {}),
+            sorteios: result.data,
+          },
+        });
+      }
       return result.data || [];
     } catch (error) {
       console.error('Get all sorteios error:', error);
@@ -422,6 +486,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getPublicPlanos = useCallback(async (): Promise<Plan[]> => {
     try {
       const result = await callApi('getPublicPlanos');
+      if (Array.isArray(result.data)) {
+        updateOfflineAuthArray('planos', result.data);
+      }
       return result.data || [];
     } catch (error) {
       console.error('Get public planos error:', error);
@@ -433,6 +500,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user?.role !== 'admin') return [];
     try {
       const result = await callApi('getPlanos');
+      if (Array.isArray(result.data)) {
+        updateOfflineAuthArray('planos', result.data);
+      }
       return result.data || [];
     } catch (error) {
       console.error('Get planos error:', error);
@@ -445,7 +515,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('createPlano', data);
       if (result.data) {
+        const currentPlanos = (((getOfflineAppState().auth || {}) as Record<string, unknown>).planos as Plan[]) || [];
+        updateOfflineAuthArray('planos', [...currentPlanos.filter((item) => item.id !== result.data.id), result.data]);
         toast({ title: 'Plano criado', description: `${result.data.nome} foi criado com sucesso.` });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const currentPlanos = (((getOfflineAppState().auth || {}) as Record<string, unknown>).planos as Plan[]) || [];
+        const localPlan = {
+          id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          nome: data.nome,
+          valor: data.valor,
+          descricao: data.descricao || '',
+          stripe_price_id: data.stripe_price_id || '',
+          tipo_plano: data.tipo_plano || 'mensal',
+          ciclo_dias_renovacao: data.ciclo_dias_renovacao || 30,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as Plan;
+        updateOfflineAuthArray('planos', [...currentPlanos.filter((item) => item.nome !== localPlan.nome), localPlan]);
+        toast({ title: 'Plano criado', description: `${localPlan.nome} foi criado com sucesso.` });
         return { success: true };
       }
       return { success: false, error: result.error || 'Erro ao criar plano' };
@@ -459,6 +548,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('updatePlano', { id, ...data });
       if (result.data) {
+        const currentPlanos = (((getOfflineAppState().auth || {}) as Record<string, unknown>).planos as Plan[]) || [];
+        updateOfflineAuthArray('planos', currentPlanos.map((item) => item.id === id ? { ...item, ...data } : item));
+        toast({ title: 'Plano atualizado', description: 'As alterações foram salvas.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const currentPlanos = (((getOfflineAppState().auth || {}) as Record<string, unknown>).planos as Plan[]) || [];
+        updateOfflineAuthArray('planos', currentPlanos.map((item) => item.id === id ? { ...item, ...data } : item));
         toast({ title: 'Plano atualizado', description: 'As alterações foram salvas.' });
         return { success: true };
       }
@@ -473,6 +570,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('deletePlano', { id });
       if (result.success) {
+        const currentPlanos = (((getOfflineAppState().auth || {}) as Record<string, unknown>).planos as Plan[]) || [];
+        updateOfflineAuthArray('planos', currentPlanos.filter((item) => item.id !== id));
         toast({ title: 'Plano excluído', description: 'O plano foi removido do sistema.' });
         return { success: true };
       }
@@ -487,6 +586,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('assignUserPlan', { user_id: userId, plano_id: planoId, extension_days: extensionDays });
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === userId ? {
+          ...current,
+          plano_id: planoId || null,
+          plano_vencimento: result.user?.plano_vencimento || current.plano_vencimento,
+          plano_pagamento_status: result.user?.plano_pagamento_status || current.plano_pagamento_status,
+          plano_pagamento_metodo: result.user?.plano_pagamento_metodo || current.plano_pagamento_metodo,
+          ativo: typeof result.user?.ativo === 'boolean' ? result.user.ativo : current.ativo,
+        } : current));
+        toast({ title: 'Plano atribuído', description: 'O plano foi atribuído ao usuário.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === userId ? {
+          ...current,
+          plano_id: planoId || null,
+          ativo: true,
+        } : current));
         toast({ title: 'Plano atribuído', description: 'O plano foi atribuído ao usuário.' });
         return { success: true };
       }
@@ -501,10 +619,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('grantLifetimeAccess', { user_id: userId, gratuidade_vitalicia: grant });
       if (result.success) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === userId ? { ...current, gratuidade_vitalicia: grant } : current));
         toast({
           title: grant ? 'Gratuidade vitalícia concedida' : 'Gratuidade vitalícia removida',
           description: grant ? 'O usuário agora tem acesso vitalício gratuito.' : 'O acesso vitalício foi removido.',
         });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const currentUsers = (((getOfflineAppState().auth || {}) as Record<string, unknown>).users as User[]) || [];
+        updateOfflineAuthArray('users', currentUsers.map((current) => current.id === userId ? { ...current, gratuidade_vitalicia: grant } : current));
         return { success: true };
       }
       return { success: false, error: result.error || 'Erro ao alterar gratuidade' };
@@ -517,6 +642,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user?.role !== 'admin') return {};
     try {
       const result = await callApi('getConfiguracoes');
+      if (result.data && typeof result.data === 'object') {
+        updateOfflineAuthSnapshot({ configuracoes: result.data });
+      }
       return result.data || {};
     } catch (error) {
       console.error('Get configuracoes error:', error);
@@ -529,6 +657,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('updateConfiguracoes', { config });
       if (result.success) {
+        updateOfflineAuthSnapshot({ configuracoes: config });
+        toast({ title: 'Configurações salvas', description: 'As configurações foram atualizadas.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        updateOfflineAuthSnapshot({ configuracoes: config });
         toast({ title: 'Configurações salvas', description: 'As configurações foram atualizadas.' });
         return { success: true };
       }
@@ -541,6 +675,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getUserConfiguracoes = useCallback(async (): Promise<Record<string, string>> => {
     try {
       const result = await callApi('getUserConfiguracoes');
+      if (result.data && typeof result.data === 'object') {
+        updateOfflineAuthSnapshot({ userConfiguracoes: result.data });
+      }
       return result.data || {};
     } catch (error) {
       console.error('Get user configuracoes error:', error);
@@ -552,6 +689,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('updateUserConfiguracoes', { config });
       if (result.success) {
+        updateOfflineAuthSnapshot({ userConfiguracoes: config });
+        toast({ title: 'Configurações salvas', description: 'Configurações de pagamento atualizadas.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        updateOfflineAuthSnapshot({ userConfiguracoes: config });
         toast({ title: 'Configurações salvas', description: 'Configurações de pagamento atualizadas.' });
         return { success: true };
       }
@@ -564,6 +707,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getLojaCompradores = useCallback(async (): Promise<Sorteio[]> => {
     try {
       const result = await callApi('getLojaCompradores');
+      if (Array.isArray(result.data)) {
+        updateOfflineAuthArray('lojaCompradores', result.data);
+      }
       return result.data || [];
     } catch (error) {
       console.error('Get loja compradores error:', error);
@@ -574,6 +720,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getUserConfiguracoesByUserId = useCallback(async (userId: string): Promise<Record<string, string>> => {
     try {
       const result = await callApi('getUserConfiguracoesAdmin', { user_id: userId }) as { data?: Record<string, string> };
+      if (result.data && typeof result.data === 'object') {
+        updateOfflineAuthMap('userConfiguracoesByUserId', { [userId]: result.data });
+      }
       return result.data || {};
     } catch {
       return {};
@@ -583,6 +732,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateUserConfiguracoesByUserId = useCallback(async (userId: string, config: Record<string, string>) => {
     try {
       await callApi('updateUserConfiguracoesAdmin', { user_id: userId, config });
+      updateOfflineAuthMap('userConfiguracoesByUserId', { [userId]: config });
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar configurações do usuário' };
@@ -592,6 +742,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getCartelasComprador = useCallback(async (email: string): Promise<Record<string, unknown>[]> => {
     try {
       const result = await callApi('getCartelasComprador', { email });
+      if (Array.isArray(result.data)) {
+        updateOfflineAuthMap('cartelasCompradorByEmail', { [email]: result.data });
+      }
       return result.data || [];
     } catch (error) {
       console.error('Get cartelas comprador error:', error);
@@ -603,6 +756,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('createLojaComprador', data);
       if (result.data) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        updateOfflineAuthArray('lojaCompradores', [...current.filter((item) => item.email !== data.email), result.data]);
+        toast({ title: 'Cliente adicionado', description: 'O cliente foi cadastrado com sucesso.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        const localBuyer = { ...data };
+        updateOfflineAuthArray('lojaCompradores', [...current.filter((item) => item.email !== data.email), localBuyer]);
         toast({ title: 'Cliente adicionado', description: 'O cliente foi cadastrado com sucesso.' });
         return { success: true };
       }
@@ -616,6 +778,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('updateLojaComprador', data);
       if (result.success) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        updateOfflineAuthArray('lojaCompradores', current.map((item) => item.email === data.email ? { ...item, ...data } : item));
+        toast({ title: 'Cliente atualizado', description: 'Os dados do cliente foram atualizados.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        updateOfflineAuthArray('lojaCompradores', current.map((item) => item.email === data.email ? { ...item, ...data } : item));
         toast({ title: 'Cliente atualizado', description: 'Os dados do cliente foram atualizados.' });
         return { success: true };
       }
@@ -629,6 +799,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await callApi('deleteLojaComprador', { email });
       if (result.success) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        updateOfflineAuthArray('lojaCompradores', current.filter((item) => item.email !== email));
+        toast({ title: 'Cliente removido', description: 'O cliente foi removido da sua lista.' });
+        return { success: true };
+      }
+      if ((result as { offlineQueued?: boolean }).offlineQueued) {
+        const current = (((getOfflineAppState().auth || {}) as Record<string, unknown>).lojaCompradores as Record<string, unknown>[]) || [];
+        updateOfflineAuthArray('lojaCompradores', current.filter((item) => item.email !== email));
         toast({ title: 'Cliente removido', description: 'O cliente foi removido da sua lista.' });
         return { success: true };
       }
@@ -661,6 +839,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.user) {
         setUser(result.user);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        updateOfflineAuthSnapshot({ user: result.user });
       }
     } catch (error) {
       console.error('Refresh user error:', error);
@@ -697,6 +876,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.user) {
         setUser(result.user);
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        updateOfflineAuthSnapshot({ user: result.user });
         return { success: true, pending: !!result.pending, message: result.message };
       }
       return { success: false, error: result.error || 'Erro ao confirmar pagamento' };

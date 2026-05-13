@@ -184,6 +184,32 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const makeTempId = () => (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const parseCartelaList = (value: string) => value.split(',').map(v => Number(v.trim())).filter(Number.isFinite);
   const isOfflineQueued = (result: unknown): boolean => !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
+  const persistOfflineBingoState = useCallback((next: Partial<{
+    sorteioAtivo: Sorteio | null;
+    sorteios: Sorteio[];
+    vendedores: Vendedor[];
+    cartelas: Cartela[];
+    atribuicoes: Atribuicao[];
+    vendas: Venda[];
+    cartelaLayouts: CartelaLayout[];
+    cartelasValidadas: CartelaValidada[];
+    lojaCartelas: LojaCartela[];
+  }>) => {
+    patchOfflineAppState({
+      bingo: {
+        sorteioAtivo,
+        sorteios,
+        vendedores,
+        cartelas,
+        atribuicoes,
+        vendas,
+        cartelaLayouts,
+        cartelasValidadas,
+        lojaCartelas,
+        ...next,
+      },
+    });
+  }, [sorteioAtivo, sorteios, vendedores, cartelas, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
 
   // ================== SORTEIOS ==================
   const loadSorteios = useCallback(async () => {
@@ -930,14 +956,24 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           created_at: createdAt,
           updated_at: createdAt,
         };
-        setVendas(prev => [...prev, localVenda]);
+        const nextVendas = [...vendas, localVenda];
+        setVendas(nextVendas);
         const numeros = parseCartelaList(venda.numeros_cartelas);
-        setCartelas(prev => prev.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c));
-        setAtribuicoes(prev => prev.map(a => ({
+        const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c);
+        setCartelas(nextCartelas);
+        const nextAtribuicoes = atribuicoes.map(a => ({
           ...a,
           cartelas: a.cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c)
-        })));
-        setLojaCartelas(prev => prev.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'vendida' } : c));
+        }));
+        setAtribuicoes(nextAtribuicoes);
+        const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'vendida' } : c);
+        setLojaCartelas(nextLojaCartelas);
+        persistOfflineBingoState({
+          vendas: nextVendas,
+          cartelas: nextCartelas,
+          atribuicoes: nextAtribuicoes,
+          lojaCartelas: nextLojaCartelas,
+        });
       }
       toast({ title: "Venda registrada!" });
       if (!isOfflineQueued(result)) {
@@ -989,10 +1025,18 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const venda = vendas.find(v => v.id === id);
         if (venda) {
           const numeros = parseCartelaList(venda.numeros_cartelas);
-          setCartelas(prev => prev.map(c => numeros.includes(c.numero) ? { ...c, status: 'disponivel' } : c));
-          setLojaCartelas(prev => prev.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'disponivel', comprador_nome: undefined, comprador_email: undefined, comprador_endereco: undefined, comprador_cidade: undefined, comprador_telefone: undefined } : c));
+          const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'disponivel' } : c);
+          const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'disponivel', comprador_nome: undefined, comprador_email: undefined, comprador_endereco: undefined, comprador_cidade: undefined, comprador_telefone: undefined } : c);
+          const nextVendas = vendas.filter(v => v.id !== id);
+          setCartelas(nextCartelas);
+          setLojaCartelas(nextLojaCartelas);
+          setVendas(nextVendas);
+          persistOfflineBingoState({
+            vendas: nextVendas,
+            cartelas: nextCartelas,
+            lojaCartelas: nextLojaCartelas,
+          });
         }
-        setVendas(prev => prev.filter(v => v.id !== id));
       }
       toast({ title: "Venda excluída!" });
       if (!isOfflineQueued(result)) {

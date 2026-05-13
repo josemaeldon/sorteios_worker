@@ -96,7 +96,7 @@ const stableStringify = (value: unknown): string => {
 const getCacheKey = (action: string, data: Record<string, unknown>): string => `${OFFLINE_CACHE_PREFIX}${action}:${stableStringify(data)}`;
 const isLikelyReadAction = (action: string): boolean => /^(get|load|check|list|fetch|export|search|download)/i.test(action);
 
-const getOfflineResponse = (action: string): any | null => {
+const getOfflineResponse = (action: string, data: Record<string, unknown> = {}): any | null => {
   const state = getOfflineAppState();
   const bingo = (state.bingo || {}) as Record<string, unknown>;
   const auth = (state.auth || {}) as Record<string, unknown>;
@@ -106,6 +106,7 @@ const getOfflineResponse = (action: string): any | null => {
     case 'getMyProfile':
       return { user: auth.user || null };
     case 'getSorteios':
+    case 'getAllSorteiosAdmin':
       return { data: asArray(bingo.sorteios) };
     case 'getVendedores':
       return { data: asArray(bingo.vendedores) };
@@ -125,11 +126,22 @@ const getOfflineResponse = (action: string): any | null => {
       return { data: asArray(auth.users) };
     case 'getPublicPlanos':
     case 'getPlanos':
-      return { data: asArray(bingo.planos) };
+      return { data: asArray(auth.planos || bingo.planos) };
     case 'getConfiguracoes':
     case 'getUserConfiguracoes':
-    case 'getUserConfiguracoesByUserId':
-      return { data: bingo.configuracoes || {} };
+      return { data: auth.configuracoes || {} };
+    case 'getUserConfiguracoesByUserId': {
+      const userId = String(data.user_id || '');
+      const configsByUser = (auth.userConfiguracoesByUserId || {}) as Record<string, Record<string, string>>;
+      return { data: configsByUser[userId] || {} };
+    }
+    case 'getLojaCompradores':
+      return { data: asArray(auth.lojaCompradores) };
+    case 'getCartelasComprador': {
+      const email = String(data.email || '');
+      const cartelasByEmail = (auth.cartelasCompradorByEmail || {}) as Record<string, Record<string, unknown>[]>;
+      return { data: cartelasByEmail[email] || [] };
+    }
     default:
       return null;
   }
@@ -237,17 +249,20 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   console.log(`API Call: ${action}`, data);
 
   const offlineEnabled = isOfflineModeEnabled();
+  const hasPendingQueue = getOfflineQueue().length > 0;
   if (offlineEnabled) {
     if (isLikelyReadAction(action)) {
-      const cached = readCachedResponse(action, data);
-      if (cached !== null) return cached;
-      const fallback = getOfflineResponse(action);
-      if (fallback !== null) return fallback;
-      return { data: [], success: true, offline: true };
+      if (!navigator.onLine || hasPendingQueue) {
+        const fallback = getOfflineResponse(action, data);
+        if (fallback !== null) return fallback;
+        const cached = readCachedResponse(action, data);
+        if (cached !== null) return cached;
+        return { data: [], success: true, offline: true };
+      }
+    } else {
+      enqueueOfflineRequest({ action, data });
+      return { success: true, offlineQueued: true };
     }
-
-    enqueueOfflineRequest({ action, data });
-    return { success: true, offlineQueued: true };
   }
 
   try {
@@ -255,10 +270,10 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   } catch (error) {
     if (offlineEnabled) {
       if (isLikelyReadAction(action)) {
+        const fallback = getOfflineResponse(action, data);
+        if (fallback !== null) return fallback;
         const cached = readCachedResponse(action, data);
         if (cached !== null) return cached;
-        const fallback = getOfflineResponse(action);
-        if (fallback !== null) return fallback;
       } else {
         enqueueOfflineRequest({ action, data });
         return { success: true, offlineQueued: true };
