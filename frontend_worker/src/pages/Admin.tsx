@@ -43,7 +43,7 @@ const planSchema = z.object({
 
 const Admin: React.FC = () => {
   const navigate = useNavigate();
-  const { user, getAllUsers, createUser, updateUser, deleteUser, approveUser, rejectUser, isAuthenticated, getAllSorteiosAdmin, getSorteioUsers, assignSorteioToUser, removeUserFromSorteio, changeSorteioOwner, getPlanos, createPlano, updatePlano, deletePlano, assignUserPlan, grantLifetimeAccess, getConfiguracoes, updateConfiguracoes } = useAuth();
+  const { user, getAllUsers, createUser, updateUser, deleteUser, approveUser, rejectUser, isAuthenticated, getAllSorteiosAdmin, getSorteioUsers, assignSorteioToUser, removeUserFromSorteio, changeSorteioOwner, getPlanos, createPlano, updatePlano, deletePlano, assignUserPlan, grantLifetimeAccess, getConfiguracoes, updateConfiguracoes, getUserConfiguracoesByUserId, updateUserConfiguracoesByUserId } = useAuth();
   const { toast } = useToast();
   
   const [users, setUsers] = useState<User[]>([]);
@@ -80,6 +80,11 @@ const Admin: React.FC = () => {
   const [selectedUserForPlan, setSelectedUserForPlan] = useState<User | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [isSubmittingUserPlan, setIsSubmittingUserPlan] = useState(false);
+  const [isGatewayUserModalOpen, setIsGatewayUserModalOpen] = useState(false);
+  const [selectedUserForGateway, setSelectedUserForGateway] = useState<User | null>(null);
+  const [isLoadingGatewayUserConfig, setIsLoadingGatewayUserConfig] = useState(false);
+  const [isSavingGatewayUserConfig, setIsSavingGatewayUserConfig] = useState(false);
+  const [gatewayUserConfig, setGatewayUserConfig] = useState<Record<string, string>>({});
 
   // Settings / Stripe state
   const [paymentGateway, setPaymentGateway] = useState<'stripe' | 'mercado_pago'>('stripe');
@@ -234,6 +239,28 @@ const Admin: React.FC = () => {
     });
     applyFavicon(faviconUrl || null);
     setIsSavingConfig(false);
+  };
+
+  const handleOpenGatewayUserModal = async (targetUser: User) => {
+    setSelectedUserForGateway(targetUser);
+    setIsGatewayUserModalOpen(true);
+    setIsLoadingGatewayUserConfig(true);
+    const cfg = await getUserConfiguracoesByUserId(targetUser.id);
+    setGatewayUserConfig(cfg);
+    setIsLoadingGatewayUserConfig(false);
+  };
+
+  const handleSaveGatewayUserConfig = async () => {
+    if (!selectedUserForGateway) return;
+    setIsSavingGatewayUserConfig(true);
+    const result = await updateUserConfiguracoesByUserId(selectedUserForGateway.id, gatewayUserConfig);
+    setIsSavingGatewayUserConfig(false);
+    if (!result.success) {
+      toast({ title: 'Erro', description: result.error || 'Não foi possível salvar gateway do usuário.', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Configurações salvas', description: 'Gateway do usuário atualizado com sucesso.' });
+    setIsGatewayUserModalOpen(false);
   };
 
   const handleFaviconUpload = (file: File | null) => {
@@ -767,6 +794,14 @@ const Admin: React.FC = () => {
                             onClick={() => handleOpenUserPlanModal(u)}
                           >
                             <CreditCard className="h-4 w-4 text-blue-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Configurar gateway"
+                            onClick={() => handleOpenGatewayUserModal(u)}
+                          >
+                            <Settings className="h-4 w-4 text-amber-600" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -1391,6 +1426,32 @@ const Admin: React.FC = () => {
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Rejeitar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGatewayUserModalOpen} onOpenChange={setIsGatewayUserModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Configurar Gateway do Usuário</DialogTitle>
+            <DialogDescription>{selectedUserForGateway?.nome} ({selectedUserForGateway?.email})</DialogDescription>
+          </DialogHeader>
+          {isLoadingGatewayUserConfig ? (
+            <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Gateway de Pagamento</Label>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setGatewayUserConfig(prev => ({ ...prev, payment_gateway: 'stripe' }))} className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-semibold ${(gatewayUserConfig['payment_gateway'] || 'stripe') === 'stripe' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200'}`}>Stripe</button>
+                  <button type="button" onClick={() => setGatewayUserConfig(prev => ({ ...prev, payment_gateway: 'mercado_pago' }))} className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-semibold ${gatewayUserConfig['payment_gateway'] === 'mercado_pago' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200'}`}>Mercado Pago</button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGatewayUserModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveGatewayUserConfig} disabled={isSavingGatewayUserConfig || isLoadingGatewayUserConfig}>{isSavingGatewayUserConfig ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

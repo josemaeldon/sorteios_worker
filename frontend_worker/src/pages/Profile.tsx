@@ -478,10 +478,12 @@ const Profile: React.FC = () => {
               <CreditCard className="h-4 w-4" />
               Minha Assinatura
             </TabsTrigger>
-            <TabsTrigger value="pagamentos" className="flex items-center gap-2" onClick={loadGatewayConfig}>
-              <Settings className="h-4 w-4" />
-              Gateway de Pagamento
-            </TabsTrigger>
+            {user?.role === 'admin' && (
+              <TabsTrigger value="pagamentos" className="flex items-center gap-2" onClick={loadGatewayConfig}>
+                <Settings className="h-4 w-4" />
+                Gateway de Pagamento
+              </TabsTrigger>
+            )}
             <TabsTrigger value="aparencia" className="flex items-center gap-2" onClick={loadBrandingConfig}>
               <ImageIcon className="h-4 w-4" />
               Aparência da Loja
