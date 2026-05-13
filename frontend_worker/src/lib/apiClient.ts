@@ -329,7 +329,7 @@ const buildApiEndpoints = (): string[] => {
   // If API is in another origin, keep a same-origin fallback to avoid CORS/proxy outages.
   const isCrossOrigin = configuredEndpoint.startsWith('http://') || configuredEndpoint.startsWith('https://');
 
-  return isCrossOrigin ? [configuredEndpoint, '/api'] : [configuredEndpoint];
+  return isCrossOrigin ? ['/api', configuredEndpoint] : [configuredEndpoint];
 };
 
 export const initOfflineQueueSync = (): void => {
