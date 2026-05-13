@@ -78,6 +78,7 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: getAuthHeaders(),
+        cache: 'no-store',
         body: JSON.stringify({ action, data }),
       });
 

@@ -441,6 +441,27 @@ const LojaPublica: React.FC = () => {
   }, [loadLoja]);
 
   useEffect(() => {
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadLoja();
+      }
+    };
+
+    const refreshOnFocus = () => loadLoja();
+    const refreshOnPageShow = () => loadLoja();
+
+    document.addEventListener('visibilitychange', refreshOnVisibility);
+    window.addEventListener('focus', refreshOnFocus);
+    window.addEventListener('pageshow', refreshOnPageShow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshOnVisibility);
+      window.removeEventListener('focus', refreshOnFocus);
+      window.removeEventListener('pageshow', refreshOnPageShow);
+    };
+  }, [loadLoja]);
+
+  useEffect(() => {
     if (!owner) return;
 
     document.title = owner.titulo_sistema || owner.nome || 'Loja de Cartelas';

@@ -173,6 +173,9 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
       if (sessionType === 'cartela_loja' && lojaCartelaId) {
         const updateClient = await dbAdapter.getConnection();
         try {
+          if (await isVendaSessionExcluded(updateClient, session.id)) {
+            return res.json({ received: true, ignored: true });
+          }
           const compradorNome = (session.metadata && session.metadata.comprador_nome) || '';
           const compradorEmail = (session.metadata && session.metadata.comprador_email) || session.customer_email || '';
           const compradorEndereco = (session.metadata && session.metadata.comprador_endereco) || '';
@@ -257,6 +260,9 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
       if (sessionType === 'cartela_loja_multi') {
         const updateClient = await dbAdapter.getConnection();
         try {
+          if (await isVendaSessionExcluded(updateClient, session.id)) {
+            return res.json({ received: true, ignored: true });
+          }
           const compradorNome = (session.metadata && session.metadata.comprador_nome) || '';
           const compradorEmail = (session.metadata && session.metadata.comprador_email) || session.customer_email || '';
           const compradorEndereco = (session.metadata && session.metadata.comprador_endereco) || '';
@@ -744,6 +750,17 @@ async function initSchema() {
             PRIMARY KEY (user_id, chave)
           )
         `);
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS vendas_excluidas (
+            id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+            venda_id CHAR(36) DEFAULT NULL,
+            stripe_session_id VARCHAR(255) NOT NULL,
+            sorteio_id CHAR(36) DEFAULT NULL,
+            numeros_cartelas TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+            UNIQUE KEY uq_vendas_excluidas_session (stripe_session_id)
+          )
+        `);
         // Add stripe_session_id to vendas for deduplication (MySQL)
         try { await client.query('ALTER TABLE vendas ADD COLUMN stripe_session_id VARCHAR(255) DEFAULT NULL'); } catch (e) {
           if (!e.message || !e.message.includes('Duplicate column')) {
@@ -906,6 +923,16 @@ async function initSchema() {
             valor NUMERIC,
             forma_pagamento TEXT,
             data_pagamento TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+          )
+        `);
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS public.vendas_excluidas (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            venda_id UUID DEFAULT NULL,
+            stripe_session_id VARCHAR(255) NOT NULL UNIQUE,
+            sorteio_id UUID DEFAULT NULL,
+            numeros_cartelas TEXT DEFAULT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
           )
         `);
@@ -1203,7 +1230,7 @@ function parseCartelas(raw) {
 
 async function deleteVendaAndSyncLoja(client, vendaId) {
   const vendaResult = await client.query(
-    'SELECT id, numeros_cartelas, sorteio_id FROM vendas WHERE id = $1',
+    'SELECT id, numeros_cartelas, sorteio_id, stripe_session_id FROM vendas WHERE id = $1',
     [vendaId]
   );
   const venda = vendaResult.rows[0];
@@ -1241,9 +1268,40 @@ async function deleteVendaAndSyncLoja(client, vendaId) {
         )
     `, [venda.sorteio_id, ...numeros]);
   }
+  if (venda.stripe_session_id) {
+    if (dbConfig.type === 'mysql') {
+      await client.query(
+        `INSERT INTO vendas_excluidas (id, venda_id, stripe_session_id, sorteio_id, numeros_cartelas, created_at)
+         VALUES (UUID(), $1, $2, $3, $4, NOW())
+         ON DUPLICATE KEY UPDATE venda_id = VALUES(venda_id),
+                                 sorteio_id = VALUES(sorteio_id),
+                                 numeros_cartelas = VALUES(numeros_cartelas)`,
+        [venda.id, venda.stripe_session_id, venda.sorteio_id || null, venda.numeros_cartelas || null]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO vendas_excluidas (venda_id, stripe_session_id, sorteio_id, numeros_cartelas)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (stripe_session_id) DO UPDATE
+         SET venda_id = EXCLUDED.venda_id,
+             sorteio_id = EXCLUDED.sorteio_id,
+             numeros_cartelas = EXCLUDED.numeros_cartelas`,
+        [venda.id, venda.stripe_session_id, venda.sorteio_id || null, venda.numeros_cartelas || null]
+      );
+    }
+  }
   await client.query('DELETE FROM pagamentos WHERE venda_id = $1', [venda.id]);
   await client.query('DELETE FROM vendas WHERE id = $1', [venda.id]);
   return venda;
+}
+
+async function isVendaSessionExcluded(client, stripeSessionId) {
+  if (!stripeSessionId) return false;
+  const result = await client.query(
+    'SELECT 1 FROM vendas_excluidas WHERE stripe_session_id = $1 LIMIT 1',
+    [stripeSessionId]
+  );
+  return result.rows.length > 0;
 }
 
 function normalizePagamentos(value) {
@@ -4694,6 +4752,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         }
         const stripeConfirm = Stripe(stripeKeyConfirm);
         const cartelaCheckoutSession = await stripeConfirm.checkout.sessions.retrieve(data.session_id);
+        if (await isVendaSessionExcluded(client, data.session_id)) {
+          return res.json({ success: true, ignored: true });
+        }
         if (cartelaCheckoutSession.payment_status !== 'paid' && cartelaCheckoutSession.payment_status !== 'no_payment_required') {
           return res.status(402).json({ error: 'Pagamento não confirmado.' });
         }
@@ -4875,6 +4936,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         }
         const stripeConfirmMulti = Stripe(stripeKeyConfirmMulti);
         const multiCheckoutSession = await stripeConfirmMulti.checkout.sessions.retrieve(data.session_id);
+        if (await isVendaSessionExcluded(client, data.session_id)) {
+          return res.json({ success: true, ignored: true });
+        }
         if (multiCheckoutSession.payment_status !== 'paid' && multiCheckoutSession.payment_status !== 'no_payment_required') {
           return res.status(402).json({ error: 'Pagamento não confirmado.' });
         }
@@ -5067,6 +5131,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (mpPayment.status !== 'approved') {
           return res.status(402).json({ error: 'Pagamento não aprovado.' });
         }
+        if (await isVendaSessionExcluded(client, `mp_${data.payment_id}`)) {
+          return res.json({ success: true, ignored: true });
+        }
         const mpMeta = mpPayment.metadata || {};
         const mpCartelaId = mpMeta.loja_cartela_id || mpPayment.external_reference;
         if (!mpCartelaId) {
@@ -5236,6 +5303,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const mpPaymentMulti = await paymentApiMulti.get({ id: data.payment_id });
         if (mpPaymentMulti.status !== 'approved') {
           return res.status(402).json({ error: 'Pagamento não aprovado.' });
+        }
+        if (await isVendaSessionExcluded(client, `mp_${data.payment_id}`)) {
+          return res.json({ success: true, ignored: true });
         }
         const mpMetaMulti = mpPaymentMulti.metadata || {};
         const rawIds = mpMetaMulti.loja_cartela_ids || mpPaymentMulti.external_reference || '';
