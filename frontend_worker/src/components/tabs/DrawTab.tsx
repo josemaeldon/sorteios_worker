@@ -728,8 +728,8 @@ const DrawTab: React.FC = () => {
     const remainingNumbers = availableNumbers.filter(n => !drawnNumbers.includes(n));
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="space-y-6 w-full">
+        <div className="flex items-center justify-between flex-wrap gap-4 w-full">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <Button
@@ -827,8 +827,8 @@ const DrawTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col xl:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex flex-col xl:flex-row gap-6 items-start w-full">
+          <div className="flex-1 min-w-0 space-y-6 w-full">
             <div className="grid grid-cols-1 gap-6">
           <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-3 md:p-8 min-h-screen flex flex-col")}>
             <Card className="border-2 flex-1 flex flex-col relative z-0">
@@ -890,8 +890,8 @@ const DrawTab: React.FC = () => {
                 </div>
                 
                 {isFullscreen && (
-                  <div className="mt-8 flex flex-col xl:flex-row gap-6 flex-shrink-0 items-start">
-                    <div className="flex-1 space-y-6">
+                  <div className="mt-8 flex flex-col xl:flex-row gap-6 flex-shrink-0 items-start w-full">
+                    <div className="flex-1 space-y-6 w-full">
                       <div className="flex flex-wrap justify-center gap-4 items-center">
                         <Button
                           onClick={drawNumber}
