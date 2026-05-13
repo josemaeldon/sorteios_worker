@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Sorteios">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <path d="M30 38c0-4.4 3.6-8 8-8h52c4.4 0 8 3.6 8 8v12c-6.6 0-12 5.4-12 12s5.4 12 12 12v12c0 4.4-3.6 8-8 8H38c-4.4 0-8-3.6-8-8V74c6.6 0 12-5.4 12-12s-5.4-12-12-12V38z" fill="#fff"/>
+  <circle cx="64" cy="64" r="10" fill="url(#g)"/>
+  <path d="M54 64h20" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</svg>

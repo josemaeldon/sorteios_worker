@@ -71,19 +71,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Check stored auth on mount
   useEffect(() => {
-    const stored = localStorage.getItem(AUTH_KEY);
-    const storedToken = getStoredToken();
-    if (stored && storedToken) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser(parsed);
-        setToken(storedToken);
-      } catch (e) {
-        localStorage.removeItem(AUTH_KEY);
-        clearStoredToken();
+    const initAuth = async () => {
+      const stored = localStorage.getItem(AUTH_KEY);
+      const storedToken = getStoredToken();
+      if (stored && storedToken) {
+        try {
+          const parsed = JSON.parse(stored);
+          setUser(parsed);
+          setToken(storedToken);
+          const result = await callApi('getMyProfile');
+          if (result.user) {
+            setUser(result.user);
+            localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+          }
+        } catch (e) {
+          localStorage.removeItem(AUTH_KEY);
+          clearStoredToken();
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   useEffect(() => {
@@ -652,6 +661,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Refresh user error:', error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    refreshUser();
+    const intervalId = window.setInterval(refreshUser, 30000);
+    const onFocus = () => refreshUser();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [token, refreshUser]);
 
   const confirmStripeCheckout = useCallback(async (sessionId: string): Promise<{ success: boolean; error?: string }> => {
     try {

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { callApi } from '@/lib/apiClient';
 
-const DEFAULT_FAVICON = '/favicon.ico?v=system';
+const DEFAULT_FAVICON = '/favicon.svg?v=system';
+const DEFAULT_APPLE_TOUCH_ICON = '/apple-touch-icon.png?v=system';
 
 export function useFavicon() {
   useEffect(() => {
@@ -30,6 +31,16 @@ function withCacheBust(url: string) {
   return url.includes('?') ? `${url}&${token}` : `${url}?${token}`;
 }
 
+function getMimeType(href: string) {
+  const match = href.match(/^data:([^;,]+)[;,]/i);
+  if (match?.[1]) return match[1].toLowerCase();
+  const cleanHref = href.split('?')[0].toLowerCase();
+  if (cleanHref.endsWith('.png')) return 'image/png';
+  if (cleanHref.endsWith('.svg')) return 'image/svg+xml';
+  if (cleanHref.endsWith('.jpg') || cleanHref.endsWith('.jpeg')) return 'image/jpeg';
+  return 'image/x-icon';
+}
+
 function appendIconLink(rel: string, href: string, type?: string, sizes?: string) {
   const link = document.createElement('link');
   link.rel = rel;
@@ -42,6 +53,8 @@ function appendIconLink(rel: string, href: string, type?: string, sizes?: string
 export function applyFavicon(url: string | null) {
   const baseHref = url || DEFAULT_FAVICON;
   const href = withCacheBust(baseHref);
+  const mimeType = getMimeType(baseHref);
+  const appleTouchHref = withCacheBust(url || DEFAULT_APPLE_TOUCH_ICON);
 
   document
     .querySelectorAll<HTMLLinkElement>(
@@ -49,9 +62,9 @@ export function applyFavicon(url: string | null) {
     )
     .forEach((el) => el.parentElement?.removeChild(el));
 
-  appendIconLink('icon', href, 'image/x-icon');
-  appendIconLink('shortcut icon', href, 'image/x-icon');
-  appendIconLink('apple-touch-icon', href, undefined, '180x180');
+  appendIconLink('icon', href, mimeType, 'any');
+  appendIconLink('shortcut icon', href, mimeType, 'any');
+  appendIconLink('apple-touch-icon', appleTouchHref, url ? mimeType : 'image/png', '180x180');
 
   const maskIcon = document.createElement('link');
   maskIcon.rel = 'mask-icon';

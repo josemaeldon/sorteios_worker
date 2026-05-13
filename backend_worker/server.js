@@ -1352,6 +1352,41 @@ async function getStripeSecretKey(dbClient) {
   return cfg['stripe_secret_key'] || '';
 }
 
+async function getStripeSecretKeyForUser(dbClient, userId) {
+  const selectUserCfg = async (targetUserId) => {
+    if (!targetUserId || targetUserId === 'undefined') return {};
+    const cfgResult = await dbClient.query(
+      "SELECT chave, valor FROM user_configuracoes WHERE user_id = $1 AND chave IN ('stripe_secret_key', 'stripe_sandbox_secret_key', 'stripe_sandbox_mode')",
+      [targetUserId]
+    );
+    const cfg = {};
+    cfgResult.rows.forEach(r => { cfg[r.chave] = r.valor || ''; });
+    return cfg;
+  };
+
+  const userCfg = await selectUserCfg(userId);
+  const adminResult = await dbClient.query("SELECT id FROM usuarios WHERE role = 'admin' LIMIT 1");
+  const adminUserId = adminResult.rows[0]?.id || null;
+  const adminCfg = adminUserId && adminUserId !== userId ? await selectUserCfg(adminUserId) : {};
+  const globalCfg = await getStripeSecretKey(dbClient);
+
+  const sandboxMode = userCfg['stripe_sandbox_mode'] ?? adminCfg['stripe_sandbox_mode'] ?? '';
+  if (sandboxMode === 'true') {
+    return userCfg['stripe_sandbox_secret_key'] || adminCfg['stripe_sandbox_secret_key'] || globalCfg || '';
+  }
+  return userCfg['stripe_secret_key'] || adminCfg['stripe_secret_key'] || globalCfg || '';
+}
+
+async function getAdminStripeSecretKey(dbClient) {
+  const adminResult = await dbClient.query("SELECT id FROM usuarios WHERE role = 'admin' LIMIT 1");
+  const adminUserId = adminResult.rows[0]?.id || null;
+  if (adminUserId) {
+    const adminKey = await getStripeSecretKeyForUser(dbClient, adminUserId);
+    if (adminKey) return adminKey;
+  }
+  return getStripeSecretKey(dbClient);
+}
+
 /** Returns active Stripe webhook secret based on sandbox mode config. */
 async function getStripeWebhookSecret(dbClient) {
   const cfgResult = await dbClient.query(
@@ -1403,7 +1438,7 @@ function hasActiveSubscription(userRow) {
 }
 
 async function ensureStripePriceForPlan(dbClient, plan) {
-  const stripeSecretKey = await getStripeSecretKey(dbClient);
+  const stripeSecretKey = await getAdminStripeSecretKey(dbClient);
   if (!stripeSecretKey) return plan.stripe_price_id || null;
   const valorCentavos = Math.round(Number(plan.valor || 0) * 100);
   if (valorCentavos <= 0) return null;
@@ -1452,24 +1487,9 @@ async function getPaymentGateway(dbClient) {
   return cfgResult.rows.length > 0 ? (cfgResult.rows[0].valor || 'stripe') : 'stripe';
 }
 
-/** Returns per-user Stripe secret key, falling back to global config. */
+/** Returns per-user Stripe secret key, falling back to admin/global config. */
 async function getUserStripeSecretKey(dbClient, userId) {
-  if (!userId || userId === 'undefined') return getStripeSecretKey(dbClient);
-  const cfgResult = await dbClient.query(
-    "SELECT chave, valor FROM user_configuracoes WHERE user_id = $1 AND chave IN ('stripe_secret_key', 'stripe_sandbox_secret_key', 'stripe_sandbox_mode')",
-    [userId]
-  );
-  const cfg = {};
-  cfgResult.rows.forEach(r => { cfg[r.chave] = r.valor || ''; });
-  if (!cfg['stripe_secret_key'] && !cfg['stripe_sandbox_secret_key']) {
-    return getStripeSecretKey(dbClient);
-  }
-  if (cfg['stripe_sandbox_mode'] === 'true') {
-    if (cfg['stripe_sandbox_secret_key']) return cfg['stripe_sandbox_secret_key'];
-    return getStripeSecretKey(dbClient);
-  }
-  if (cfg['stripe_secret_key']) return cfg['stripe_secret_key'];
-  return getStripeSecretKey(dbClient);
+  return getStripeSecretKeyForUser(dbClient, userId);
 }
 
 /** Returns per-user MercadoPago client, falling back to global config. */
@@ -4032,14 +4052,6 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'createStripeCheckout': {
-        const cfgResult = await client.query('SELECT chave, valor FROM configuracoes WHERE chave IN ($1, $2)', ['stripe_secret_key', 'stripe_webhook_secret']);
-        let stripeSecretKey = '';
-        cfgResult.rows.forEach(r => {
-          if (r.chave === 'stripe_secret_key') stripeSecretKey = r.valor || '';
-        });
-        if (!stripeSecretKey) {
-          return res.status(400).json({ error: 'Stripe não configurado. Contate o administrador.' });
-        }
         const planoResult = await client.query('SELECT id, nome, valor, stripe_price_id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE id = $1 AND ativo = true', [data.plano_id]);
         if (planoResult.rows.length === 0) {
           return res.status(404).json({ error: 'Plano não encontrado.' });
@@ -4060,6 +4072,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             [data.authenticated_user_id, plano.id, now, vencimento, normalizePlanType(plano.tipo_plano) === 'teste_gratis' ? true : false]
           );
           return res.json({ url: '/app' });
+        }
+        const stripeSecretKey = await getAdminStripeSecretKey(client);
+        if (!stripeSecretKey) {
+          return res.status(400).json({ error: 'Stripe não configurado. Contate o administrador.' });
         }
         const stripe = Stripe(stripeSecretKey);
         const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
@@ -4104,8 +4120,13 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }];
         }
 
-        const session = await stripe.checkout.sessions.create(sessionParams);
-        return res.json({ url: session.url });
+        try {
+          const session = await stripe.checkout.sessions.create(sessionParams);
+          return res.json({ url: session.url });
+        } catch (err) {
+          console.error('Stripe checkout creation failed:', err);
+          return res.status(400).json({ error: err?.message || 'Não foi possível iniciar o checkout na Stripe.' });
+        }
       }
 
       case 'createStripeConnectOnboardingLink': {
@@ -4125,11 +4146,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (!data.session_id) {
           return res.status(400).json({ error: 'Session ID não informado.' });
         }
-        const confirmCfgResult = await client.query(
-          'SELECT chave, valor FROM configuracoes WHERE chave = $1',
-          ['stripe_secret_key']
-        );
-        const confirmStripeKey = confirmCfgResult.rows.length > 0 ? confirmCfgResult.rows[0].valor || '' : '';
+        const confirmStripeKey = await getAdminStripeSecretKey(client);
         if (!confirmStripeKey) {
           return res.status(400).json({ error: 'Stripe não configurado.' });
         }
