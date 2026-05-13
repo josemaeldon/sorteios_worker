@@ -39,6 +39,7 @@ interface AuthContextType extends AuthState {
   updateLojaComprador: (data: { nome: string; email: string; cpf?: string; telefone?: string; cidade?: string; endereco?: string }) => Promise<{ success: boolean; error?: string }>;
   deleteLojaComprador: (email: string) => Promise<{ success: boolean; error?: string }>;
   createStripeCheckout: (planoId: string, successPath?: string, cancelPath?: string) => Promise<{ url?: string; error?: string }>;
+  createStripeConnectOnboardingLink: () => Promise<{ url?: string; error?: string }>;
   refreshUser: () => Promise<void>;
   confirmStripeCheckout: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -611,6 +612,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  const createStripeConnectOnboardingLink = useCallback(async (): Promise<{ url?: string; error?: string }> => {
+    try {
+      const result = await callApi('createStripeConnectOnboardingLink');
+      return result.url ? { url: result.url } : { error: result.error || 'Erro ao iniciar conexão com Stripe' };
+    } catch (error: unknown) {
+      return { error: getErrorMessage(error) || 'Erro ao iniciar conexão com Stripe' };
+    }
+  }, []);
+
   const value: AuthContextType = {
     user,
     isLoading,
@@ -650,6 +660,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateLojaComprador,
     deleteLojaComprador,
     createStripeCheckout,
+    createStripeConnectOnboardingLink,
     refreshUser,
     confirmStripeCheckout,
   };
