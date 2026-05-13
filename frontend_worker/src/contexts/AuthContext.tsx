@@ -33,6 +33,8 @@ interface AuthContextType extends AuthState {
   updateConfiguracoes: (config: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
   getUserConfiguracoes: () => Promise<Record<string, string>>;
   updateUserConfiguracoes: (config: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
+  getUserConfiguracoesByUserId: (userId: string) => Promise<Record<string, string>>;
+  updateUserConfiguracoesByUserId: (userId: string, config: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
   getLojaCompradores: () => Promise<Record<string, string | number>[]>;
   getCartelasComprador: (email: string) => Promise<Record<string, unknown>[]>;
   createLojaComprador: (data: { nome: string; email: string; cpf?: string; telefone?: string; cidade?: string; endereco?: string }) => Promise<{ success: boolean; error?: string }>;
@@ -523,6 +525,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  const getUserConfiguracoesByUserId = useCallback(async (userId: string): Promise<Record<string, string>> => {
+    try {
+      const result = await callApi('getUserConfiguracoesAdmin', { user_id: userId }) as { data?: Record<string, string> };
+      return result.data || {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const updateUserConfiguracoesByUserId = useCallback(async (userId: string, config: Record<string, string>) => {
+    try {
+      await callApi('updateUserConfiguracoesAdmin', { user_id: userId, config });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar configurações do usuário' };
+    }
+  }, []);
+
   const getCartelasComprador = useCallback(async (email: string): Promise<Record<string, unknown>[]> => {
     try {
       const result = await callApi('getCartelasComprador', { email });
@@ -658,6 +678,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateConfiguracoes,
     getUserConfiguracoes,
     updateUserConfiguracoes,
+    getUserConfiguracoesByUserId,
+    updateUserConfiguracoesByUserId,
     getLojaCompradores,
     getCartelasComprador,
     createLojaComprador,
