@@ -1351,8 +1351,6 @@ async function getPaymentGateway(dbClient) {
 /** Returns per-user Stripe secret key, falling back to global config. */
 async function getUserStripeSecretKey(dbClient, userId) {
   if (!userId || userId === 'undefined') return getStripeSecretKey(dbClient);
-  const userResult = await dbClient.query('SELECT role FROM usuarios WHERE id = $1', [userId]);
-  const isAdminUser = userResult.rows[0] && userResult.rows[0].role === 'admin';
   const cfgResult = await dbClient.query(
     "SELECT chave, valor FROM user_configuracoes WHERE user_id = $1 AND chave IN ('stripe_secret_key', 'stripe_sandbox_secret_key', 'stripe_sandbox_mode')",
     [userId]
@@ -1360,13 +1358,14 @@ async function getUserStripeSecretKey(dbClient, userId) {
   const cfg = {};
   cfgResult.rows.forEach(r => { cfg[r.chave] = r.valor || ''; });
   if (!cfg['stripe_secret_key'] && !cfg['stripe_sandbox_secret_key']) {
-    if (!isAdminUser) return '';
     return getStripeSecretKey(dbClient);
   }
   if (cfg['stripe_sandbox_mode'] === 'true') {
-    return cfg['stripe_sandbox_secret_key'] || '';
+    if (cfg['stripe_sandbox_secret_key']) return cfg['stripe_sandbox_secret_key'];
+    return getStripeSecretKey(dbClient);
   }
-  return cfg['stripe_secret_key'] || '';
+  if (cfg['stripe_secret_key']) return cfg['stripe_secret_key'];
+  return getStripeSecretKey(dbClient);
 }
 
 /** Returns per-user MercadoPago client, falling back to global config. */
@@ -5254,10 +5253,21 @@ ${numerosCartelas ? `<p><strong>Cartelas:</strong> ${numerosCartelas}</p>` : ''}
       }
 
       case 'updateUserConfiguracoes': {
-        if (data.authenticated_role !== 'admin') {
-          return res.status(403).json({ error: 'Somente admin pode configurar gateway por usuário.' });
+        const ucEntries = Object.entries(data.config || {});
+        for (const [chave, valor] of ucEntries) {
+          if (dbConfig.type === 'mysql') {
+            await client.query(
+              `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()`,
+              [data.authenticated_user_id, chave, valor]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO user_configuracoes (user_id, chave, valor) VALUES ($1, $2, $3) ON CONFLICT (user_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW()`,
+              [data.authenticated_user_id, chave, valor]
+            );
+          }
         }
-        return res.status(400).json({ error: 'Use a ação updateUserConfiguracoesAdmin.' });
+        return res.json({ success: true });
       }
 
       case 'getUserConfiguracoesAdmin': {
