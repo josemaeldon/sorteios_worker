@@ -225,17 +225,19 @@ const RodadasTab: React.FC = () => {
           description: "A rodada foi atualizada com sucesso."
         });
       } else {
+        const tempId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const result = await callApi('createRodada', {
           sorteio_id: sorteioAtivo.id,
           nome: formData.nome,
           range_start,
           range_end,
-          status: formData.status
+          status: formData.status,
+          client_temp_id: tempId,
         });
         offlineQueued = !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
         if (offlineQueued) {
           const nextRodadas = [...rodadas, {
-            id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            id: tempId,
             sorteio_id: sorteioAtivo.id,
             nome: formData.nome,
             range_start,

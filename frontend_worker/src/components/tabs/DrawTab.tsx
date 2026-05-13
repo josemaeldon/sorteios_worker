@@ -435,17 +435,19 @@ const DrawTab: React.FC = () => {
           description: "A rodada foi atualizada com sucesso."
         });
       } else {
+        const tempId = makeTempId();
         const result = await callApi('createRodada', {
           sorteio_id: sorteioAtivo.id,
           nome: formData.nome,
           range_start,
           range_end,
-          status: formData.status
+          status: formData.status,
+          client_temp_id: tempId,
         });
         offlineQueued = isOfflineQueued(result);
         if (offlineQueued) {
           const createdRodada: RodadaSorteio = {
-            id: makeTempId(),
+            id: tempId,
             sorteio_id: sorteioAtivo.id,
             nome: formData.nome,
             range_start,

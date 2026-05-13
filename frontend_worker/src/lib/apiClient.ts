@@ -6,6 +6,7 @@ import {
   getOfflineQueue,
   isOfflineModeEnabled,
   OFFLINE_EVENT_NAMES,
+  patchOfflineAppState,
   setOfflineQueue,
   setOfflineSyncing,
 } from './offlineMode';
@@ -276,12 +277,75 @@ export const syncOfflineQueue = async (): Promise<void> => {
   try {
     const remaining = [...queue];
     const processed: string[] = [];
+    const rodadaIdMap = new Map<string, string>();
+
+    const replaceTempRodadaIdInState = (tempId: string, realId: string, realRodada?: Record<string, unknown>) => {
+      const current = getOfflineAppState();
+      const bingo = (current.bingo || {}) as Record<string, unknown>;
+      const drawTab = (bingo.drawTab || {}) as Record<string, unknown>;
+      const rodadas = Array.isArray(drawTab.rodadas) ? drawTab.rodadas as Record<string, unknown>[] : [];
+      const updatedRodadas = rodadas.map((rodada) => {
+        if (String(rodada.id) !== tempId) return rodada;
+        return {
+          ...rodada,
+          ...(realRodada || {}),
+          id: realId,
+          sorteio_id: realRodada?.sorteio_id || rodada.sorteio_id,
+        };
+      });
+
+      const selectedRodada = drawTab.selectedRodada && typeof drawTab.selectedRodada === 'object'
+        ? (drawTab.selectedRodada as Record<string, unknown>)
+        : null;
+      const updatedSelectedRodada = selectedRodada && String(selectedRodada.id) === tempId
+        ? {
+            ...selectedRodada,
+            ...(realRodada || {}),
+            id: realId,
+            sorteio_id: realRodada?.sorteio_id || selectedRodada.sorteio_id,
+          }
+        : selectedRodada;
+
+      patchOfflineAppState({
+        bingo: {
+          ...bingo,
+          drawTab: {
+            ...drawTab,
+            rodadas: updatedRodadas,
+            selectedRodada: updatedSelectedRodada,
+            sorteioId: realRodada?.sorteio_id || drawTab.sorteioId || null,
+          },
+        },
+      });
+    };
 
     for (const item of queue) {
       if (!navigator.onLine) break;
       try {
-        const response = await callApiNetwork(item.action, item.data);
+        const payload = { ...item.data } as Record<string, unknown>;
+        const tempRodadaId = typeof payload.rodada_id === 'string' ? payload.rodada_id : '';
+        if (tempRodadaId && rodadaIdMap.has(tempRodadaId)) {
+          payload.rodada_id = rodadaIdMap.get(tempRodadaId);
+        }
+
+        const response = await callApiNetwork(item.action, payload);
         writeCachedResponse(item.action, item.data, response);
+
+        if (item.action === 'createRodada') {
+          const tempId = String(item.data.client_temp_id || '');
+          const realId = String(response?.data?.id || response?.data?.[0]?.id || '');
+          if (tempId && realId) {
+            rodadaIdMap.set(tempId, realId);
+            replaceTempRodadaIdInState(tempId, realId, response.data || response?.data?.[0]);
+
+            for (const pending of remaining) {
+              if (String(pending.data?.rodada_id || '') === tempId) {
+                pending.data = { ...pending.data, rodada_id: realId };
+              }
+            }
+          }
+        }
+
         processed.push(item.id);
         remaining.shift();
       } catch (error) {
