@@ -1329,6 +1329,8 @@ async function getPaymentGateway(dbClient) {
 /** Returns per-user Stripe secret key, falling back to global config. */
 async function getUserStripeSecretKey(dbClient, userId) {
   if (!userId || userId === 'undefined') return getStripeSecretKey(dbClient);
+  const userResult = await dbClient.query('SELECT role FROM usuarios WHERE id = $1', [userId]);
+  const isAdminUser = userResult.rows[0] && userResult.rows[0].role === 'admin';
   const cfgResult = await dbClient.query(
     "SELECT chave, valor FROM user_configuracoes WHERE user_id = $1 AND chave IN ('stripe_secret_key', 'stripe_sandbox_secret_key', 'stripe_sandbox_mode')",
     [userId]
@@ -1336,6 +1338,7 @@ async function getUserStripeSecretKey(dbClient, userId) {
   const cfg = {};
   cfgResult.rows.forEach(r => { cfg[r.chave] = r.valor || ''; });
   if (!cfg['stripe_secret_key'] && !cfg['stripe_sandbox_secret_key']) {
+    if (!isAdminUser) return '';
     return getStripeSecretKey(dbClient);
   }
   if (cfg['stripe_sandbox_mode'] === 'true') {
@@ -3907,14 +3910,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'createStripeConnectOnboardingLink': {
-        const stripeClientIdResult = await client.query(
-          "SELECT valor FROM configuracoes WHERE chave = 'stripe_connect_client_id'"
-        );
-        const stripeClientId = process.env.STRIPE_CONNECT_CLIENT_ID
-          || (stripeClientIdResult.rows[0] && stripeClientIdResult.rows[0].valor)
-          || '';
+        const stripeClientId = process.env.STRIPE_CONNECT_CLIENT_ID || '';
         if (!stripeClientId) {
-          return res.status(400).json({ error: 'Stripe Connect não configurado. Defina STRIPE_CONNECT_CLIENT_ID ou a configuração stripe_connect_client_id.' });
+          return res.status(400).json({ error: 'Stripe Connect não configurado no servidor. Defina STRIPE_CONNECT_CLIENT_ID.' });
         }
         const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const state = crypto.randomBytes(24).toString('hex');
