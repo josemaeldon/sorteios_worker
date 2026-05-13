@@ -5,10 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { CheckCircle2, Ticket, BarChart3, ShieldCheck, Smartphone, Clock3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plan } from '@/types/auth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Settings, User } from 'lucide-react';
 
 const Landing: React.FC = () => {
-  const { getPublicPlanos, isAuthenticated } = useAuth();
+  const { getPublicPlanos, isAuthenticated, user } = useAuth();
   const [planos, setPlanos] = useState<Plan[]>([]);
+  const getInitials = (name: string) =>
+    name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
 
   useEffect(() => {
     getPublicPlanos().then(setPlanos).catch(() => setPlanos([]));
@@ -20,7 +32,38 @@ const Landing: React.FC = () => {
         <div className="flex items-center gap-2 font-bold text-xl"><Ticket className="w-6 h-6 text-primary" /> Sorteios Pro</div>
         <div className="flex gap-2">
           {isAuthenticated ? (
-            <Button asChild><Link to="/">Sorteios</Link></Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Avatar className="h-7 w-7">
+                    <AvatarImage src={user?.avatar_url} alt={user?.nome} />
+                    <AvatarFallback>{user?.nome ? getInitials(user.nome) : 'U'}</AvatarFallback>
+                  </Avatar>
+                  <span className="max-w-32 truncate">{user?.nome}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col">
+                    <span>{user?.nome}</span>
+                    <span className="text-xs text-muted-foreground">{user?.email}</span>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/profile"><User className="h-4 w-4 mr-2" />Meu Perfil</Link>
+                </DropdownMenuItem>
+                {user?.role === 'admin' && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin"><Settings className="h-4 w-4 mr-2" />Configurações</Link>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/app">Sorteios</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <>
               <Button asChild variant="outline"><Link to="/auth">Fazer login</Link></Button>

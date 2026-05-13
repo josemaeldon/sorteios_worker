@@ -617,7 +617,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('createStripeConnectOnboardingLink');
       return result.url ? { url: result.url } : { error: result.error || 'Erro ao iniciar conexão com Stripe' };
     } catch (error: unknown) {
-      return { error: getErrorMessage(error) || 'Erro ao iniciar conexão com Stripe' };
+      const message = getErrorMessage(error);
+      return { error: message || 'Erro desconhecido ao conectar Stripe. Verifique as configurações do servidor.' };
     }
   }, []);
 

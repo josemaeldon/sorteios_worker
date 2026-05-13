@@ -3907,8 +3907,15 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'createStripeConnectOnboardingLink': {
-        const stripeClientId = process.env.STRIPE_CONNECT_CLIENT_ID;
-        if (!stripeClientId) return res.status(400).json({ error: 'Stripe Connect não configurado no servidor.' });
+        const stripeClientIdResult = await client.query(
+          "SELECT valor FROM configuracoes WHERE chave = 'stripe_connect_client_id'"
+        );
+        const stripeClientId = process.env.STRIPE_CONNECT_CLIENT_ID
+          || (stripeClientIdResult.rows[0] && stripeClientIdResult.rows[0].valor)
+          || '';
+        if (!stripeClientId) {
+          return res.status(400).json({ error: 'Stripe Connect não configurado. Defina STRIPE_CONNECT_CLIENT_ID ou a configuração stripe_connect_client_id.' });
+        }
         const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const state = crypto.randomBytes(24).toString('hex');
         stripeConnectStates.set(state, { userId: data.authenticated_user_id, createdAt: Date.now() });
