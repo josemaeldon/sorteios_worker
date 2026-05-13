@@ -300,6 +300,11 @@ const DrawTab: React.FC = () => {
       setRodadas(result.data || []);
     } catch (error: unknown) {
       console.error('Error loading rodadas:', error);
+      const offlineDrawTab = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
+      if ((isOfflineModeEnabled() || getOfflineQueue().length > 0) && Array.isArray(offlineDrawTab.rodadas)) {
+        setRodadas((offlineDrawTab.rodadas as RodadaSorteio[]).filter((rodada) => rodada.sorteio_id === sorteioAtivo.id));
+        return;
+      }
       toast({
         title: "Erro ao carregar rodadas",
         description: (error instanceof Error ? error.message : 'Erro inesperado'),
