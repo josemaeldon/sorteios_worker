@@ -1375,7 +1375,7 @@ const DrawTab: React.FC = () => {
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=1400x1400&data=${encodeURIComponent(streamingUrl)}`}
               alt="QR Code da transmissão"
-              className="w-auto h-auto max-w-full max-h-full object-contain rounded-md bg-white p-2"
+              className="w-auto h-auto max-w-[90%] max-h-[90%] object-contain rounded-md bg-white p-2"
             />
           </div>
           <div className="flex justify-center">
