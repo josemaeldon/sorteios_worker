@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateBingoGrid, exportBingoCardsPDF, DEFAULT_LAYOUT, BINGO_COLS, A4_W_MM, A4_H_MM } from '@/lib/utils/bingoCardUtils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { callApi } from '@/lib/apiClient';
-import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
+import { getOfflineAppState, getOfflineQueue, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 
 // ─── BINGO column ranges (B I N G O) ─────────────────────────────────────────
 const COL_RANGES = [
@@ -134,14 +134,15 @@ const CartelasTab: React.FC = () => {
   } = useBingo();
   const { toast } = useToast();
   const cartelasTabSnapshot = (getOfflineAppState().bingo?.cartelasTab || {}) as Record<string, unknown>;
+  const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
 
   // ─── Sub-tab ───────────────────────────────────────────────────────────────
-  const [subTab, setSubTab] = useState<'lista' | 'validacao'>((cartelasTabSnapshot.subTab as 'lista' | 'validacao') || 'lista');
+  const [subTab, setSubTab] = useState<'lista' | 'validacao'>(shouldHydrateOfflineState ? ((cartelasTabSnapshot.subTab as 'lista' | 'validacao') || 'lista') : 'lista');
 
   // ─── Cartela view / edit state ─────────────────────────────────────────────
-  const [selectedCartela, setSelectedCartela] = useState<Cartela | null>((cartelasTabSnapshot.selectedCartela as Cartela | null) || null);
-  const [editMode, setEditMode] = useState(!!cartelasTabSnapshot.editMode);
-  const [editGrids, setEditGrids] = useState<number[][]>((cartelasTabSnapshot.editGrids as number[][]) || [Array(25).fill(0)]);
+  const [selectedCartela, setSelectedCartela] = useState<Cartela | null>(shouldHydrateOfflineState ? ((cartelasTabSnapshot.selectedCartela as Cartela | null) || null) : null);
+  const [editMode, setEditMode] = useState(shouldHydrateOfflineState ? !!cartelasTabSnapshot.editMode : false);
+  const [editGrids, setEditGrids] = useState<number[][]>(shouldHydrateOfflineState ? ((cartelasTabSnapshot.editGrids as number[][]) || [Array(25).fill(0)]) : [Array(25).fill(0)]);
   const [isSaving, setIsSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -151,15 +152,15 @@ const CartelasTab: React.FC = () => {
   const [isLoadingCartelaDetalhe, setIsLoadingCartelaDetalhe] = useState(false);
 
   // ─── New-cartela modal state ───────────────────────────────────────────────
-  const [showNewModal, setShowNewModal] = useState(!!cartelasTabSnapshot.showNewModal);
-  const [newGrid, setNewGrid] = useState<number[]>((cartelasTabSnapshot.newGrid as number[]) || Array(25).fill(0));
+  const [showNewModal, setShowNewModal] = useState(shouldHydrateOfflineState ? !!cartelasTabSnapshot.showNewModal : false);
+  const [newGrid, setNewGrid] = useState<number[]>(shouldHydrateOfflineState ? ((cartelasTabSnapshot.newGrid as number[]) || Array(25).fill(0)) : Array(25).fill(0));
   const [isSavingNew, setIsSavingNew] = useState(false);
 
   // ─── Validation state ──────────────────────────────────────────────────────
-  const [validacaoNumero, setValidacaoNumero] = useState((cartelasTabSnapshot.validacaoNumero as string) || '');
-  const [validacaoNome, setValidacaoNome] = useState((cartelasTabSnapshot.validacaoNome as string) || '');
+  const [validacaoNumero, setValidacaoNumero] = useState(shouldHydrateOfflineState ? ((cartelasTabSnapshot.validacaoNumero as string) || '') : '');
+  const [validacaoNome, setValidacaoNome] = useState(shouldHydrateOfflineState ? ((cartelasTabSnapshot.validacaoNome as string) || '') : '');
   const [isValidando, setIsValidando] = useState(false);
-  const [nomeObrigatorio, setNomeObrigatorio] = useState(!!cartelasTabSnapshot.nomeObrigatorio);
+  const [nomeObrigatorio, setNomeObrigatorio] = useState(shouldHydrateOfflineState ? !!cartelasTabSnapshot.nomeObrigatorio : false);
   const [tamanhoLote, setTamanhoLoteState] = useState<number>(() => {
     const saved = localStorage.getItem(LOTE_STORAGE_KEY);
     if (saved !== null) {
@@ -201,7 +202,7 @@ const CartelasTab: React.FC = () => {
   const [isRemovingTodas, setIsRemovingTodas] = useState(false);
 
   // ─── Edit validated cartela ────────────────────────────────────────────────
-  const [editingValidada, setEditingValidada] = useState<{ numero: number; nome: string } | null>((cartelasTabSnapshot.editingValidada as { numero: number; nome: string } | null) || null);
+  const [editingValidada, setEditingValidada] = useState<{ numero: number; nome: string } | null>(shouldHydrateOfflineState ? ((cartelasTabSnapshot.editingValidada as { numero: number; nome: string } | null) || null) : null);
   const [isSavingValidada, setIsSavingValidada] = useState(false);
   const [isLoadingLista, setIsLoadingLista] = useState(false);
   const [cartelasPagina, setCartelasPagina] = useState<Cartela[]>([]);

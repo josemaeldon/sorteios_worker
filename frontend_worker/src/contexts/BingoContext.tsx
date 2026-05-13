@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { callApi as callBackendApi } from '@/lib/apiClient';
-import { OFFLINE_EVENT_NAMES, getOfflineAppState, patchOfflineAppState, isOfflineModeEnabled } from '@/lib/offlineMode';
+import { OFFLINE_EVENT_NAMES, getOfflineAppState, getOfflineQueue, patchOfflineAppState, isOfflineModeEnabled } from '@/lib/offlineMode';
 
 interface BingoContextType {
   // State
@@ -122,18 +122,20 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const { toast } = useToast();
   const { user } = useAuth();
   const offlineSnapshot = getOfflineAppState().bingo || {};
+  const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
+  const hasInitialOnlineSyncRef = React.useRef(shouldHydrateOfflineState);
   
   // State
-  const [sorteioAtivo, setSorteioAtivoState] = useState<Sorteio | null>((offlineSnapshot.sorteioAtivo as Sorteio | null) || null);
-  const [sorteios, setSorteios] = useState<Sorteio[]>((offlineSnapshot.sorteios as Sorteio[]) || []);
-  const [vendedores, setVendedores] = useState<Vendedor[]>((offlineSnapshot.vendedores as Vendedor[]) || []);
-  const [cartelas, setCartelas] = useState<Cartela[]>((offlineSnapshot.cartelas as Cartela[]) || []);
-  const [cartelasComGrade, setCartelasComGrade] = useState<Cartela[]>((offlineSnapshot.cartelasComGrade as Cartela[]) || []);
-  const [atribuicoes, setAtribuicoes] = useState<Atribuicao[]>((offlineSnapshot.atribuicoes as Atribuicao[]) || []);
-  const [vendas, setVendas] = useState<Venda[]>((offlineSnapshot.vendas as Venda[]) || []);
-  const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>((offlineSnapshot.cartelaLayouts as CartelaLayout[]) || []);
-  const [cartelasValidadas, setCartelasValidadas] = useState<CartelaValidada[]>((offlineSnapshot.cartelasValidadas as CartelaValidada[]) || []);
-  const [lojaCartelas, setLojaCartelas] = useState<LojaCartela[]>((offlineSnapshot.lojaCartelas as LojaCartela[]) || []);
+  const [sorteioAtivo, setSorteioAtivoState] = useState<Sorteio | null>(shouldHydrateOfflineState ? ((offlineSnapshot.sorteioAtivo as Sorteio | null) || null) : null);
+  const [sorteios, setSorteios] = useState<Sorteio[]>(shouldHydrateOfflineState ? ((offlineSnapshot.sorteios as Sorteio[]) || []) : []);
+  const [vendedores, setVendedores] = useState<Vendedor[]>(shouldHydrateOfflineState ? ((offlineSnapshot.vendedores as Vendedor[]) || []) : []);
+  const [cartelas, setCartelas] = useState<Cartela[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelas as Cartela[]) || []) : []);
+  const [cartelasComGrade, setCartelasComGrade] = useState<Cartela[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelasComGrade as Cartela[]) || []) : []);
+  const [atribuicoes, setAtribuicoes] = useState<Atribuicao[]>(shouldHydrateOfflineState ? ((offlineSnapshot.atribuicoes as Atribuicao[]) || []) : []);
+  const [vendas, setVendas] = useState<Venda[]>(shouldHydrateOfflineState ? ((offlineSnapshot.vendas as Venda[]) || []) : []);
+  const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelaLayouts as CartelaLayout[]) || []) : []);
+  const [cartelasValidadas, setCartelasValidadas] = useState<CartelaValidada[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelasValidadas as CartelaValidada[]) || []) : []);
+  const [lojaCartelas, setLojaCartelas] = useState<LojaCartela[]>(shouldHydrateOfflineState ? ((offlineSnapshot.lojaCartelas as LojaCartela[]) || []) : []);
   const [currentTab, setCurrentTab] = useState<TabType>('sorteios');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -163,6 +165,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 
   useEffect(() => {
+    if (!shouldHydrateOfflineState && !hasInitialOnlineSyncRef.current) return;
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
     patchOfflineAppState({
       bingo: {
@@ -179,7 +182,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         lojaCartelas,
       },
     });
-  }, [sorteioAtivo, sorteios, vendedores, cartelas, cartelasComGrade, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
+  }, [shouldHydrateOfflineState, sorteioAtivo, sorteios, vendedores, cartelas, cartelasComGrade, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
 
   // API call helper (funciona em qualquer modo)
   const callApi = useCallback(async (action: string, data: Record<string, unknown> = {}) => {
@@ -1188,6 +1191,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     setIsLoading(true);
+    hasInitialOnlineSyncRef.current = false;
     try {
       await Promise.all([
         loadVendedores(),
@@ -1198,6 +1202,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         loadCartelasValidadas(),
       ]);
     } finally {
+      hasInitialOnlineSyncRef.current = true;
       setIsLoading(false);
     }
   }, [sorteioAtivo, loadVendedores, loadCartelas, loadAtribuicoes, loadVendas, loadCartelaLayouts, loadCartelasValidadas]);

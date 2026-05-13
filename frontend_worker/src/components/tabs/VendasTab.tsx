@@ -10,7 +10,7 @@ import VendaModal from '@/components/modals/VendaModal';
 import PagamentoModal from '@/components/modals/PagamentoModal';
 import ReciboModal from '@/components/modals/ReciboModal';
 import { useToast } from '@/hooks/use-toast';
-import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
+import { getOfflineAppState, getOfflineQueue, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,15 +34,16 @@ const VendasTab: React.FC = () => {
   } = useBingo();
   const { toast } = useToast();
   const vendasTabSnapshot = (getOfflineAppState().bingo?.vendasTab || {}) as Record<string, unknown>;
+  const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
 
-  const [isModalOpen, setIsModalOpen] = useState(!!vendasTabSnapshot.isModalOpen);
-  const [editingVendaId, setEditingVendaId] = useState<string | null>((vendasTabSnapshot.editingVendaId as string | null) || null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(!!vendasTabSnapshot.deleteDialogOpen);
-  const [deletingVendaId, setDeletingVendaId] = useState<string | null>((vendasTabSnapshot.deletingVendaId as string | null) || null);
-  const [isPagamentoOpen, setIsPagamentoOpen] = useState(!!vendasTabSnapshot.isPagamentoOpen);
-  const [pagamentoVendaId, setPagamentoVendaId] = useState<string | null>((vendasTabSnapshot.pagamentoVendaId as string | null) || null);
-  const [isReciboOpen, setIsReciboOpen] = useState(!!vendasTabSnapshot.isReciboOpen);
-  const [reciboVendaId, setReciboVendaId] = useState<string | null>((vendasTabSnapshot.reciboVendaId as string | null) || null);
+  const [isModalOpen, setIsModalOpen] = useState(shouldHydrateOfflineState ? !!vendasTabSnapshot.isModalOpen : false);
+  const [editingVendaId, setEditingVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.editingVendaId as string | null) || null) : null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(shouldHydrateOfflineState ? !!vendasTabSnapshot.deleteDialogOpen : false);
+  const [deletingVendaId, setDeletingVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.deletingVendaId as string | null) || null) : null);
+  const [isPagamentoOpen, setIsPagamentoOpen] = useState(shouldHydrateOfflineState ? !!vendasTabSnapshot.isPagamentoOpen : false);
+  const [pagamentoVendaId, setPagamentoVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.pagamentoVendaId as string | null) || null) : null);
+  const [isReciboOpen, setIsReciboOpen] = useState(shouldHydrateOfflineState ? !!vendasTabSnapshot.isReciboOpen : false);
+  const [reciboVendaId, setReciboVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.reciboVendaId as string | null) || null) : null);
 
   React.useEffect(() => {
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;

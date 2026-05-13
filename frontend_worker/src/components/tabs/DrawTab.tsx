@@ -756,8 +756,23 @@ const DrawTab: React.FC = () => {
     }
   };
 
+  const rankingCardsWithGrade = useMemo<ValidatedCartelaComGrade[]>(() => {
+    const validatedNumbers = new Set(cartelasValidadas.map((cv) => Number(cv.numero)));
+    const source = !shouldHydrateOfflineState && cartelasComGrade.length > 0
+      ? (cartelasComGrade as ValidatedCartelaComGrade[])
+      : cardsWithGrade;
+
+    return source
+      .filter((card) => validatedNumbers.has(Number(card.numero)))
+      .map((card) => {
+        const normalized = normalizeNumerosGrade(card.numeros_grade);
+        return { ...card, numeros_grade: normalized };
+      })
+      .filter((card) => card.numeros_grade.length > 0);
+  }, [cardsWithGrade, cartelasComGrade, cartelasValidadas, shouldHydrateOfflineState]);
+
   const handleCartelaClick = (numero: number, nome?: string) => {
-    const cartela = cardsWithGrade.find(c => c.numero === numero);
+    const cartela = rankingCardsWithGrade.find(c => c.numero === numero);
     if (!cartela || !cartela.numeros_grade || cartela.numeros_grade.length === 0) return;
     setSelectedCartelaModal({ numero, nome, grade: cartela.numeros_grade[0] });
   };
@@ -785,9 +800,9 @@ const DrawTab: React.FC = () => {
     }
 
     const drawnSet = new Set(drawnNumbers);
-    if (cardsWithGrade.length === 0) return [];
+    if (rankingCardsWithGrade.length === 0) return [];
 
-    const scored: RankingCartela[] = cardsWithGrade.map(c => {
+    const scored: RankingCartela[] = rankingCardsWithGrade.map(c => {
       const grids = normalizeNumerosGrade(c.numeros_grade);
       const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
@@ -797,7 +812,7 @@ const DrawTab: React.FC = () => {
     return scored
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || a.numero - b.numero);
-  }, [drawnNumbers, cardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
+  }, [drawnNumbers, rankingCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
   // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
   const groupedTop = useMemo(() => {
