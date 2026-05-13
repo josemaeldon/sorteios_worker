@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
@@ -24,10 +25,10 @@ interface AuthContextType extends AuthState {
   changeSorteioOwner: (sorteioId: string, newOwnerId: string) => Promise<{ success: boolean; error?: string }>;
   getPublicPlanos: () => Promise<Plan[]>;
   getPlanos: () => Promise<Plan[]>;
-  createPlano: (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string }) => Promise<{ success: boolean; error?: string }>;
-  updatePlano: (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string }) => Promise<{ success: boolean; error?: string }>;
+  createPlano: (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => Promise<{ success: boolean; error?: string }>;
+  updatePlano: (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => Promise<{ success: boolean; error?: string }>;
   deletePlano: (id: string) => Promise<{ success: boolean; error?: string }>;
-  assignUserPlan: (userId: string, planoId: string | null) => Promise<{ success: boolean; error?: string }>;
+  assignUserPlan: (userId: string, planoId: string | null, extensionDays?: number) => Promise<{ success: boolean; error?: string }>;
   grantLifetimeAccess: (userId: string, grant: boolean) => Promise<{ success: boolean; error?: string }>;
   getConfiguracoes: () => Promise<Record<string, string>>;
   updateConfiguracoes: (config: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
@@ -64,6 +65,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const shownExpirationWarningRef = useRef<string | null>(null);
 
   const getAuthToken = useCallback(() => token, [token]);
 
@@ -83,6 +85,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !user.plano_vencimento || user.gratuidade_vitalicia) return;
+    const venc = new Date(user.plano_vencimento);
+    if (Number.isNaN(venc.getTime())) return;
+    const diffMs = venc.getTime() - Date.now();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays < 0 || diffDays > 7) return;
+    const key = `${user.id}:${user.plano_vencimento}`;
+    if (shownExpirationWarningRef.current === key) return;
+    shownExpirationWarningRef.current = key;
+    toast({
+      title: 'Plano próximo do vencimento',
+      description: `Seu plano vence em ${diffDays} dia(s). Renove para evitar interrupção.`,
+      variant: 'destructive',
+      action: (
+        <ToastAction altText="Renovar assinatura" onClick={() => { window.location.href = '/planos'; }}>
+          Renovar agora
+        </ToastAction>
+      ),
+    });
+  }, [user, toast]);
 
   const checkFirstAccess = useCallback(async (): Promise<boolean> => {
     try {
@@ -394,7 +418,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
-  const createPlano = useCallback(async (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string }) => {
+  const createPlano = useCallback(async (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
     try {
       const result = await callApi('createPlano', data);
@@ -408,7 +432,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, toast]);
 
-  const updatePlano = useCallback(async (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string }) => {
+  const updatePlano = useCallback(async (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
     try {
       const result = await callApi('updatePlano', { id, ...data });
@@ -436,10 +460,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, toast]);
 
-  const assignUserPlan = useCallback(async (userId: string, planoId: string | null) => {
+  const assignUserPlan = useCallback(async (userId: string, planoId: string | null, extensionDays = 0) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
     try {
-      const result = await callApi('assignUserPlan', { user_id: userId, plano_id: planoId });
+      const result = await callApi('assignUserPlan', { user_id: userId, plano_id: planoId, extension_days: extensionDays });
       if (result.success) {
         toast({ title: 'Plano atribuído', description: 'O plano foi atribuído ao usuário.' });
         return { success: true };

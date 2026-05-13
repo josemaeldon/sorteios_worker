@@ -29,12 +29,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireAdmin 
   }
 
   // Non-admin users without a plan or lifetime access must subscribe
-  if (!skipPlanCheck && user?.role !== 'admin' && !user?.gratuidade_vitalicia && !user?.plano_id) {
-    return <Navigate to="/planos" replace />;
+  if (!skipPlanCheck && user?.role !== 'admin') {
+    const hasLifetime = !!user?.gratuidade_vitalicia;
+    const hasPlan = !!user?.plano_id;
+    const planExpired = !!user?.plano_vencimento && new Date(user.plano_vencimento).getTime() < Date.now();
+    if (!hasLifetime && (!hasPlan || planExpired)) {
+      return <Navigate to="/planos" replace />;
+    }
   }
 
   return <>{children}</>;
 };
 
 export default ProtectedRoute;
-

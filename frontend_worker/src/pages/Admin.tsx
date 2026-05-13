@@ -39,6 +39,8 @@ const planSchema = z.object({
   valor: z.coerce.number().min(0, 'Valor deve ser maior ou igual a zero'),
   descricao: z.string().max(500).optional().or(z.literal('')),
   stripe_price_id: z.string().max(255).optional().or(z.literal('')),
+  tipo_plano: z.enum(['teste_gratis', 'mensal', 'anual']),
+  ciclo_dias_renovacao: z.coerce.number().int().min(1, 'Informe ao menos 1 dia'),
 });
 
 const Admin: React.FC = () => {
@@ -73,12 +75,13 @@ const Admin: React.FC = () => {
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
   const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
-  const [planFormData, setPlanFormData] = useState({ nome: '', valor: '', descricao: '', stripe_price_id: '' });
+  const [planFormData, setPlanFormData] = useState({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal' as 'teste_gratis' | 'mensal' | 'anual', ciclo_dias_renovacao: '30' });
 
   // User plan assignment state
   const [isUserPlanModalOpen, setIsUserPlanModalOpen] = useState(false);
   const [selectedUserForPlan, setSelectedUserForPlan] = useState<User | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [planExtensionDays, setPlanExtensionDays] = useState<string>('0');
   const [isSubmittingUserPlan, setIsSubmittingUserPlan] = useState(false);
   const [isGatewayUserModalOpen, setIsGatewayUserModalOpen] = useState(false);
   const [selectedUserForGateway, setSelectedUserForGateway] = useState<User | null>(null);
@@ -336,10 +339,17 @@ const Admin: React.FC = () => {
   const handleOpenPlanModal = (plan?: Plan) => {
     if (plan) {
       setEditingPlan(plan);
-      setPlanFormData({ nome: plan.nome, valor: String(plan.valor), descricao: plan.descricao || '', stripe_price_id: plan.stripe_price_id || '' });
+      setPlanFormData({
+        nome: plan.nome,
+        valor: String(plan.valor),
+        descricao: plan.descricao || '',
+        stripe_price_id: plan.stripe_price_id || '',
+        tipo_plano: plan.tipo_plano || 'mensal',
+        ciclo_dias_renovacao: String(plan.ciclo_dias_renovacao || 30),
+      });
     } else {
       setEditingPlan(null);
-      setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '' });
+      setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30' });
     }
     setPlanErrors({});
     setIsPlanModalOpen(true);
@@ -348,7 +358,7 @@ const Admin: React.FC = () => {
   const handleClosePlanModal = () => {
     setIsPlanModalOpen(false);
     setEditingPlan(null);
-    setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '' });
+    setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30' });
     setPlanErrors({});
   };
 
@@ -368,7 +378,14 @@ const Admin: React.FC = () => {
       }
     }
     setIsSubmittingPlan(true);
-    const payload = { nome: planFormData.nome, valor: Number(planFormData.valor), descricao: planFormData.descricao, stripe_price_id: planFormData.stripe_price_id || undefined };
+    const payload = {
+      nome: planFormData.nome,
+      valor: Number(planFormData.valor),
+      descricao: planFormData.descricao,
+      stripe_price_id: planFormData.stripe_price_id || undefined,
+      tipo_plano: planFormData.tipo_plano,
+      ciclo_dias_renovacao: Number(planFormData.ciclo_dias_renovacao),
+    };
     const result = editingPlan
       ? await updatePlano(editingPlan.id, payload)
       : await createPlano(payload);
@@ -401,13 +418,14 @@ const Admin: React.FC = () => {
   const handleOpenUserPlanModal = (u: User) => {
     setSelectedUserForPlan(u);
     setSelectedPlanId(u.plano_id || NO_PLAN_VALUE);
+    setPlanExtensionDays('0');
     setIsUserPlanModalOpen(true);
   };
 
   const handleAssignUserPlan = async () => {
     if (!selectedUserForPlan) return;
     setIsSubmittingUserPlan(true);
-    await assignUserPlan(selectedUserForPlan.id, selectedPlanId === NO_PLAN_VALUE ? null : selectedPlanId);
+    await assignUserPlan(selectedUserForPlan.id, selectedPlanId === NO_PLAN_VALUE ? null : selectedPlanId, Number(planExtensionDays || 0));
     setIsSubmittingUserPlan(false);
     setIsUserPlanModalOpen(false);
     loadUsers();
@@ -909,6 +927,8 @@ const Admin: React.FC = () => {
                         <TableRow>
                           <TableHead>Nome</TableHead>
                           <TableHead>Valor</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Ciclo</TableHead>
                           <TableHead>Descrição</TableHead>
                           <TableHead>Criado em</TableHead>
                           <TableHead className="w-[100px]">Ações</TableHead>
@@ -924,6 +944,8 @@ const Admin: React.FC = () => {
                                 : <span>R$ {Number(p.valor).toFixed(2)}</span>
                               }
                             </TableCell>
+                            <TableCell>{p.tipo_plano === 'teste_gratis' ? 'Teste grátis' : p.tipo_plano === 'anual' ? 'Anual' : 'Mensal'}</TableCell>
+                            <TableCell>{p.ciclo_dias_renovacao || '—'} dias</TableCell>
                             <TableCell className="text-muted-foreground text-sm">{p.descricao || '—'}</TableCell>
                             <TableCell>{new Date(p.created_at).toLocaleDateString('pt-BR')}</TableCell>
                             <TableCell>
@@ -1794,6 +1816,37 @@ const Admin: React.FC = () => {
               {planErrors.descricao && <p className="text-destructive text-sm">{planErrors.descricao}</p>}
             </div>
             <div className="space-y-2">
+              <Label htmlFor="plan_tipo_plano">Tipo do Plano</Label>
+              <Select
+                value={planFormData.tipo_plano}
+                onValueChange={(value) => setPlanFormData({ ...planFormData, tipo_plano: value as 'teste_gratis' | 'mensal' | 'anual' })}
+                disabled={isSubmittingPlan}
+              >
+                <SelectTrigger id="plan_tipo_plano">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="teste_gratis">Teste grátis</SelectItem>
+                  <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+              {planErrors.tipo_plano && <p className="text-destructive text-sm">{planErrors.tipo_plano}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plan_ciclo_dias_renovacao">Ciclo de renovação (dias)</Label>
+              <Input
+                id="plan_ciclo_dias_renovacao"
+                type="number"
+                min="1"
+                step="1"
+                value={planFormData.ciclo_dias_renovacao}
+                onChange={(e) => setPlanFormData({ ...planFormData, ciclo_dias_renovacao: e.target.value })}
+                disabled={isSubmittingPlan}
+              />
+              {planErrors.ciclo_dias_renovacao && <p className="text-destructive text-sm">{planErrors.ciclo_dias_renovacao}</p>}
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="plan_stripe_price_id">Stripe Price ID (opcional)</Label>
               <Input
                 id="plan_stripe_price_id"
@@ -1869,8 +1922,22 @@ const Admin: React.FC = () => {
               </Select>
             </div>
             {selectedPlanId && selectedPlanId !== NO_PLAN_VALUE && (
+              <div className="space-y-2">
+                <Label htmlFor="plan_extension_days">Dias extras de validade</Label>
+                <Input
+                  id="plan_extension_days"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={planExtensionDays}
+                  onChange={(e) => setPlanExtensionDays(e.target.value)}
+                  disabled={isSubmittingUserPlan}
+                />
+              </div>
+            )}
+            {selectedPlanId && selectedPlanId !== NO_PLAN_VALUE && (
               <p className="text-xs text-muted-foreground">
-                O plano será atribuído a partir de hoje e vencerá todo mês no mesmo dia.
+                O vencimento será recalculado por ciclo do plano + dias extras.
               </p>
             )}
           </div>

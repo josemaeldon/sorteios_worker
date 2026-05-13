@@ -584,10 +584,31 @@ async function initSchema() {
           }
         }
         try {
+          await client.query(`ALTER TABLE usuarios ADD COLUMN trial_gratis_usado TINYINT(1) NOT NULL DEFAULT 0`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add trial_gratis_usado column (unexpected error):', e.message);
+          }
+        }
+        try {
           await client.query(`ALTER TABLE planos ADD COLUMN stripe_price_id VARCHAR(255)`);
         } catch (e) {
           if (!e.message || !e.message.includes('Duplicate column')) {
             console.warn('Could not add stripe_price_id column (unexpected error):', e.message);
+          }
+        }
+        try {
+          await client.query(`ALTER TABLE planos ADD COLUMN tipo_plano VARCHAR(30) NOT NULL DEFAULT 'mensal'`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add tipo_plano column (unexpected error):', e.message);
+          }
+        }
+        try {
+          await client.query(`ALTER TABLE planos ADD COLUMN ciclo_dias_renovacao INT NOT NULL DEFAULT 30`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add ciclo_dias_renovacao column (unexpected error):', e.message);
           }
         }
         // Create loja_compradores table (MySQL)
@@ -932,7 +953,10 @@ async function initSchema() {
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS gratuidade_vitalicia BOOLEAN NOT NULL DEFAULT false`);
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_inicio TIMESTAMP WITH TIME ZONE`);
         await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_vencimento TIMESTAMP WITH TIME ZONE`);
+        await client.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS trial_gratis_usado BOOLEAN NOT NULL DEFAULT false`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(255)`);
+        await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS tipo_plano VARCHAR(30) NOT NULL DEFAULT 'mensal'`);
+        await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS ciclo_dias_renovacao INT NOT NULL DEFAULT 30`);
         // Create loja_compradores table (PostgreSQL)
         await client.query(`
           CREATE TABLE IF NOT EXISTS public.loja_compradores (
@@ -1323,6 +1347,68 @@ async function getStripeWebhookSecret(dbClient) {
   return cfg['stripe_webhook_secret'] || '';
 }
 
+function normalizePlanType(tipo) {
+  const raw = String(tipo || '').toLowerCase().trim();
+  if (raw === 'teste_gratis' || raw === 'teste-gratis' || raw === 'trial') return 'teste_gratis';
+  if (raw === 'anual' || raw === 'yearly') return 'anual';
+  return 'mensal';
+}
+
+function defaultCycleDaysByType(tipo) {
+  if (tipo === 'teste_gratis') return 7;
+  if (tipo === 'anual') return 365;
+  return 30;
+}
+
+function getPlanCycleDays(planLike) {
+  const tipo = normalizePlanType(planLike?.tipo_plano);
+  const parsed = Number(planLike?.ciclo_dias_renovacao);
+  const cycleDays = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : defaultCycleDaysByType(tipo);
+  return { tipo, cycleDays };
+}
+
+function addDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function hasActiveSubscription(userRow) {
+  if (!userRow) return false;
+  if (userRow.role === 'admin') return true;
+  if (userRow.gratuidade_vitalicia === true || userRow.gratuidade_vitalicia === 1) return true;
+  if (!userRow.plano_id) return false;
+  if (!userRow.plano_vencimento) return true;
+  const venc = new Date(userRow.plano_vencimento);
+  if (Number.isNaN(venc.getTime())) return true;
+  return venc.getTime() >= Date.now();
+}
+
+async function ensureStripePriceForPlan(dbClient, plan) {
+  const stripeSecretKey = await getStripeSecretKey(dbClient);
+  if (!stripeSecretKey) return plan.stripe_price_id || null;
+  const valorCentavos = Math.round(Number(plan.valor || 0) * 100);
+  if (valorCentavos <= 0) return null;
+  const stripe = Stripe(stripeSecretKey);
+  const { tipo, cycleDays } = getPlanCycleDays(plan);
+
+  const product = await stripe.products.create({
+    name: plan.nome,
+    description: plan.descricao || undefined,
+    metadata: { plano_id: String(plan.id || ''), tipo_plano: tipo, ciclo_dias_renovacao: String(cycleDays) },
+  });
+
+  const price = await stripe.prices.create({
+    currency: 'brl',
+    unit_amount: valorCentavos,
+    recurring: { interval: 'day', interval_count: cycleDays },
+    product: product.id,
+    metadata: { plano_id: String(plan.id || ''), tipo_plano: tipo, ciclo_dias_renovacao: String(cycleDays) },
+  });
+
+  return price.id;
+}
+
 /** Returns a configured MercadoPagoConfig client based on sandbox mode.
  *  Uses mp_sandbox_access_token when mp_sandbox_mode is 'true'. */
 async function getMercadoPagoClient(dbClient) {
@@ -1675,6 +1761,25 @@ app.post('/api', checkBasicAuth, async (req, res) => {
   
   try {
     let result;
+    if (authResult.user && authResult.user.role !== 'admin') {
+      const subscriptionAllowedActions = new Set([
+        'getMyProfile',
+        'updateProfile',
+        'getPublicPlanos',
+        'createStripeCheckout',
+        'confirmStripeCheckout',
+      ]);
+      if (!subscriptionAllowedActions.has(action)) {
+        const userSubResult = await client.query(
+          'SELECT role, plano_id, gratuidade_vitalicia, plano_vencimento FROM usuarios WHERE id = $1',
+          [authResult.user.user_id]
+        );
+        const currentUser = userSubResult.rows[0];
+        if (!hasActiveSubscription(currentUser)) {
+          return res.status(402).json({ error: 'Assinatura vencida. Renove seu plano para voltar a usar as funções.' });
+        }
+      }
+    }
     
     switch (action) {
       // ================== AUTH ==================
@@ -3851,7 +3956,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       // ================== PLANOS ==================
       case 'getPublicPlanos':
-        result = await client.query('SELECT id, nome, valor, descricao, ativo, stripe_price_id FROM planos WHERE ativo = true ORDER BY valor ASC');
+        result = await client.query('SELECT id, nome, valor, descricao, ativo, stripe_price_id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE ativo = true ORDER BY valor ASC');
         return res.json({ data: result.rows });
 
       case 'getPlanos':
@@ -3859,19 +3964,36 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         return res.json({ data: result.rows });
 
       case 'createPlano': {
+        const tipoPlano = normalizePlanType(data.tipo_plano);
+        const cicloDias = Math.max(1, Number(data.ciclo_dias_renovacao || defaultCycleDaysByType(tipoPlano)));
         result = await client.query(
-          `INSERT INTO planos (nome, valor, descricao, stripe_price_id) VALUES ($1, $2, $3, $4) RETURNING *`,
-          [data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null]
+          `INSERT INTO planos (nome, valor, descricao, stripe_price_id, tipo_plano, ciclo_dias_renovacao) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          [data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias]
         );
-        return res.json({ data: result.rows[0] });
+        let plano = result.rows[0];
+        const createdStripePriceId = await ensureStripePriceForPlan(client, plano);
+        if (createdStripePriceId || Number(plano.valor || 0) <= 0) {
+          const updated = await client.query('UPDATE planos SET stripe_price_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *', [plano.id, createdStripePriceId || null]);
+          plano = updated.rows[0];
+        }
+        return res.json({ data: plano });
       }
 
       case 'updatePlano': {
+        const tipoPlano = normalizePlanType(data.tipo_plano);
+        const cicloDias = Math.max(1, Number(data.ciclo_dias_renovacao || defaultCycleDaysByType(tipoPlano)));
         result = await client.query(
-          `UPDATE planos SET nome = $2, valor = $3, descricao = $4, stripe_price_id = $5, updated_at = NOW() WHERE id = $1 RETURNING *`,
-          [data.id, data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null]
+          `UPDATE planos SET nome = $2, valor = $3, descricao = $4, stripe_price_id = $5, tipo_plano = $6, ciclo_dias_renovacao = $7, updated_at = NOW() WHERE id = $1 RETURNING *`,
+          [data.id, data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias]
         );
-        return res.json({ data: result.rows[0] });
+        let plano = result.rows[0];
+        if (!plano) return res.status(404).json({ error: 'Plano não encontrado.' });
+        const createdStripePriceId = await ensureStripePriceForPlan(client, plano);
+        if (createdStripePriceId || Number(plano.valor || 0) <= 0) {
+          const updated = await client.query('UPDATE planos SET stripe_price_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *', [plano.id, createdStripePriceId || null]);
+          plano = updated.rows[0];
+        }
+        return res.json({ data: plano });
       }
 
       case 'deletePlano':
@@ -3880,13 +4002,31 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'assignUserPlan': {
         const planoId = data.plano_id || null;
+        const extensionDays = Math.max(0, Number(data.extension_days || 0));
         if (planoId) {
+          const planoResult = await client.query('SELECT id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE id = $1', [planoId]);
+          if (planoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Plano não encontrado.' });
+          }
+          const plano = planoResult.rows[0];
+          if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
+            const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.user_id]);
+            const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
+            if (trialUsed) {
+              return res.status(400).json({ error: 'Este usuário já utilizou o plano Teste Grátis uma vez.' });
+            }
+          }
+          const { cycleDays } = getPlanCycleDays(plano);
+          const totalDays = cycleDays + extensionDays;
           const now = new Date();
-          const vencimento = await resolvePlanVencimentoFromStripeSession(stripe, session, now);
+          const vencimento = addDaysFromNow(totalDays);
           await client.query(
             'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, updated_at = NOW() WHERE id = $1',
             [data.user_id, planoId, now, vencimento]
           );
+          if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
+            await client.query('UPDATE usuarios SET trial_gratis_usado = $2, updated_at = NOW() WHERE id = $1', [data.user_id, true]);
+          }
         } else {
           await client.query(
             'UPDATE usuarios SET plano_id = NULL, plano_inicio = NULL, plano_vencimento = NULL, updated_at = NOW() WHERE id = $1',
@@ -3905,11 +4045,18 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (!stripeSecretKey) {
           return res.status(400).json({ error: 'Stripe não configurado. Contate o administrador.' });
         }
-        const planoResult = await client.query('SELECT id, nome, valor, stripe_price_id FROM planos WHERE id = $1 AND ativo = true', [data.plano_id]);
+        const planoResult = await client.query('SELECT id, nome, valor, stripe_price_id, tipo_plano FROM planos WHERE id = $1 AND ativo = true', [data.plano_id]);
         if (planoResult.rows.length === 0) {
           return res.status(404).json({ error: 'Plano não encontrado.' });
         }
         const plano = planoResult.rows[0];
+        if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
+          const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
+          const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
+          if (trialUsed) {
+            return res.status(400).json({ error: 'O plano Teste Grátis pode ser usado apenas uma vez por usuário.' });
+          }
+        }
         const stripe = Stripe(stripeSecretKey);
         const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
 
@@ -3994,12 +4141,27 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (!sessionPlanoId) {
           return res.status(400).json({ error: 'Plano não identificado na sessão.' });
         }
+        const sessionPlanoResult = await client.query('SELECT id, tipo_plano FROM planos WHERE id = $1', [sessionPlanoId]);
+        if (sessionPlanoResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Plano não encontrado.' });
+        }
+        const sessionPlano = sessionPlanoResult.rows[0];
+        if (normalizePlanType(sessionPlano.tipo_plano) === 'teste_gratis') {
+          const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
+          const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
+          if (trialUsed) {
+            return res.status(400).json({ error: 'O plano Teste Grátis pode ser usado apenas uma vez por usuário.' });
+          }
+        }
         const confirmNow = new Date();
         const confirmVencimento = await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
         await client.query(
           'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
           [sessionPlanoId, confirmNow, confirmVencimento, data.authenticated_user_id]
         );
+        if (normalizePlanType(sessionPlano.tipo_plano) === 'teste_gratis') {
+          await client.query('UPDATE usuarios SET trial_gratis_usado = $2, updated_at = NOW() WHERE id = $1', [data.authenticated_user_id, true]);
+        }
         const confirmedUserResult = await client.query(
           'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento FROM usuarios WHERE id = $1',
           [data.authenticated_user_id]

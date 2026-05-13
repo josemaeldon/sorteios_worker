@@ -23,6 +23,8 @@ export interface Plan {
   descricao?: string;
   ativo: boolean;
   stripe_price_id?: string | null;
+  tipo_plano?: 'teste_gratis' | 'mensal' | 'anual';
+  ciclo_dias_renovacao?: number;
   created_at: string;
   updated_at?: string;
 }
