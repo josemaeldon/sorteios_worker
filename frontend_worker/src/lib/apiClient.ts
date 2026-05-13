@@ -364,8 +364,9 @@ export const syncOfflineQueue = async (): Promise<void> => {
 };
 
 let offlineSyncTimer: number | null = null;
+let offlineSyncPoller: number | null = null;
 const requestOfflineQueueSync = (): void => {
-  if (!isOfflineModeEnabled() || !navigator.onLine) return;
+  if (!isOfflineModeEnabled() || !navigator.onLine || isOfflineSyncing()) return;
   if (offlineSyncTimer) {
     window.clearTimeout(offlineSyncTimer);
   }
@@ -439,6 +440,13 @@ export const initOfflineQueueSync = (): void => {
   window.addEventListener(OFFLINE_EVENT_NAMES.modeChanged, requestOfflineQueueSync);
   window.addEventListener(OFFLINE_EVENT_NAMES.queueChanged, requestOfflineQueueSync);
   window.addEventListener(OFFLINE_EVENT_NAMES.syncComplete, requestOfflineQueueSync);
+  if (offlineSyncPoller === null) {
+    offlineSyncPoller = window.setInterval(() => {
+      if (!isOfflineModeEnabled() || !navigator.onLine) return;
+      if (getOfflineQueue().length === 0) return;
+      requestOfflineQueueSync();
+    }, 5000);
+  }
   if (isOfflineModeEnabled() && navigator.onLine) {
     requestOfflineQueueSync();
   }
