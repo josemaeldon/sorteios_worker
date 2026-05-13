@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getOfflineAppState, getOfflineQueue, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 
 const RodadasTab: React.FC = () => {
   const { sorteioAtivo, setCurrentTab } = useBingo();
@@ -45,13 +46,34 @@ const RodadasTab: React.FC = () => {
     range_end: '75',
     status: 'ativo' as 'ativo' | 'concluido' | 'cancelado'
   });
+  const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
+
+  const persistRodadasOffline = (nextRodadas: RodadaSorteio[]) => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+    const currentDrawTab = (currentBingo.drawTab || {}) as Record<string, unknown>;
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        drawTab: {
+          ...currentDrawTab,
+          rodadas: nextRodadas,
+        },
+      },
+    });
+  };
 
   useEffect(() => {
+    const rodadasOfflineSnapshot = ((getOfflineAppState().bingo?.drawTab?.rodadas as RodadaSorteio[]) || [])
+      .filter((rodada) => !sorteioAtivo || rodada.sorteio_id === sorteioAtivo.id);
+    if (shouldHydrateOfflineState && rodadasOfflineSnapshot.length > 0) {
+      setRodadas(rodadasOfflineSnapshot);
+      return;
+    }
     if (sorteioAtivo) {
       loadRodadas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorteioAtivo?.id]);
+  }, [sorteioAtivo?.id, shouldHydrateOfflineState]);
 
   const loadRodadas = async () => {
     if (!sorteioAtivo) return;
@@ -79,8 +101,15 @@ const RodadasTab: React.FC = () => {
       );
       
       setRodadas(rodadasWithCount);
+      persistRodadasOffline(rodadasWithCount);
     } catch (error: unknown) {
       console.error('Error loading rodadas:', error);
+      const rodadasOfflineSnapshot = ((getOfflineAppState().bingo?.drawTab?.rodadas as RodadaSorteio[]) || [])
+        .filter((rodada) => !sorteioAtivo || rodada.sorteio_id === sorteioAtivo.id);
+      if (shouldHydrateOfflineState && rodadasOfflineSnapshot.length > 0) {
+        setRodadas(rodadasOfflineSnapshot);
+        return;
+      }
       toast({
         title: "Erro ao carregar rodadas",
         description: (error instanceof Error ? error.message : 'Erro inesperado'),
@@ -125,12 +154,20 @@ const RodadasTab: React.FC = () => {
     if (!deletingRodadaId) return;
     
     try {
-      await callApi('deleteRodada', { id: deletingRodadaId });
+      const result = await callApi('deleteRodada', { id: deletingRodadaId });
+      const offlineQueued = !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
+      if (offlineQueued) {
+        const nextRodadas = rodadas.filter((rodada) => rodada.id !== deletingRodadaId);
+        setRodadas(nextRodadas);
+        persistRodadasOffline(nextRodadas);
+      }
       toast({
         title: "Rodada excluída",
         description: "A rodada foi excluída com sucesso."
       });
-      await loadRodadas();
+      if (!offlineQueued) {
+        await loadRodadas();
+      }
     } catch (error: unknown) {
       toast({
         title: "Erro ao excluir rodada",
@@ -161,26 +198,56 @@ const RodadasTab: React.FC = () => {
     }
     
     try {
+      let offlineQueued = false;
       if (editingRodada) {
-        await callApi('updateRodada', {
+        const result = await callApi('updateRodada', {
           id: editingRodada.id,
           nome: formData.nome,
           range_start,
           range_end,
           status: formData.status
         });
+        offlineQueued = !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
+        if (offlineQueued) {
+          const nextRodadas = rodadas.map((rodada) => rodada.id === editingRodada.id ? {
+            ...rodada,
+            nome: formData.nome,
+            range_start,
+            range_end,
+            status: formData.status,
+            updated_at: new Date().toISOString(),
+          } : rodada);
+          setRodadas(nextRodadas);
+          persistRodadasOffline(nextRodadas);
+        }
         toast({
           title: "Rodada atualizada",
           description: "A rodada foi atualizada com sucesso."
         });
       } else {
-        await callApi('createRodada', {
+        const result = await callApi('createRodada', {
           sorteio_id: sorteioAtivo.id,
           nome: formData.nome,
           range_start,
           range_end,
           status: formData.status
         });
+        offlineQueued = !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
+        if (offlineQueued) {
+          const nextRodadas = [...rodadas, {
+            id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            sorteio_id: sorteioAtivo.id,
+            nome: formData.nome,
+            range_start,
+            range_end,
+            status: formData.status,
+            numeros_sorteados: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }];
+          setRodadas(nextRodadas);
+          persistRodadasOffline(nextRodadas);
+        }
         toast({
           title: "Rodada criada",
           description: "A rodada foi criada com sucesso."
@@ -188,7 +255,9 @@ const RodadasTab: React.FC = () => {
       }
       
       setIsModalOpen(false);
-      await loadRodadas();
+      if (!offlineQueued) {
+        await loadRodadas();
+      }
     } catch (error: unknown) {
       toast({
         title: "Erro ao salvar rodada",

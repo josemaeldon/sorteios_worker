@@ -470,17 +470,18 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: false }),
         callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }),
       ]);
-      setCartelas(result.data || []);
-      setCartelasComGrade(resultComGrade.data || result.data || []);
-      if (Array.isArray(resultComGrade?.data) && resultComGrade.data.length > 0) {
-        const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
-        patchOfflineAppState({
-          bingo: {
-            ...currentBingo,
-            cartelasComGrade: resultComGrade.data,
-          },
-        });
-      }
+      const cartelasBase = result.data || [];
+      const cartelasGrade = resultComGrade.data || cartelasBase;
+      setCartelas(cartelasBase);
+      setCartelasComGrade(cartelasGrade);
+      const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+      patchOfflineAppState({
+        bingo: {
+          ...currentBingo,
+          cartelas: cartelasBase,
+          cartelasComGrade: cartelasGrade,
+        },
+      });
     } catch (error: unknown) {
       console.error('Error loading cartelas:', error);
     }

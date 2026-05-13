@@ -78,6 +78,11 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
   return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
 };
 
+const isOfflineQueued = (result: unknown): boolean =>
+  !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
+
+const makeTempId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, cartelasComGrade, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
@@ -257,7 +262,9 @@ const DrawTab: React.FC = () => {
     const matchesSnapshot = shouldHydrateOfflineState && (!snapshotSorteioId || snapshotSorteioId === sorteioAtivo.id);
 
     if (matchesSnapshot) {
-      if (Array.isArray(offlineDrawTab.rodadas)) setRodadas(offlineDrawTab.rodadas as RodadaSorteio[]);
+      if (Array.isArray(offlineDrawTab.rodadas)) {
+        setRodadas((offlineDrawTab.rodadas as RodadaSorteio[]).filter((rodada) => rodada.sorteio_id === sorteioAtivo.id));
+      }
       if (offlineDrawTab.selectedRodada) setSelectedRodada(offlineDrawTab.selectedRodada as RodadaSorteio);
       if (typeof offlineDrawTab.showDrawing === 'boolean') setShowDrawing(offlineDrawTab.showDrawing);
       if (typeof offlineDrawTab.currentNumber === 'number' || offlineDrawTab.currentNumber === null) setCurrentNumber(offlineDrawTab.currentNumber as number | null);
@@ -337,12 +344,27 @@ const DrawTab: React.FC = () => {
     if (!deletingRodadaId) return;
     
     try {
-      await callApi('deleteRodada', { id: deletingRodadaId });
+      const result = await callApi('deleteRodada', { id: deletingRodadaId });
+      if (isOfflineQueued(result)) {
+        const nextRodadas = rodadas.filter((rodada) => rodada.id !== deletingRodadaId);
+        setRodadas(nextRodadas);
+        if (selectedRodada?.id === deletingRodadaId) {
+          setShowDrawing(false);
+          setSelectedRodada(null);
+        }
+        persistDrawTabState({
+          rodadas: nextRodadas,
+          selectedRodada: selectedRodada?.id === deletingRodadaId ? null : selectedRodada,
+          showDrawing: selectedRodada?.id === deletingRodadaId ? false : showDrawing,
+        });
+      }
       toast({
         title: "Rodada excluída",
         description: "A rodada foi excluída com sucesso."
       });
-      await loadRodadas();
+      if (!isOfflineQueued(result)) {
+        await loadRodadas();
+      }
       
       // If the deleted rodada was selected, go back to list
       if (selectedRodada?.id === deletingRodadaId) {
@@ -379,26 +401,63 @@ const DrawTab: React.FC = () => {
     }
     
     try {
+      let offlineQueued = false;
       if (editingRodada) {
-        await callApi('updateRodada', {
+        const result = await callApi('updateRodada', {
           id: editingRodada.id,
           nome: formData.nome,
           range_start,
           range_end,
           status: formData.status
         });
+        offlineQueued = isOfflineQueued(result);
+        if (offlineQueued) {
+          const updatedRodada: RodadaSorteio = {
+            ...editingRodada,
+            nome: formData.nome,
+            range_start,
+            range_end,
+            status: formData.status,
+            updated_at: new Date().toISOString(),
+          };
+          const nextRodadas = rodadas.map((rodada) => rodada.id === editingRodada.id ? updatedRodada : rodada);
+          setRodadas(nextRodadas);
+          if (selectedRodada?.id === editingRodada.id) {
+            setSelectedRodada(updatedRodada);
+          }
+          persistDrawTabState({
+            rodadas: nextRodadas,
+            selectedRodada: selectedRodada?.id === editingRodada.id ? updatedRodada : selectedRodada,
+          });
+        }
         toast({
           title: "Rodada atualizada",
           description: "A rodada foi atualizada com sucesso."
         });
       } else {
-        await callApi('createRodada', {
+        const result = await callApi('createRodada', {
           sorteio_id: sorteioAtivo.id,
           nome: formData.nome,
           range_start,
           range_end,
           status: formData.status
         });
+        offlineQueued = isOfflineQueued(result);
+        if (offlineQueued) {
+          const createdRodada: RodadaSorteio = {
+            id: makeTempId(),
+            sorteio_id: sorteioAtivo.id,
+            nome: formData.nome,
+            range_start,
+            range_end,
+            status: formData.status,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as RodadaSorteio;
+          const nextRodadas = [...rodadas, createdRodada];
+          setRodadas(nextRodadas);
+          persistDrawTabState({ rodadas: nextRodadas });
+        }
         toast({
           title: "Rodada criada",
           description: "A rodada foi criada com sucesso."
@@ -406,7 +465,9 @@ const DrawTab: React.FC = () => {
       }
       
       setIsModalOpen(false);
-      await loadRodadas();
+      if (!offlineQueued) {
+        await loadRodadas();
+      }
     } catch (error: unknown) {
       toast({
         title: "Erro ao salvar rodada",
@@ -782,7 +843,7 @@ const DrawTab: React.FC = () => {
 
   const rankingCardsWithGrade = useMemo<ValidatedCartelaComGrade[]>(() => {
     const validatedNumbers = new Set(cartelasValidadas.map((cv) => Number(cv.numero)));
-    const source = !shouldHydrateOfflineState && cartelasComGrade.length > 0
+    const source = cartelasComGrade.length > 0
       ? (cartelasComGrade as ValidatedCartelaComGrade[])
       : cardsWithGrade;
 
