@@ -131,9 +131,19 @@ const DrawTab: React.FC = () => {
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const ganhadoresPopShownRef = useRef<Set<number>>(new Set());
+  const selectedRodadaRef = useRef<RodadaSorteio | null>(selectedRodada);
+  const sorteioAtivoIdRef = useRef<string | null>(sorteioAtivo?.id ?? null);
   const streamingUrl = selectedRodada
     ? `${window.location.origin}/sorteio-live/${selectedRodada.id}`
     : '';
+
+  useEffect(() => {
+    selectedRodadaRef.current = selectedRodada;
+  }, [selectedRodada]);
+
+  useEffect(() => {
+    sorteioAtivoIdRef.current = sorteioAtivo?.id ?? null;
+  }, [sorteioAtivo?.id]);
 
   const persistDrawTabState = useCallback((patch: Record<string, unknown>) => {
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
@@ -144,11 +154,11 @@ const DrawTab: React.FC = () => {
         drawTab: {
           ...currentDrawTab,
           ...patch,
-          sorteioId: selectedRodada?.sorteio_id || sorteioAtivo?.id || currentDrawTab.sorteioId || null,
+          sorteioId: selectedRodadaRef.current?.sorteio_id || sorteioAtivoIdRef.current || currentDrawTab.sorteioId || null,
         },
       },
     });
-  }, [selectedRodada?.sorteio_id, sorteioAtivo?.id]);
+  }, []);
 
   const resetDrawTabState = useCallback(() => {
     setSelectedRodada(null);
@@ -410,6 +420,7 @@ const DrawTab: React.FC = () => {
     try {
       setSelectedRodada(rodada);
       setShowDrawing(true);
+      localStorage.removeItem('selectedRodadaId');
 
       // Fetch fresh validated cartelas
       let freshValidadas: CartelaValidada[] = cartelasValidadas;
@@ -521,6 +532,19 @@ const DrawTab: React.FC = () => {
       });
     }
   };
+
+  useEffect(() => {
+    if (!sorteioAtivo || showDrawing || isLoadingRodadas || rodadas.length === 0) return;
+
+    const savedRodadaId = localStorage.getItem('selectedRodadaId');
+    if (!savedRodadaId) return;
+
+    const rodada = rodadas.find((r) => r.id === savedRodadaId);
+    if (!rodada) return;
+
+    void handleStartDrawing(rodada);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rodadas, sorteioAtivo?.id, showDrawing, isLoadingRodadas]);
 
   const copyStreamingUrl = async () => {
     if (!streamingUrl) return;
@@ -1615,7 +1639,7 @@ const DrawTab: React.FC = () => {
                       size="sm"
                     >
                       <Play className="w-4 h-4" />
-                      Sortear
+                      Abrir Rodada
                     </Button>
                     <Button
                       onClick={() => handleEditRodada(rodada)}
