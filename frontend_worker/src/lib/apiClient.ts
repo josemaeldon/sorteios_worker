@@ -87,8 +87,8 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
           throw new Error('Não autorizado. Faça login novamente.');
         }
 
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-        const err = new Error(errorData.error || `HTTP ${response.status}`);
+        const errorData = await response.json().catch(async () => ({ error: (await response.text().catch(() => '')) || 'Erro desconhecido' }));
+        const err = new Error((errorData as {error?: string}).error || `HTTP ${response.status}`);
         if (errorData.code) (err as Error & { code?: string }).code = errorData.code;
 
         // Retry next endpoint when the API gateway is unavailable.
