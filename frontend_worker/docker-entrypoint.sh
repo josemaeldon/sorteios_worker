@@ -37,7 +37,7 @@ if [ -n "$API_BASE_URL" ]; then
     {} \;
 
 elif [ -n "$VITE_SUPABASE_URL" ]; then
-  echo "Modo: SUPABASE (Lovable Cloud)"
+  echo "Modo: SUPABASE"
   echo ""
   echo "Configuração detectada:"
   echo "  - SUPABASE_URL: $VITE_SUPABASE_URL"
