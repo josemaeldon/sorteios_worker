@@ -220,9 +220,27 @@ const callApiNetwork = async (action: string, data: Record<string, unknown> = {}
           throw new Error('Não autorizado. Faça login novamente.');
         }
 
-        const errorData = await response.json().catch(async () => ({ error: (await response.text().catch(() => '')) || 'Erro desconhecido' }));
-        const err = new Error((errorData as {error?: string}).error || `HTTP ${response.status}`);
-        if ((errorData as { code?: string }).code) (err as Error & { code?: string }).code = (errorData as { code?: string }).code;
+        const errorText = await response.text().catch(() => '');
+        let errorMessage = '';
+        if (errorText) {
+          try {
+            const parsed = JSON.parse(errorText) as { error?: string; message?: string };
+            errorMessage = parsed.error || parsed.message || '';
+          } catch {
+            errorMessage = errorText;
+          }
+        }
+        if (!errorMessage && response.statusText) {
+          errorMessage = response.statusText;
+        }
+        if (!errorMessage) {
+          errorMessage = `HTTP ${response.status}`;
+        }
+        if ([502, 503, 504].includes(response.status)) {
+          errorMessage = 'Serviço temporariamente indisponível. Tente novamente em instantes.';
+        }
+
+        const err = new Error(errorMessage);
 
         if (response.status >= 500 && endpoint !== '/api') {
           lastError = err;

@@ -5,6 +5,7 @@ services:
     image: ghcr.io/josemaeldon/sorteios_worker:frontend_worker-latest
     environment:
       VITE_API_BASE_URL: https://api.bingo.cloudbr.app
+      VITE_API_BACKEND_HOST: bingo_backend:3001
       VITE_BASIC_AUTH_USER: ""
       VITE_BASIC_AUTH_PASS: ""
     networks:
