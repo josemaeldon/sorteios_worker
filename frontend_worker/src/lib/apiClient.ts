@@ -404,7 +404,7 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   try {
     return await callApiNetwork(action, data);
   } catch (error) {
-    if (offlineEnabled) {
+    if (offlineEnabled && !navigator.onLine) {
       if (isLikelyReadAction(action)) {
         const fallback = getOfflineResponse(action, data);
         if (fallback !== null) return fallback;
@@ -412,11 +412,9 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
         if (cached !== null) return cached;
         return { data: [], success: true, offline: true };
       }
-      if (!navigator.onLine) {
-        enqueueOfflineRequest({ action, data });
-        requestOfflineQueueSync();
-        return { success: true, offlineQueued: true };
-      }
+      enqueueOfflineRequest({ action, data });
+      requestOfflineQueueSync();
+      return { success: true, offlineQueued: true };
     }
     throw error;
   }

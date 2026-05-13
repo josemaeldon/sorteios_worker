@@ -110,17 +110,9 @@ const RodadasTab: React.FC = () => {
         setRodadas(rodadasOfflineSnapshot);
         return;
       }
-      const errorMessage = error instanceof Error ? error.message : 'Erro inesperado';
-      if (shouldHydrateOfflineState) {
-        toast({
-          title: "Rodadas offline",
-          description: "Usando dados salvos localmente.",
-        });
-        return;
-      }
       toast({
         title: "Erro ao carregar rodadas",
-        description: errorMessage,
+        description: (error instanceof Error ? error.message : 'Erro inesperado'),
         variant: "destructive"
       });
     } finally {
