@@ -70,6 +70,14 @@ const Planos: React.FC = () => {
     }
   };
 
+  const getPlanCycleLabel = (plano: Plan) => {
+    const tipo = plano.tipo_plano || 'mensal';
+    const dias = Number(plano.ciclo_dias_renovacao || 0);
+    if (tipo === 'teste_gratis') return `Teste grátis por ${dias || 7} dia${(dias || 7) > 1 ? 's' : ''}`;
+    if (tipo === 'anual') return `Renovação anual a cada ${dias || 365} dias`;
+    return `Renovação mensal a cada ${dias || 30} dias`;
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-2xl space-y-6">
@@ -119,6 +127,9 @@ const Planos: React.FC = () => {
                         const valor = Number(plano.valor);
                         return valor > 0 ? `R$ ${valor.toFixed(2).replace('.', ',')}` : 'Gratuito';
                       })()}
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {getPlanCycleLabel(plano)}
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <CheckCircle className="h-4 w-4 text-green-500" />

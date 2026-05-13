@@ -58,13 +58,24 @@ async function resolvePlanVencimentoFromStripeSession(stripe, session, startedAt
       const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
       const first = lineItems?.data?.[0];
       const recurring = first?.price?.recurring;
-      if (recurring?.interval === 'year') return nextYearSameDay(baseDate);
-      if (recurring?.interval === 'month') return nextMonthSameDay(baseDate);
+      if (recurring?.interval === 'day' && recurring?.interval_count) {
+        const result = new Date(baseDate);
+        result.setDate(result.getDate() + Number(recurring.interval_count));
+        return result;
+      }
     }
   } catch (err) {
     console.warn('Could not resolve plan expiration from Stripe session:', err?.message || err);
   }
-  return nextMonthSameDay(baseDate);
+  return baseDate;
+}
+
+function resolvePlanVencimentoFromPlan(planLike, startedAt) {
+  const baseDate = startedAt || new Date();
+  const { cycleDays } = getPlanCycleDays(planLike);
+  const result = new Date(baseDate);
+  result.setDate(result.getDate() + cycleDays);
+  return result;
 }
 
 // Stripe webhook must receive raw body — register before express.json()
@@ -111,7 +122,14 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
         const updateClient = await dbAdapter.getConnection();
         try {
           const now = new Date();
-          const vencimento = await resolvePlanVencimentoFromStripeSession(stripe, session, now);
+          const planoResult = await updateClient.query(
+            'SELECT id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE id = $1',
+            [planoId]
+          );
+          const plano = planoResult.rows[0];
+          const vencimento = plano
+            ? resolvePlanVencimentoFromPlan(plano, now)
+            : await resolvePlanVencimentoFromStripeSession(stripe, session, now);
           await updateClient.query(
             'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, updated_at = NOW() WHERE id = $4',
             [planoId, now, vencimento, userId]
@@ -4022,17 +4040,26 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         if (!stripeSecretKey) {
           return res.status(400).json({ error: 'Stripe não configurado. Contate o administrador.' });
         }
-        const planoResult = await client.query('SELECT id, nome, valor, stripe_price_id, tipo_plano FROM planos WHERE id = $1 AND ativo = true', [data.plano_id]);
+        const planoResult = await client.query('SELECT id, nome, valor, stripe_price_id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE id = $1 AND ativo = true', [data.plano_id]);
         if (planoResult.rows.length === 0) {
           return res.status(404).json({ error: 'Plano não encontrado.' });
         }
         const plano = planoResult.rows[0];
-        if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
-          const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
-          const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
-          if (trialUsed) {
-            return res.status(400).json({ error: 'O plano Teste Grátis pode ser usado apenas uma vez por usuário.' });
+        if (Number(plano.valor) <= 0 || normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
+          if (normalizePlanType(plano.tipo_plano) === 'teste_gratis') {
+            const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
+            const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
+            if (trialUsed) {
+              return res.status(400).json({ error: 'O plano Teste Grátis pode ser usado apenas uma vez por usuário.' });
+            }
           }
+          const now = new Date();
+          const vencimento = resolvePlanVencimentoFromPlan(plano, now);
+          await client.query(
+            'UPDATE usuarios SET plano_id = $2, plano_inicio = $3, plano_vencimento = $4, ativo = true, trial_gratis_usado = $5, updated_at = NOW() WHERE id = $1',
+            [data.authenticated_user_id, plano.id, now, vencimento, normalizePlanType(plano.tipo_plano) === 'teste_gratis' ? true : false]
+          );
+          return res.json({ url: '/app' });
         }
         const stripe = Stripe(stripeSecretKey);
         const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
@@ -4123,15 +4150,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(404).json({ error: 'Plano não encontrado.' });
         }
         const sessionPlano = sessionPlanoResult.rows[0];
-        if (normalizePlanType(sessionPlano.tipo_plano) === 'teste_gratis') {
-          const trialCheck = await client.query('SELECT trial_gratis_usado FROM usuarios WHERE id = $1', [data.authenticated_user_id]);
-          const trialUsed = trialCheck.rows[0] && (trialCheck.rows[0].trial_gratis_usado === true || trialCheck.rows[0].trial_gratis_usado === 1);
-          if (trialUsed) {
-            return res.status(400).json({ error: 'O plano Teste Grátis pode ser usado apenas uma vez por usuário.' });
-          }
-        }
         const confirmNow = new Date();
-        const confirmVencimento = await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
+        const confirmPlanResult = await client.query('SELECT id, tipo_plano, ciclo_dias_renovacao FROM planos WHERE id = $1', [sessionPlanoId]);
+        const confirmPlano = confirmPlanResult.rows[0];
+        const confirmVencimento = confirmPlano
+          ? resolvePlanVencimentoFromPlan(confirmPlano, confirmNow)
+          : await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
         await client.query(
           'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, updated_at = NOW() WHERE id = $4',
           [sessionPlanoId, confirmNow, confirmVencimento, data.authenticated_user_id]
