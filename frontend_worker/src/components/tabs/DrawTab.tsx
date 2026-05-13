@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useBingo } from '@/contexts/BingoContext';
 import { RodadaSorteio, CartelaValidada } from '@/types/bingo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,7 +78,6 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
 };
 
 const DrawTab: React.FC = () => {
-  const navigate = useNavigate();
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
 
@@ -118,6 +116,7 @@ const DrawTab: React.FC = () => {
   const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>([]);
   const [manualNumberInput, setManualNumberInput] = useState('');
   const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>([]);
+  const [isQrCodeModalOpen, setIsQrCodeModalOpen] = useState(false);
 
   // Random cartela raffle state
   const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(false);
@@ -278,10 +277,6 @@ const DrawTab: React.FC = () => {
     try {
       setSelectedRodada(rodada);
       setShowDrawing(true);
-      toast({
-        title: 'Link de transmissão criado',
-        description: `${window.location.origin}/sorteio-live/${rodada.id}`,
-      });
 
       const isRifa = sorteioAtivo?.tipo === 'rifa';
 
@@ -345,36 +340,58 @@ const DrawTab: React.FC = () => {
         comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
       }));
       setCardsWithGrade(loadedCardsWithGrade);
-
-
+      const validatedCardsWithGrade = loadedCardsWithGrade.filter((card) => validatedNumbers.has(card.numero));
       let poolNumbers: number[];
       if (isRifa) {
-        // For rifa: pool is the validated cartela numbers (ticket numbers)
-        poolNumbers = freshValidadas
+        // Para rifa: sorteia apenas entre cartelas validadas.
+        const validatedPool = freshValidadas
           .map((cv: CartelaValidada) => cv.numero)
           .filter(n => n >= rodada.range_start && n <= rodada.range_end)
           .sort((a, b) => a - b);
+        if (validatedPool.length > 0) {
+          poolNumbers = validatedPool;
+        } else {
+          poolNumbers = [];
+          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+            poolNumbers.push(i);
+          }
+        }
       } else {
-        // For bingo: draw must be random over the full rodada range, independent of card distribution
-        poolNumbers = [];
-        for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-          poolNumbers.push(i);
+        // Para bingo: quando houver cartelas validadas, o sorteio considera apenas
+        // os números que existem nessas cartelas validadas.
+        if (validatedCardsWithGrade.length > 0) {
+          const uniq = new Set<number>();
+          validatedCardsWithGrade.forEach((card) => {
+            const grids = normalizeNumerosGrade(card.numeros_grade);
+            grids.forEach((grid) => {
+              grid.forEach((n) => {
+                if (n !== 0 && n >= rodada.range_start && n <= rodada.range_end) uniq.add(n);
+              });
+            });
+          });
+          poolNumbers = Array.from(uniq).sort((a, b) => a - b);
+        } else {
+          poolNumbers = [];
+          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+            poolNumbers.push(i);
+          }
         }
       }
       setAvailableNumbers(poolNumbers);
-      
-      // Load history for this rodada
-      const historyResult = await callApi('getRodadaHistorico', { rodada_id: rodada.id });
-      
-      if (historyResult.data && historyResult.data.length > 0) {
-        const sortedHistory = (historyResult.data as Array<{ ordem: number; numero_sorteado: number }>).sort((a, b) => a.ordem - b.ordem);
-        const numbers = sortedHistory.map((item) => item.numero_sorteado);
-        setDrawnNumbers(numbers);
-        
-        if (numbers.length > 0) {
-          setCurrentNumber(numbers[numbers.length - 1]);
+
+      // Load history for this rodada (não bloqueia a UI se falhar)
+      try {
+        const historyResult = await callApi('getRodadaHistorico', { rodada_id: rodada.id });
+        if (historyResult.data && historyResult.data.length > 0) {
+          const sortedHistory = (historyResult.data as Array<{ ordem: number; numero_sorteado: number }>).sort((a, b) => a.ordem - b.ordem);
+          const numbers = sortedHistory.map((item) => item.numero_sorteado);
+          setDrawnNumbers(numbers);
+          if (numbers.length > 0) setCurrentNumber(numbers[numbers.length - 1]);
+        } else {
+          setDrawnNumbers([]);
+          setCurrentNumber(null);
         }
-      } else {
+      } catch {
         setDrawnNumbers([]);
         setCurrentNumber(null);
       }
@@ -622,7 +639,10 @@ const DrawTab: React.FC = () => {
   };
 
   const goBackToList = () => {
-    navigate('/app');
+    setShowDrawing(false);
+    setSelectedRodada(null);
+    setCurrentNumber(null);
+    setIsQrCodeModalOpen(false);
   };
 
   // Compute all scored cartelas; the UI groups them by score and shows the top 10 scores.
@@ -755,16 +775,9 @@ const DrawTab: React.FC = () => {
               <Copy className="w-5 h-5" />
               Copiar link OBS
             </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="gap-2"
-            >
-              <a href={streamingUrl} target="_blank" rel="noreferrer">
-                <ExternalLink className="w-5 h-5" />
-                Abrir transmissão
-              </a>
+            <Button onClick={() => setIsQrCodeModalOpen(true)} size="lg" variant="outline" className="gap-2">
+              <ExternalLink className="w-5 h-5" />
+              QrCode
             </Button>
             <Button
               onClick={drawNumber}
@@ -1350,6 +1363,24 @@ const DrawTab: React.FC = () => {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isQrCodeModalOpen} onOpenChange={setIsQrCodeModalOpen}>
+        <DialogContent className="w-[85vw] h-[85vh] max-w-[85vw] p-4">
+          <DialogHeader>
+            <DialogTitle>QR Code da Transmissão</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=1400x1400&data=${encodeURIComponent(streamingUrl)}`}
+              alt="QR Code da transmissão"
+              className="w-auto h-auto max-w-full max-h-full object-contain rounded-md bg-white p-2"
+            />
+          </div>
+          <div className="flex justify-center">
+            <Button onClick={() => setIsQrCodeModalOpen(false)} size="lg">Fechar</Button>
+          </div>
         </DialogContent>
       </Dialog>
       </div>

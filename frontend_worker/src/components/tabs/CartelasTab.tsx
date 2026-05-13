@@ -309,6 +309,19 @@ const CartelasTab: React.FC = () => {
         });
       }
     } catch (error) {
+      // Fallback para ambientes/usuários onde o endpoint de detalhe possa falhar:
+      // carrega a cartela com grade via listagem com include_grades.
+      try {
+        const fallback = await callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true, busca: String(cartela.numero) });
+        const data = (fallback?.data || []) as Cartela[];
+        const match = data.find((c) => Number(c.numero) === Number(cartela.numero));
+        if (match) {
+          setSelectedCartela((prev) => (prev ? { ...prev, ...match } : prev));
+          return;
+        }
+      } catch (fallbackError) {
+        console.error('Fallback getCartelas failed:', fallbackError);
+      }
       console.error('Error loading cartela details:', error);
       toast({ title: 'Erro ao carregar detalhes da cartela', variant: 'destructive' });
     } finally {
