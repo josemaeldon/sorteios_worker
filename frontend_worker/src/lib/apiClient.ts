@@ -115,6 +115,20 @@ const getOfflineResponse = (action: string, data: Record<string, unknown> = {}):
     case 'getSorteios':
     case 'getAllSorteiosAdmin':
       return { data: asArray(bingo.sorteios) };
+    case 'getRodadas':
+      return { data: asArray(drawTab.rodadas) };
+    case 'getRodadaHistorico':
+      return {
+        data: asArray(drawTab.drawnNumbers).map((numero, index) => ({
+          ordem: index + 1,
+          numero_sorteado: Number(numero),
+        })),
+      };
+    case 'getRodadaCartelaHistorico':
+      return { data: asArray(drawTab.cartelasSorteadasHistory).map((item: unknown) => ({
+        numero: Number((item as Record<string, unknown>).numero || 0),
+        comprador_nome: (item as Record<string, unknown>).nome || (item as Record<string, unknown>).comprador_nome || undefined,
+      })) };
     case 'getVendedores':
       return { data: asArray(bingo.vendedores) };
     case 'getCartelas':
@@ -177,14 +191,6 @@ const readCachedResponse = (action: string, data: Record<string, unknown>): unkn
   } catch {
     return null;
   }
-};
-
-const getFallbackReadResponse = (action: string, data: Record<string, unknown>): unknown | null => {
-  const fallback = getOfflineResponse(action, data);
-  if (fallback !== null) return fallback;
-  const cached = readCachedResponse(action, data);
-  if (cached !== null) return cached;
-  return null;
 };
 
 const writeCachedResponse = (action: string, data: Record<string, unknown>, response: unknown): void => {
@@ -298,15 +304,14 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   try {
     return await callApiNetwork(action, data);
   } catch (error) {
-    if (isLikelyReadAction(action)) {
-      const fallback = getFallbackReadResponse(action, data);
-      const message = error instanceof Error ? error.message : '';
-      const isGatewayFailure = /502|503|504|Bad Gateway|Gateway Timeout|Service Unavailable|Failed to fetch/i.test(message);
-      if (fallback !== null && (offlineEnabled || isGatewayFailure)) return fallback;
-      if (offlineEnabled && !navigator.onLine) {
-        return fallback ?? { data: [], success: true, offline: true };
+    if (offlineEnabled && !navigator.onLine) {
+      if (isLikelyReadAction(action)) {
+        const fallback = getOfflineResponse(action, data);
+        if (fallback !== null) return fallback;
+        const cached = readCachedResponse(action, data);
+        if (cached !== null) return cached;
+        return { data: [], success: true, offline: true };
       }
-    } else if (offlineEnabled && !navigator.onLine) {
       enqueueOfflineRequest({ action, data });
       return { success: true, offlineQueued: true };
     }

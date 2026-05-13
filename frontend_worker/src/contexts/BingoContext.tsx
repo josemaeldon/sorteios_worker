@@ -1115,9 +1115,11 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setCartelasValidadas(result.data || []);
     } catch (error: unknown) {
       console.error('Error loading cartelas validadas:', error);
-      const fallback = getOfflineAppState().bingo?.cartelasValidadas;
-      if (Array.isArray(fallback)) {
-        setCartelasValidadas(fallback as CartelaValidada[]);
+      if (isOfflineModeEnabled() && !navigator.onLine) {
+        const fallback = getOfflineAppState().bingo?.cartelasValidadas;
+        if (Array.isArray(fallback)) {
+          setCartelasValidadas(fallback as CartelaValidada[]);
+        }
       }
     }
   }, [sorteioAtivo, callApi]);
