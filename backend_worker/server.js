@@ -1226,7 +1226,15 @@ async function deleteVendaAndSyncLoja(client, vendaId) {
   if (numeros.length > 0) {
     const placeholders = numeros.map((_, i) => `$${i + 2}`).join(',');
     await client.query(`
-      DELETE FROM loja_cartelas
+      UPDATE loja_cartelas
+      SET status = 'disponivel',
+          comprador_nome = NULL,
+          comprador_email = NULL,
+          comprador_endereco = NULL,
+          comprador_cidade = NULL,
+          comprador_telefone = NULL,
+          stripe_session_id = NULL,
+          updated_at = NOW()
       WHERE numero_cartela IN (${placeholders})
         AND card_set_id IN (
           SELECT id FROM bingo_card_sets WHERE sorteio_id = $1
@@ -3836,11 +3844,30 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'createVenda': {
+        const numerosVenda = data.numeros_cartelas.split(',').map(n => parseInt(n.trim())).filter((n) => !Number.isNaN(n));
+        let finalVendedorId = data.vendedor_id || null;
+        if (!finalVendedorId && numerosVenda.length > 0) {
+          for (const numero of numerosVenda) {
+            const vendedorInferido = await client.query(
+              `SELECT a.vendedor_id
+               FROM atribuicao_cartelas ac
+               JOIN atribuicoes a ON ac.atribuicao_id = a.id
+               WHERE ac.numero_cartela = $1 AND a.sorteio_id = $2 AND a.vendedor_id IS NOT NULL
+               LIMIT 1`,
+              [numero, data.sorteio_id]
+            );
+            if (vendedorInferido.rows[0]?.vendedor_id) {
+              finalVendedorId = vendedorInferido.rows[0].vendedor_id;
+              break;
+            }
+          }
+        }
+
         const vendaResult = await client.query(`
           INSERT INTO vendas (sorteio_id, vendedor_id, cliente_nome, cliente_telefone, numeros_cartelas, valor_total, valor_pago, status, data_venda)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
           RETURNING *
-        `, [data.sorteio_id, data.vendedor_id, data.cliente_nome, data.cliente_telefone, data.numeros_cartelas, data.valor_total, data.valor_pago, data.status]);
+        `, [data.sorteio_id, finalVendedorId, data.cliente_nome, data.cliente_telefone, data.numeros_cartelas, data.valor_total, data.valor_pago, data.status]);
         
         const vendaId = vendaResult.rows[0].id;
         
@@ -3853,10 +3880,9 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
         }
         
-        const numerosVenda = data.numeros_cartelas.split(',').map(n => parseInt(n.trim()));
         for (const numero of numerosVenda) {
           await client.query(
-            'UPDATE cartelas SET status = \'vendida\' WHERE sorteio_id = $1 AND numero = $2',
+            "UPDATE cartelas SET status = 'vendida' WHERE sorteio_id = $1 AND numero = $2",
             [data.sorteio_id, numero]
           );
           await client.query(`
@@ -3864,35 +3890,20 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             WHERE numero_cartela = $2 AND atribuicao_id IN (
               SELECT id FROM atribuicoes WHERE sorteio_id = $3
             )
-          `, [vendaId, numero, data.sorteio_id, data.vendedor_id]);
+          `, [vendaId, numero, data.sorteio_id]);
         }
 
-        // Attempt to infer vendedor_id from atribuições if not provided and update venda
-        if (!data.vendedor_id) {
-          let inferredVendedor = null;
-          for (const numero of numerosVenda) {
-            const vRes = await client.query(
-              `SELECT a.vendedor_id FROM atribuicao_cartelas ac JOIN atribuicoes a ON ac.atribuicao_id = a.id
-               WHERE ac.numero_cartela = $1 AND a.sorteio_id = $2 LIMIT 1`,
-              [numero, data.sorteio_id]
-            );
-            if (vRes.rows.length > 0 && vRes.rows[0].vendedor_id) {
-              inferredVendedor = vRes.rows[0].vendedor_id;
-              break;
-            }
-          }
-          if (inferredVendedor) {
-            await client.query('UPDATE vendas SET vendedor_id = $2 WHERE id = $1', [vendaId, inferredVendedor]);
-          }
+        if (finalVendedorId) {
+          await client.query('UPDATE vendas SET vendedor_id = $2 WHERE id = $1', [vendaId, finalVendedorId]);
         }
 
         // Sync loja_cartelas: mark as vendida if present in loja
         for (const numero of numerosVenda) {
           await client.query(`
-            UPDATE loja_cartelas SET status = 'vendida', comprador_nome = $1, updated_at = NOW(), vendedor_id = COALESCE(vendedor_id, $3)
+            UPDATE loja_cartelas SET status = 'vendida', comprador_nome = $1, updated_at = NOW(), vendedor_id = COALESCE(vendedor_id, $4)
             WHERE card_set_id IN (SELECT id FROM bingo_card_sets WHERE sorteio_id = $2)
               AND numero_cartela = $3
-          `, [data.cliente_nome || null, data.sorteio_id, numero]);
+          `, [data.cliente_nome || null, data.sorteio_id, numero, finalVendedorId || null]);
         }
 
         // Auto-assign cliente_nome to validated cartelas when a name is provided
@@ -4386,7 +4397,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         }
         const preco = Number(data.preco) >= 0 ? Number(data.preco) : 0;
         const layoutData = data.layout_data || '';
-        const vendedorIdLoja = data.vendedor_id || null;
+        let vendedorIdLoja = data.vendedor_id || null;
         // When admin adds a cartela, use the sorteio owner's user_id
         let lojaUserId = data.authenticated_user_id;
         if (data.authenticated_role === 'admin') {
@@ -4396,6 +4407,58 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           );
           if (ownerLookup.rows.length > 0) lojaUserId = ownerLookup.rows[0].user_id;
         }
+
+        const soldCheck = await client.query(
+          `SELECT
+             lc.status AS loja_status,
+             c.status AS cartela_status,
+             ac.status AS atribuicao_status
+           FROM bingo_card_sets bcs
+           LEFT JOIN loja_cartelas lc
+             ON lc.user_id = $1 AND lc.card_set_id = bcs.id AND lc.numero_cartela = $3
+           LEFT JOIN cartelas c
+             ON c.sorteio_id = bcs.sorteio_id AND c.numero = $3
+           LEFT JOIN atribuicao_cartelas ac
+             ON ac.numero_cartela = $3
+            AND ac.atribuicao_id IN (SELECT id FROM atribuicoes WHERE sorteio_id = bcs.sorteio_id)
+           LEFT JOIN atribuicoes a
+             ON a.id = ac.atribuicao_id AND a.sorteio_id = bcs.sorteio_id
+           WHERE bcs.id = $2
+           LIMIT 1`,
+          [lojaUserId, data.card_set_id, data.numero_cartela]
+        );
+        const soldRow = soldCheck.rows[0] || {};
+        if (soldRow.loja_status === 'vendida' || soldRow.cartela_status === 'vendida' || soldRow.atribuicao_status === 'vendida') {
+          return res.status(409).json({ error: 'Cartela já foi vendida e não pode ser adicionada à loja.', code: 'CARTELA_VENDIDA' });
+        }
+
+        if (!vendedorIdLoja) {
+          const vendedorLookup = await client.query(
+            `SELECT c.vendedor_id
+             FROM cartelas c
+             JOIN bingo_card_sets bcs ON bcs.sorteio_id = c.sorteio_id
+             WHERE bcs.id = $1 AND c.numero = $2
+             LIMIT 1`,
+            [data.card_set_id, data.numero_cartela]
+          );
+          vendedorIdLoja = vendedorLookup.rows[0]?.vendedor_id || null;
+        }
+        if (!vendedorIdLoja) {
+          const atribuicaoLookup = await client.query(
+            `SELECT a.vendedor_id
+             FROM atribuicao_cartelas ac
+             JOIN atribuicoes a ON a.id = ac.atribuicao_id
+             JOIN bingo_card_sets bcs ON bcs.sorteio_id = a.sorteio_id
+             WHERE bcs.id = $1 AND ac.numero_cartela = $2
+             LIMIT 1`,
+            [data.card_set_id, data.numero_cartela]
+          );
+          vendedorIdLoja = atribuicaoLookup.rows[0]?.vendedor_id || null;
+        }
+        if (!vendedorIdLoja) {
+          return res.status(400).json({ error: 'Cartela sem vendedor definido. Atribua um vendedor antes de disponibilizar na loja.' });
+        }
+
         if (dbConfig.type === 'mysql') {
           const insertResult = await client.query(
             `INSERT IGNORE INTO loja_cartelas (id, user_id, card_set_id, numero_cartela, preco, card_data, layout_data, vendedor_id)
@@ -4403,6 +4466,13 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             [lojaUserId, data.card_set_id, data.numero_cartela, preco, data.card_data, layoutData, vendedorIdLoja]
           );
           if (insertResult.rows.affectedRows === 0) {
+            const existingLoja = await client.query(
+              'SELECT status FROM loja_cartelas WHERE user_id = $1 AND card_set_id = $2 AND numero_cartela = $3 LIMIT 1',
+              [lojaUserId, data.card_set_id, data.numero_cartela]
+            );
+            if (existingLoja.rows[0]?.status === 'vendida') {
+              return res.status(409).json({ error: 'Cartela já foi vendida e não pode ser adicionada à loja.', code: 'CARTELA_VENDIDA' });
+            }
             return res.status(409).json({ error: 'Cartela já está na loja.', code: 'DUPLICATE_CARTELA' });
           }
           const inserted = await client.query(
@@ -4419,6 +4489,13 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             [lojaUserId, data.card_set_id, data.numero_cartela, preco, data.card_data, layoutData, vendedorIdLoja]
           );
           if (result.rows.length === 0) {
+            const existingLoja = await client.query(
+              'SELECT status FROM loja_cartelas WHERE user_id = $1 AND card_set_id = $2 AND numero_cartela = $3 LIMIT 1',
+              [lojaUserId, data.card_set_id, data.numero_cartela]
+            );
+            if (existingLoja.rows[0]?.status === 'vendida') {
+              return res.status(409).json({ error: 'Cartela já foi vendida e não pode ser adicionada à loja.', code: 'CARTELA_VENDIDA' });
+            }
             return res.status(409).json({ error: 'Cartela já está na loja.', code: 'DUPLICATE_CARTELA' });
           }
           return res.json({ data: result.rows[0] });
