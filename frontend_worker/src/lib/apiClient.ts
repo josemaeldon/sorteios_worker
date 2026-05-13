@@ -179,6 +179,14 @@ const readCachedResponse = (action: string, data: Record<string, unknown>): unkn
   }
 };
 
+const getFallbackReadResponse = (action: string, data: Record<string, unknown>): unknown | null => {
+  const fallback = getOfflineResponse(action, data);
+  if (fallback !== null) return fallback;
+  const cached = readCachedResponse(action, data);
+  if (cached !== null) return cached;
+  return null;
+};
+
 const writeCachedResponse = (action: string, data: Record<string, unknown>, response: unknown): void => {
   try {
     localStorage.setItem(getCacheKey(action, data), JSON.stringify(response));
@@ -290,16 +298,17 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   try {
     return await callApiNetwork(action, data);
   } catch (error) {
-    if (offlineEnabled) {
-      if (isLikelyReadAction(action)) {
-        const fallback = getOfflineResponse(action, data);
-        if (fallback !== null) return fallback;
-        const cached = readCachedResponse(action, data);
-        if (cached !== null) return cached;
-      } else {
-        enqueueOfflineRequest({ action, data });
-        return { success: true, offlineQueued: true };
+    if (isLikelyReadAction(action)) {
+      const fallback = getFallbackReadResponse(action, data);
+      const message = error instanceof Error ? error.message : '';
+      const isGatewayFailure = /502|503|504|Bad Gateway|Gateway Timeout|Service Unavailable|Failed to fetch/i.test(message);
+      if (fallback !== null && (offlineEnabled || isGatewayFailure)) return fallback;
+      if (offlineEnabled && !navigator.onLine) {
+        return fallback ?? { data: [], success: true, offline: true };
       }
+    } else if (offlineEnabled && !navigator.onLine) {
+      enqueueOfflineRequest({ action, data });
+      return { success: true, offlineQueued: true };
     }
     throw error;
   }
