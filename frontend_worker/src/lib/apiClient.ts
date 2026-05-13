@@ -272,10 +272,9 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   console.log(`API Call: ${action}`, data);
 
   const offlineEnabled = isOfflineModeEnabled();
-  const hasPendingQueue = getOfflineQueue().length > 0;
   if (offlineEnabled) {
     if (isLikelyReadAction(action)) {
-      if (!navigator.onLine || hasPendingQueue) {
+      if (!navigator.onLine) {
         const fallback = getOfflineResponse(action, data);
         if (fallback !== null) return fallback;
         const cached = readCachedResponse(action, data);
