@@ -83,7 +83,7 @@ const Header: React.FC = () => {
             <Button
               type="button"
               variant="ghost"
-              className="text-primary-foreground hover:bg-primary-foreground/10 gap-2"
+              className={`gap-2 border transition-colors ${enabled ? 'border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white' : 'border-rose-400 bg-rose-500 text-white hover:bg-rose-600 hover:text-white'}`}
               onClick={toggle}
               title={enabled ? 'Desativar modo offline' : 'Ativar modo offline'}
             >
