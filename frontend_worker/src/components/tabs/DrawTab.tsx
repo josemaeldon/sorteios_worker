@@ -278,8 +278,6 @@ const DrawTab: React.FC = () => {
       setSelectedRodada(rodada);
       setShowDrawing(true);
 
-      const isRifa = sorteioAtivo?.tipo === 'rifa';
-
       // Fetch fresh validated cartelas
       let freshValidadas: CartelaValidada[] = cartelasValidadas;
       try {
@@ -340,42 +338,9 @@ const DrawTab: React.FC = () => {
         comprador_nome: freshValidadas.find((cv: CartelaValidada) => cv.numero === card.numero)?.comprador_nome || card.comprador_nome,
       }));
       setCardsWithGrade(loadedCardsWithGrade);
-      const validatedCardsWithGrade = loadedCardsWithGrade.filter((card) => validatedNumbers.has(card.numero));
-      let poolNumbers: number[];
-      if (isRifa) {
-        // Para rifa: sorteia apenas entre cartelas validadas.
-        const validatedPool = freshValidadas
-          .map((cv: CartelaValidada) => cv.numero)
-          .filter(n => n >= rodada.range_start && n <= rodada.range_end)
-          .sort((a, b) => a - b);
-        if (validatedPool.length > 0) {
-          poolNumbers = validatedPool;
-        } else {
-          poolNumbers = [];
-          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-            poolNumbers.push(i);
-          }
-        }
-      } else {
-        // Para bingo: quando houver cartelas validadas, o sorteio considera apenas
-        // os números que existem nessas cartelas validadas.
-        if (validatedCardsWithGrade.length > 0) {
-          const uniq = new Set<number>();
-          validatedCardsWithGrade.forEach((card) => {
-            const grids = normalizeNumerosGrade(card.numeros_grade);
-            grids.forEach((grid) => {
-              grid.forEach((n) => {
-                if (n !== 0 && n >= rodada.range_start && n <= rodada.range_end) uniq.add(n);
-              });
-            });
-          });
-          poolNumbers = Array.from(uniq).sort((a, b) => a - b);
-        } else {
-          poolNumbers = [];
-          for (let i = rodada.range_start; i <= rodada.range_end; i++) {
-            poolNumbers.push(i);
-          }
-        }
+      const poolNumbers: number[] = [];
+      for (let i = rodada.range_start; i <= rodada.range_end; i++) {
+        poolNumbers.push(i);
       }
       setAvailableNumbers(poolNumbers);
 
