@@ -667,14 +667,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!token) return;
     refreshUser();
-    const intervalId = window.setInterval(refreshUser, 30000);
-    const onFocus = () => refreshUser();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
     return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      // Intentionally no background polling here.
     };
   }, [token, refreshUser]);
 
