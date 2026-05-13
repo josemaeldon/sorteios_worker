@@ -281,7 +281,7 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
         if (cached !== null) return cached;
         return { data: [], success: true, offline: true };
       }
-    } else {
+    } else if (!navigator.onLine) {
       enqueueOfflineRequest({ action, data });
       return { success: true, offlineQueued: true };
     }
