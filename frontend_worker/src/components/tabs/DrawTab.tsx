@@ -827,14 +827,14 @@ const DrawTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-6 items-start">
+        <div className="flex flex-col xl:flex-row gap-6 items-start">
           <div className="flex-1 min-w-0 space-y-6">
             <div className="grid grid-cols-1 gap-6">
           <div ref={fullscreenRef} className={cn(isFullscreen && "bg-background p-3 md:p-8 min-h-screen flex flex-col")}>
             <Card className="border-2 flex-1 flex flex-col relative z-0">
-              <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
-                <CardTitle>Número Sorteado</CardTitle>
-                <div className="flex gap-2">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
+                <CardTitle className="text-lg sm:text-xl">Número Sorteado</CardTitle>
+                <div className="flex flex-wrap gap-2">
                   {isFullscreen && (
                     <>
                       <Button onClick={decreaseFontSize} variant="outline" size="icon" title="Diminuir tamanho">
@@ -866,31 +866,31 @@ const DrawTab: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex items-center justify-center flex-1 min-h-[400px]">
+                <div className="flex items-center justify-center flex-1 min-h-[220px] sm:min-h-[320px]">
                   {currentNumber !== null ? (
                     <div
                       className={cn(
-                        "font-black leading-none transition-all duration-300",
+                        "font-black leading-none transition-all duration-300 text-center break-keep",
                         isDrawing 
                           ? "animate-pulse text-primary" 
                           : justDrawn
                             ? "text-primary animate-bingo-globe-emerge animate-bingo-globe-shine"
                             : "text-primary"
                       )}
-                      style={{ fontSize: `${isFullscreen ? fullscreenFontSize + 'px' : fontSize + 'px'}` }}
+                      style={{ fontSize: isFullscreen ? `clamp(6rem, 20vw, ${fullscreenFontSize}px)` : `clamp(4rem, 18vw, ${fontSize}px)` }}
                     >
                       {currentNumber}
                     </div>
                   ) : (
-                    <div className="text-center text-muted-foreground">
-                      <Shuffle className="w-24 h-24 mx-auto mb-4 opacity-50" />
-                      <p className="text-xl">Clique em "Sortear" para começar</p>
+                    <div className="text-center text-muted-foreground px-4">
+                      <Shuffle className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-4 opacity-50" />
+                      <p className="text-base sm:text-xl">Clique em "Sortear" para começar</p>
                     </div>
                   )}
                 </div>
                 
                 {isFullscreen && (
-                  <div className="mt-8 flex gap-6 flex-shrink-0 items-start">
+                  <div className="mt-8 flex flex-col xl:flex-row gap-6 flex-shrink-0 items-start">
                     <div className="flex-1 space-y-6">
                       <div className="flex flex-wrap justify-center gap-4 items-center">
                         <Button
@@ -929,19 +929,19 @@ const DrawTab: React.FC = () => {
                       </div>
                     
                       {drawnNumbers.length > 0 && (
-                        <div className="bg-card rounded-lg p-6">
+                        <div className="bg-card rounded-lg p-4 sm:p-6">
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-2xl font-bold">Números Sorteados</h3>
-                            <span className="text-lg text-muted-foreground">
+                            <h3 className="text-lg sm:text-2xl font-bold">Números Sorteados</h3>
+                            <span className="text-sm sm:text-lg text-muted-foreground">
                               {drawnNumbers.length} / {availableNumbers.length}
                             </span>
                           </div>
-                          <div className="flex flex-wrap gap-3 max-h-[200px] overflow-y-auto">
+                          <div className="flex flex-wrap gap-2 sm:gap-3 max-h-[200px] overflow-y-auto">
                             {drawnNumbers.map((num, index) => (
                               <div
                                 key={num}
                                 className={cn(
-                                  "relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg font-bold text-lg sm:text-xl md:text-2xl border-2 transition-all duration-300",
+                                  "relative flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg font-bold text-base sm:text-xl md:text-2xl border-2 transition-all duration-300",
                                   num === currentNumber && !isDrawing
                                     ? "bg-primary text-primary-foreground border-primary scale-110"
                                     : "bg-muted text-foreground border-border"
@@ -959,7 +959,7 @@ const DrawTab: React.FC = () => {
                     {/* Top 10 Sidebar in fullscreen */}
                     <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-2xl font-bold flex items-center gap-2">
+                        <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
                           <Trophy className="w-6 h-6 text-yellow-500" />
                           Top 10 Cartelas
                         </h3>
@@ -1167,7 +1167,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-full md:w-80 flex-shrink-0 space-y-4 flex flex-col">
+          <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className="border-2 border-success bg-success/5">
