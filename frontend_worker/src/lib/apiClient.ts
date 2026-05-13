@@ -363,6 +363,18 @@ export const syncOfflineQueue = async (): Promise<void> => {
   }
 };
 
+let offlineSyncTimer: number | null = null;
+const requestOfflineQueueSync = (): void => {
+  if (!isOfflineModeEnabled() || !navigator.onLine) return;
+  if (offlineSyncTimer) {
+    window.clearTimeout(offlineSyncTimer);
+  }
+  offlineSyncTimer = window.setTimeout(() => {
+    offlineSyncTimer = null;
+    void syncOfflineQueue();
+  }, 150);
+};
+
 // API call function
 export const callApi = async (action: string, data: Record<string, unknown> = {}): Promise<any> => {
   console.log(`API Call: ${action}`, data);
@@ -379,6 +391,7 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
       }
     } else if (!navigator.onLine) {
       enqueueOfflineRequest({ action, data });
+      requestOfflineQueueSync();
       return { success: true, offlineQueued: true };
     }
   }
@@ -395,6 +408,7 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
         return { data: [], success: true, offline: true };
       }
       enqueueOfflineRequest({ action, data });
+      requestOfflineQueueSync();
       return { success: true, offlineQueued: true };
     }
     throw error;
@@ -419,13 +433,13 @@ export const initOfflineQueueSync = (): void => {
   let initialized = (window as Window & { __offlineSyncInit?: boolean }).__offlineSyncInit || false;
   if (initialized) return;
   (window as Window & { __offlineSyncInit?: boolean }).__offlineSyncInit = true;
-  window.addEventListener('online', () => {
-    void syncOfflineQueue();
-  });
-  window.addEventListener(OFFLINE_EVENT_NAMES.modeChanged, () => {
-    void syncOfflineQueue();
-  });
+  window.addEventListener('online', requestOfflineQueueSync);
+  window.addEventListener('focus', requestOfflineQueueSync);
+  window.addEventListener('pageshow', requestOfflineQueueSync);
+  window.addEventListener(OFFLINE_EVENT_NAMES.modeChanged, requestOfflineQueueSync);
+  window.addEventListener(OFFLINE_EVENT_NAMES.queueChanged, requestOfflineQueueSync);
+  window.addEventListener(OFFLINE_EVENT_NAMES.syncComplete, requestOfflineQueueSync);
   if (isOfflineModeEnabled() && navigator.onLine) {
-    void syncOfflineQueue();
+    requestOfflineQueueSync();
   }
 };
