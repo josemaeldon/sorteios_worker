@@ -25,6 +25,7 @@ interface BingoContextType {
   sorteios: Sorteio[];
   vendedores: Vendedor[];
   cartelas: Cartela[];
+  cartelasComGrade: Cartela[];
   atribuicoes: Atribuicao[];
   vendas: Venda[];
   cartelaLayouts: CartelaLayout[];
@@ -127,6 +128,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [sorteios, setSorteios] = useState<Sorteio[]>((offlineSnapshot.sorteios as Sorteio[]) || []);
   const [vendedores, setVendedores] = useState<Vendedor[]>((offlineSnapshot.vendedores as Vendedor[]) || []);
   const [cartelas, setCartelas] = useState<Cartela[]>((offlineSnapshot.cartelas as Cartela[]) || []);
+  const [cartelasComGrade, setCartelasComGrade] = useState<Cartela[]>((offlineSnapshot.cartelasComGrade as Cartela[]) || []);
   const [atribuicoes, setAtribuicoes] = useState<Atribuicao[]>((offlineSnapshot.atribuicoes as Atribuicao[]) || []);
   const [vendas, setVendas] = useState<Venda[]>((offlineSnapshot.vendas as Venda[]) || []);
   const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>((offlineSnapshot.cartelaLayouts as CartelaLayout[]) || []);
@@ -169,6 +171,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         sorteios,
         vendedores,
         cartelas,
+        cartelasComGrade,
         atribuicoes,
         vendas,
         cartelaLayouts,
@@ -176,7 +179,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         lojaCartelas,
       },
     });
-  }, [sorteioAtivo, sorteios, vendedores, cartelas, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
+  }, [sorteioAtivo, sorteios, vendedores, cartelas, cartelasComGrade, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
 
   // API call helper (funciona em qualquer modo)
   const callApi = useCallback(async (action: string, data: Record<string, unknown> = {}) => {
@@ -249,6 +252,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           updated_at: new Date().toISOString(),
         };
         setSorteios(prev => [...prev, created]);
+        setCartelasComGrade([]);
       }
       toast({ title: "Sorteio criado com sucesso!" });
       if (!isOfflineQueued(result)) {
@@ -464,6 +468,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         callApi('getCartelas', { sorteio_id: sorteioAtivo.id, include_grades: true }),
       ]);
       setCartelas(result.data || []);
+      setCartelasComGrade(resultComGrade.data || result.data || []);
       if (Array.isArray(resultComGrade?.data) && resultComGrade.data.length > 0) {
         const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
         patchOfflineAppState({

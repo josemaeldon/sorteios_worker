@@ -79,7 +79,7 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
 };
 
 const DrawTab: React.FC = () => {
-  const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
+  const { sorteioAtivo, cartelasValidadas, cartelasComGrade, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
   const drawTabSnapshot = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
   const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
@@ -463,6 +463,15 @@ const DrawTab: React.FC = () => {
           });
         } catch (_err) {
           // ignore individual cartela detail failure
+        }
+      }
+
+      const persistedGradeCards = (cartelasComGrade as unknown as ValidatedCartelaComGrade[]) || [];
+      for (const card of persistedGradeCards) {
+        const normalized = normalizeNumerosGrade(card?.numeros_grade);
+        if (normalized.length === 0) continue;
+        if (!mergedByNumero.has(card.numero)) {
+          mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
         }
       }
 
