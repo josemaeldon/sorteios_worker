@@ -31,6 +31,14 @@ export const setOfflineModeEnabled = (enabled: boolean): void => {
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_MODE, { detail: { enabled } }));
 };
 
+export const clearOfflineSessionState = (): void => {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY);
+  localStorage.removeItem(OFFLINE_SYNCING_KEY);
+  localStorage.removeItem(OFFLINE_APP_STATE_KEY);
+  window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_QUEUE, { detail: { size: 0 } }));
+  window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_SYNC_STATE, { detail: { syncing: false } }));
+};
+
 export const toggleOfflineMode = (): boolean => {
   const next = !isOfflineModeEnabled();
   setOfflineModeEnabled(next);
@@ -124,7 +132,16 @@ export const useOfflineMode = () => {
     };
   }, []);
 
-  return { enabled, online, queueSize, syncing, toggle: () => setOfflineModeEnabled(!enabled) };
+  const toggle = () => {
+    const next = !enabled;
+    setOfflineModeEnabled(next);
+    if (!next) {
+      clearOfflineSessionState();
+      window.location.reload();
+    }
+  };
+
+  return { enabled, online, queueSize, syncing, toggle };
 };
 
 export const OFFLINE_EVENT_NAMES = {
