@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 const OFFLINE_MODE_KEY = 'sorteios_offline_mode_enabled';
 const OFFLINE_QUEUE_KEY = 'sorteios_offline_queue_v1';
 const OFFLINE_SYNCING_KEY = 'sorteios_offline_syncing_v1';
+const OFFLINE_APP_STATE_KEY = 'sorteios_offline_app_state_v1';
 const OFFLINE_EVENT_MODE = 'sorteios-offline-mode-changed';
 const OFFLINE_EVENT_QUEUE = 'sorteios-offline-queue-changed';
 const OFFLINE_EVENT_SYNC = 'sorteios-offline-sync-complete';
@@ -14,6 +15,11 @@ export interface OfflineQueueItem {
   data: Record<string, unknown>;
   createdAt: number;
   attempts: number;
+}
+
+export interface OfflineAppState {
+  bingo?: Record<string, unknown>;
+  auth?: Record<string, unknown>;
 }
 
 const readBoolean = (key: string): boolean => localStorage.getItem(key) === 'true';
@@ -52,6 +58,28 @@ export const isOfflineSyncing = (): boolean => readBoolean(OFFLINE_SYNCING_KEY);
 export const setOfflineSyncing = (syncing: boolean): void => {
   localStorage.setItem(OFFLINE_SYNCING_KEY, syncing ? 'true' : 'false');
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_SYNC_STATE, { detail: { syncing } }));
+};
+
+export const getOfflineAppState = (): OfflineAppState => {
+  try {
+    const raw = localStorage.getItem(OFFLINE_APP_STATE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+export const setOfflineAppState = (state: OfflineAppState): void => {
+  localStorage.setItem(OFFLINE_APP_STATE_KEY, JSON.stringify(state));
+};
+
+export const patchOfflineAppState = (patch: Partial<OfflineAppState>): OfflineAppState => {
+  const current = getOfflineAppState();
+  const next = { ...current, ...patch };
+  setOfflineAppState(next);
+  return next;
 };
 
 export const enqueueOfflineRequest = (item: Omit<OfflineQueueItem, 'id' | 'createdAt' | 'attempts'>): OfflineQueueItem => {

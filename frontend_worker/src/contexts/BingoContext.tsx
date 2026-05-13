@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { callApi as callBackendApi } from '@/lib/apiClient';
-import { OFFLINE_EVENT_NAMES } from '@/lib/offlineMode';
+import { OFFLINE_EVENT_NAMES, getOfflineAppState, patchOfflineAppState, isOfflineModeEnabled } from '@/lib/offlineMode';
 
 interface BingoContextType {
   // State
@@ -120,17 +120,18 @@ const getErrorMessage = (error: unknown) => (error instanceof Error ? error.mess
 export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const offlineSnapshot = getOfflineAppState().bingo || {};
   
   // State
-  const [sorteioAtivo, setSorteioAtivoState] = useState<Sorteio | null>(null);
-  const [sorteios, setSorteios] = useState<Sorteio[]>([]);
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [cartelas, setCartelas] = useState<Cartela[]>([]);
-  const [atribuicoes, setAtribuicoes] = useState<Atribuicao[]>([]);
-  const [vendas, setVendas] = useState<Venda[]>([]);
-  const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>([]);
-  const [cartelasValidadas, setCartelasValidadas] = useState<CartelaValidada[]>([]);
-  const [lojaCartelas, setLojaCartelas] = useState<LojaCartela[]>([]);
+  const [sorteioAtivo, setSorteioAtivoState] = useState<Sorteio | null>((offlineSnapshot.sorteioAtivo as Sorteio | null) || null);
+  const [sorteios, setSorteios] = useState<Sorteio[]>((offlineSnapshot.sorteios as Sorteio[]) || []);
+  const [vendedores, setVendedores] = useState<Vendedor[]>((offlineSnapshot.vendedores as Vendedor[]) || []);
+  const [cartelas, setCartelas] = useState<Cartela[]>((offlineSnapshot.cartelas as Cartela[]) || []);
+  const [atribuicoes, setAtribuicoes] = useState<Atribuicao[]>((offlineSnapshot.atribuicoes as Atribuicao[]) || []);
+  const [vendas, setVendas] = useState<Venda[]>((offlineSnapshot.vendas as Venda[]) || []);
+  const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>((offlineSnapshot.cartelaLayouts as CartelaLayout[]) || []);
+  const [cartelasValidadas, setCartelasValidadas] = useState<CartelaValidada[]>((offlineSnapshot.cartelasValidadas as CartelaValidada[]) || []);
+  const [lojaCartelas, setLojaCartelas] = useState<LojaCartela[]>((offlineSnapshot.lojaCartelas as LojaCartela[]) || []);
   const [currentTab, setCurrentTab] = useState<TabType>('sorteios');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -159,10 +160,30 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     periodo: 'todos'
   });
 
+  useEffect(() => {
+    patchOfflineAppState({
+      bingo: {
+        sorteioAtivo,
+        sorteios,
+        vendedores,
+        cartelas,
+        atribuicoes,
+        vendas,
+        cartelaLayouts,
+        cartelasValidadas,
+        lojaCartelas,
+      },
+    });
+  }, [sorteioAtivo, sorteios, vendedores, cartelas, atribuicoes, vendas, cartelaLayouts, cartelasValidadas, lojaCartelas]);
+
   // API call helper (funciona em qualquer modo)
   const callApi = useCallback(async (action: string, data: Record<string, unknown> = {}) => {
     return callBackendApi(action, data);
   }, []);
+
+  const makeTempId = () => (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const parseCartelaList = (value: string) => value.split(',').map(v => Number(v.trim())).filter(Number.isFinite);
+  const isOfflineQueued = (result: unknown): boolean => !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
 
   // ================== SORTEIOS ==================
   const loadSorteios = useCallback(async () => {
@@ -189,9 +210,22 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     
     try {
       setIsLoading(true);
-      await callApi('createSorteio', { ...sorteio, user_id: user.id, ...(targetUserId ? { target_user_id: targetUserId } : {}) });
+      const result = await callApi('createSorteio', { ...sorteio, user_id: user.id, ...(targetUserId ? { target_user_id: targetUserId } : {}) });
+      if (isOfflineQueued(result)) {
+        const created: Sorteio = {
+          ...sorteio,
+          id: makeTempId(),
+          user_id: targetUserId || user.id,
+          premios: sorteio.premios || (sorteio.premio ? [sorteio.premio] : ['']),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setSorteios(prev => [...prev, created]);
+      }
       toast({ title: "Sorteio criado com sucesso!" });
-      await loadSorteios();
+      if (!isOfflineQueued(result)) {
+        await loadSorteios();
+      }
     } catch (error: unknown) {
       console.error('Error creating sorteio:', error);
       toast({
@@ -212,8 +246,16 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       
       const result = await callApi('updateSorteio', { id, ...sorteio, ...updates });
       const updatedSorteio = result.data?.[0] as Sorteio | undefined;
+      if (isOfflineQueued(result)) {
+        setSorteios(prev => prev.map(s => s.id === id ? { ...s, ...updates } as Sorteio : s));
+        if (sorteioAtivo?.id === id) {
+          setSorteioAtivoState(prev => prev ? { ...prev, ...updates } : prev);
+        }
+      }
       toast({ title: "Sorteio atualizado!" });
-      await loadSorteios();
+      if (!isOfflineQueued(result)) {
+        await loadSorteios();
+      }
       
       if (sorteioAtivo?.id === id) {
         setSorteioAtivoState(prev => updatedSorteio || (prev ? { ...prev, ...updates } : null));
@@ -235,9 +277,14 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const deleteSorteio = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
-      await callApi('deleteSorteio', { id });
+      const result = await callApi('deleteSorteio', { id });
+      if (isOfflineQueued(result)) {
+        setSorteios(prev => prev.filter(s => s.id !== id));
+      }
       toast({ title: "Sorteio excluído!" });
-      await loadSorteios();
+      if (!isOfflineQueued(result)) {
+        await loadSorteios();
+      }
       
       if (sorteioAtivo?.id === id) {
         setSorteioAtivoState(null);
@@ -311,9 +358,21 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('createVendedor', { ...vendedor, sorteio_id: sorteioAtivo.id });
+      const result = await callApi('createVendedor', { ...vendedor, sorteio_id: sorteioAtivo.id });
+      if (isOfflineQueued(result)) {
+        setVendedores(prev => [...prev, {
+          ...vendedor,
+          id: makeTempId(),
+          sorteio_id: sorteioAtivo.id,
+          ativo: vendedor.ativo ?? true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
+      }
       toast({ title: "Vendedor criado!" });
-      await loadVendedores();
+      if (!isOfflineQueued(result)) {
+        await loadVendedores();
+      }
     } catch (error: unknown) {
       console.error('Error creating vendedor:', error);
       toast({
@@ -329,9 +388,14 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const vendedor = vendedores.find(v => v.id === id);
       if (!vendedor) return;
       
-      await callApi('updateVendedor', { id, ...vendedor, ...updates });
+      const result = await callApi('updateVendedor', { id, ...vendedor, ...updates });
+      if (isOfflineQueued(result)) {
+        setVendedores(prev => prev.map(v => v.id === id ? { ...v, ...updates } as Vendedor : v));
+      }
       toast({ title: "Vendedor atualizado!" });
-      await loadVendedores();
+      if (!isOfflineQueued(result)) {
+        await loadVendedores();
+      }
     } catch (error: unknown) {
       console.error('Error updating vendedor:', error);
       toast({
@@ -344,9 +408,14 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const deleteVendedor = useCallback(async (id: string) => {
     try {
-      await callApi('deleteVendedor', { id });
+      const result = await callApi('deleteVendedor', { id });
+      if (isOfflineQueued(result)) {
+        setVendedores(prev => prev.filter(v => v.id !== id));
+      }
       toast({ title: "Vendedor excluído!" });
-      await loadVendedores();
+      if (!isOfflineQueued(result)) {
+        await loadVendedores();
+      }
     } catch (error: unknown) {
       console.error('Error deleting vendedor:', error);
       toast({
@@ -378,6 +447,16 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const info = result.data?.[0];
       const quantidadeFinal = Number(info?.quantidade ?? quantidade);
       const adicionadas = Number(info?.adicionadas ?? quantidade);
+      if (isOfflineQueued(result)) {
+        const novasCartelas = Array.from({ length: quantidadeFinal }, (_, idx) => ({
+          numero: idx + 1,
+          status: 'disponivel' as const,
+          vendedor_id: undefined,
+          comprador_nome: undefined,
+          numeros_grade: undefined,
+        }));
+        setCartelas(novasCartelas as Cartela[]);
+      }
       setSorteioAtivoState(prev => prev ? { ...prev, quantidade_cartelas: quantidadeFinal } : prev);
       setSorteios(prev => prev.map(s => s.id === sorteioAtivo.id ? { ...s, quantidade_cartelas: quantidadeFinal } : s));
       toast({ title: adicionadas > 0 ? `${adicionadas} nova(s) cartela(s) gerada(s)!` : 'Nenhuma cartela existente foi alterada.' });
@@ -398,12 +477,15 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('updateCartela', { 
+      const result = await callApi('updateCartela', { 
         sorteio_id: sorteioAtivo.id, 
         numero, 
         status, 
         vendedor_id: vendedorId || null 
       });
+      if (isOfflineQueued(result)) {
+        setCartelas(prev => prev.map(c => c.numero === numero ? { ...c, status, vendedor_id: vendedorId || c.vendedor_id } : c));
+      }
       await loadCartelas();
     } catch (error: unknown) {
       console.error('Error updating cartela:', error);
@@ -413,7 +495,13 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const salvarNumerosCartelas = useCallback(async (cartelas: { numero: number; numeros_grade: number[][] }[]) => {
     if (!sorteioAtivo) return;
     try {
-      await callApi('salvarNumerosCartelas', { sorteio_id: sorteioAtivo.id, cartelas });
+      const result = await callApi('salvarNumerosCartelas', { sorteio_id: sorteioAtivo.id, cartelas });
+      if (isOfflineQueued(result)) {
+        setCartelas(prev => prev.map(c => {
+          const found = cartelas.find(item => item.numero === c.numero);
+          return found ? { ...c, numeros_grade: found.numeros_grade } : c;
+        }));
+      }
       await loadCartelas();
     } catch (error: unknown) {
       console.error('Error saving cartela numbers:', error);
@@ -428,9 +516,14 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const deleteCartela = useCallback(async (numero: number) => {
     if (!sorteioAtivo) return;
     try {
-      await callApi('deleteCartela', { sorteio_id: sorteioAtivo.id, numero });
+      const result = await callApi('deleteCartela', { sorteio_id: sorteioAtivo.id, numero });
+      if (isOfflineQueued(result)) {
+        setCartelas(prev => prev.filter(c => c.numero !== numero));
+      }
       toast({ title: "Cartela excluída!" });
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error deleting cartela:', error);
       toast({ title: "Erro ao excluir cartela", description: getErrorMessage(error), variant: "destructive" });
@@ -442,9 +535,21 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const result = await callApi('createCartela', { sorteio_id: sorteioAtivo.id, numeros_grade: numerosGrade });
       const numeroCriado = Number(result.data?.[0]?.numero || 0);
+      if (isOfflineQueued(result)) {
+        const nextNumero = numeroCriado || ((cartelas.reduce((max, c) => Math.max(max, c.numero), 0)) + 1);
+        setCartelas(prev => [...prev, {
+          numero: nextNumero,
+          status: 'disponivel',
+          vendedor_id: undefined,
+          comprador_nome: undefined,
+          numeros_grade: [numerosGrade],
+        } as Cartela]);
+      }
       toast({ title: "Cartela criada!" });
-      await loadCartelas();
-      await loadSorteios();
+      if (!isOfflineQueued(result)) {
+        await loadCartelas();
+        await loadSorteios();
+      }
       setSorteioAtivoState(prev => prev ? { ...prev, quantidade_cartelas: Math.max(prev.quantidade_cartelas || 0, numeroCriado) } : prev);
     } catch (error: unknown) {
       console.error('Error creating cartela:', error);
@@ -468,14 +573,28 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('createAtribuicao', { 
+      const result = await callApi('createAtribuicao', { 
         sorteio_id: sorteioAtivo.id, 
         vendedor_id: vendedorId, 
         cartelas: cartelasNums 
       });
+      if (isOfflineQueued(result)) {
+        const createdAt = new Date().toISOString();
+        setAtribuicoes(prev => [...prev, {
+          id: makeTempId(),
+          sorteio_id: sorteioAtivo.id,
+          vendedor_id: vendedorId,
+          cartelas: cartelasNums.map(numero => ({ numero, status: 'ativa', data_atribuicao: createdAt })),
+          created_at: createdAt,
+          updated_at: createdAt,
+        }]);
+        setCartelas(prev => prev.map(c => cartelasNums.includes(c.numero) ? { ...c, status: 'ativa', vendedor_id: vendedorId } : c));
+      }
       toast({ title: "Atribuição criada!" });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error creating atribuicao:', error);
       toast({
@@ -502,6 +621,18 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       cartelas: firstBatch,
     }) as { data: { id: string }[] };
     const atribuicaoId = result.data[0].id;
+    if (isOfflineQueued(result)) {
+      const createdAt = new Date().toISOString();
+      setAtribuicoes(prev => [...prev, {
+        id: atribuicaoId || makeTempId(),
+        sorteio_id: sorteioAtivo.id,
+        vendedor_id: vendedorId,
+        cartelas: firstBatch.map(numero => ({ numero, status: 'ativa', data_atribuicao: createdAt })),
+        created_at: createdAt,
+        updated_at: createdAt,
+      }]);
+      setCartelas(prev => prev.map(c => firstBatch.includes(c.numero) ? { ...c, status: 'ativa', vendedor_id: vendedorId } : c));
+    }
     onProgress(Math.min(ATRIB_BATCH_SIZE, total), total);
 
     for (let i = ATRIB_BATCH_SIZE; i < total; i += ATRIB_BATCH_SIZE) {
@@ -515,8 +646,10 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       onProgress(Math.min(i + ATRIB_BATCH_SIZE, total), total);
     }
 
-    await loadAtribuicoes();
-    await loadCartelas();
+    if (!isOfflineQueued(result)) {
+      await loadAtribuicoes();
+      await loadCartelas();
+    }
   }, [sorteioAtivo, callApi, loadAtribuicoes, loadCartelas]);
 
   const addCartelasToAtribuicaoComProgresso = useCallback(async (
@@ -537,23 +670,34 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       onProgress(Math.min(i + ATRIB_BATCH_SIZE, total), total);
     }
-    await loadAtribuicoes();
-    await loadCartelas();
+    if (!isOfflineQueued(result)) {
+      await loadAtribuicoes();
+      await loadCartelas();
+    }
   }, [sorteioAtivo, callApi, loadAtribuicoes, loadCartelas]);
 
   const addCartelasToAtribuicao = useCallback(async (atribuicaoId: string, vendedorId: string, cartelasNums: number[]) => {
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('addCartelasToAtribuicao', { 
+      const result = await callApi('addCartelasToAtribuicao', { 
         atribuicao_id: atribuicaoId,
         vendedor_id: vendedorId,
         sorteio_id: sorteioAtivo.id,
         cartelas: cartelasNums 
       });
+      if (isOfflineQueued(result)) {
+        setAtribuicoes(prev => prev.map(a => a.id === atribuicaoId ? {
+          ...a,
+          cartelas: [...a.cartelas, ...cartelasNums.map(numero => ({ numero, status: 'ativa', data_atribuicao: new Date().toISOString() }))]
+        } : a));
+        setCartelas(prev => prev.map(c => cartelasNums.includes(c.numero) ? { ...c, status: 'ativa', vendedor_id: vendedorId } : c));
+      }
       toast({ title: "Cartelas adicionadas!" });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error adding cartelas:', error);
       toast({
@@ -568,14 +712,23 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('removeCartelaFromAtribuicao', { 
+      const result = await callApi('removeCartelaFromAtribuicao', { 
         atribuicao_id: atribuicaoId,
         sorteio_id: sorteioAtivo.id,
         numero_cartela: numeroCartela 
       });
+      if (isOfflineQueued(result)) {
+        setAtribuicoes(prev => prev.map(a => a.id === atribuicaoId ? {
+          ...a,
+          cartelas: a.cartelas.filter(c => c.numero !== numeroCartela)
+        } : a));
+        setCartelas(prev => prev.map(c => c.numero === numeroCartela ? { ...c, status: 'disponivel', vendedor_id: undefined } : c));
+      }
       toast({ title: "Cartela removida!" });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error removing cartela:', error);
       toast({
@@ -590,14 +743,23 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('updateCartelaStatusInAtribuicao', { 
+      const result = await callApi('updateCartelaStatusInAtribuicao', { 
         atribuicao_id: atribuicaoId,
         sorteio_id: sorteioAtivo.id,
         numero_cartela: numeroCartela,
         status
       });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (isOfflineQueued(result)) {
+        setAtribuicoes(prev => prev.map(a => a.id === atribuicaoId ? {
+          ...a,
+          cartelas: a.cartelas.map(c => c.numero === numeroCartela ? { ...c, status } : c)
+        } : a));
+        setCartelas(prev => prev.map(c => c.numero === numeroCartela ? { ...c, status } : c));
+      }
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error updating cartela status:', error);
     }
@@ -607,10 +769,19 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('deleteAtribuicao', { atribuicao_id: id, sorteio_id: sorteioAtivo.id });
+      const result = await callApi('deleteAtribuicao', { atribuicao_id: id, sorteio_id: sorteioAtivo.id });
+      if (isOfflineQueued(result)) {
+        const removed = atribuicoes.find(a => a.id === id);
+        setAtribuicoes(prev => prev.filter(a => a.id !== id));
+        if (removed) {
+          setCartelas(prev => prev.map(c => removed.cartelas.some(rc => rc.numero === c.numero) ? { ...c, status: 'disponivel', vendedor_id: undefined } : c));
+        }
+      }
       toast({ title: "Atribuição excluída!" });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error deleting atribuicao:', error);
       toast({
@@ -625,15 +796,25 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('transferirCartelas', { 
+      const result = await callApi('transferirCartelas', { 
         atribuicao_origem_id: atribuicaoOrigemId,
         sorteio_id: sorteioAtivo.id,
         numeros_cartelas: numerosCartelas,
         vendedor_destino_id: vendedorDestinoId
       });
+      if (isOfflineQueued(result)) {
+        setAtribuicoes(prev => prev.map(a => a.id === atribuicaoOrigemId ? {
+          ...a,
+          vendedor_id: vendedorDestinoId,
+          cartelas: a.cartelas.map(c => numerosCartelas.includes(c.numero) ? { ...c, status: 'ativa' } : c)
+        } : a));
+        setCartelas(prev => prev.map(c => numerosCartelas.includes(c.numero) ? { ...c, vendedor_id: vendedorDestinoId } : c));
+      }
       toast({ title: `${numerosCartelas.length} cartela(s) transferida(s)!` });
-      await loadAtribuicoes();
-      await loadCartelas();
+      if (!isOfflineQueued(result)) {
+        await loadAtribuicoes();
+        await loadCartelas();
+      }
     } catch (error: unknown) {
       console.error('Error transferring cartelas:', error);
       toast({
@@ -668,39 +849,70 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const adicionarCartelaLoja = useCallback(async (cardSetId: string, numeroCartela: number, preco: number, cardData: string, layoutData: string, vendedorId?: string): Promise<LojaCartela> => {
     const result = await callApi('adicionarCartelaLoja', { card_set_id: cardSetId, numero_cartela: numeroCartela, preco, card_data: cardData, layout_data: layoutData, vendedor_id: vendedorId || null });
     if (!result.data) throw new Error(result.error || 'Erro ao disponibilizar cartela.');
+    const localData: LojaCartela = result.data || {
+      id: makeTempId(),
+      card_set_id: cardSetId,
+      numero_cartela: numeroCartela,
+      preco,
+      status: 'disponivel',
+      vendedor_id: vendedorId,
+      card_data: cardData,
+      layout_data: layoutData,
+    };
     setLojaCartelas(prev => {
       const idx = prev.findIndex(c => c.card_set_id === cardSetId && c.numero_cartela === numeroCartela);
       if (idx >= 0) {
         const updated = [...prev];
-        updated[idx] = result.data;
+        updated[idx] = localData;
         return updated;
       }
-      return [...prev, result.data];
+      return [...prev, localData];
     });
-    return result.data;
+    return localData;
   }, [callApi]);
 
   const removerCartelaLoja = useCallback(async (id: string) => {
-    await callApi('removerCartelaLoja', { id });
-    setLojaCartelas(prev => prev.filter(c => c.id !== id));
-    await loadMinhaLoja();
-    await loadVendas();
-    await loadCartelas();
-    await loadAtribuicoes();
-  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes]);
+    const result = await callApi('removerCartelaLoja', { id });
+    if (isOfflineQueued(result)) {
+      const removed = lojaCartelas.find(c => c.id === id);
+      setLojaCartelas(prev => prev.filter(c => c.id !== id));
+      if (removed) {
+        setCartelas(prev => prev.map(c => c.numero === removed.numero_cartela ? { ...c, status: 'disponivel' } : c));
+      }
+    } else {
+      setLojaCartelas(prev => prev.filter(c => c.id !== id));
+    }
+    if (!isOfflineQueued(result)) {
+      await loadMinhaLoja();
+      await loadVendas();
+      await loadCartelas();
+      await loadAtribuicoes();
+    }
+  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes, lojaCartelas]);
 
   const removerMultiplasCartelasLoja = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
-    await callApi('removerMultiplasCartelasLoja', { ids });
-    setLojaCartelas(prev => prev.filter(c => !ids.includes(c.id)));
-    await loadMinhaLoja();
-    await loadVendas();
-    await loadCartelas();
-    await loadAtribuicoes();
-  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes]);
+    const result = await callApi('removerMultiplasCartelasLoja', { ids });
+    if (isOfflineQueued(result)) {
+      const removed = lojaCartelas.filter(c => ids.includes(c.id));
+      setLojaCartelas(prev => prev.filter(c => !ids.includes(c.id)));
+      setCartelas(prev => prev.map(c => removed.some(r => r.numero_cartela === c.numero) ? { ...c, status: 'disponivel' } : c));
+    } else {
+      setLojaCartelas(prev => prev.filter(c => !ids.includes(c.id)));
+    }
+    if (!isOfflineQueued(result)) {
+      await loadMinhaLoja();
+      await loadVendas();
+      await loadCartelas();
+      await loadAtribuicoes();
+    }
+  }, [callApi, loadMinhaLoja, loadVendas, loadCartelas, loadAtribuicoes, lojaCartelas]);
 
   const atualizarPrecoLojaCartela = useCallback(async (id: string, preco: number) => {
-    await callApi('atualizarPrecoLojaCartela', { id, preco });
+    const result = await callApi('atualizarPrecoLojaCartela', { id, preco });
+    if (isOfflineQueued(result)) {
+      setLojaCartelas(prev => prev.map(c => c.id === id ? { ...c, preco } : c));
+    }
     setLojaCartelas(prev => prev.map(c => c.id === id ? { ...c, preco } : c));
   }, [callApi]);
 
@@ -708,11 +920,31 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!sorteioAtivo) return;
     
     try {
-      await callApi('createVenda', { ...venda, sorteio_id: sorteioAtivo.id });
+      const result = await callApi('createVenda', { ...venda, sorteio_id: sorteioAtivo.id });
+      if (isOfflineQueued(result)) {
+        const createdAt = new Date().toISOString();
+        const localVenda: Venda = {
+          ...venda,
+          id: makeTempId(),
+          sorteio_id: sorteioAtivo.id,
+          created_at: createdAt,
+          updated_at: createdAt,
+        };
+        setVendas(prev => [...prev, localVenda]);
+        const numeros = parseCartelaList(venda.numeros_cartelas);
+        setCartelas(prev => prev.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c));
+        setAtribuicoes(prev => prev.map(a => ({
+          ...a,
+          cartelas: a.cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c)
+        })));
+        setLojaCartelas(prev => prev.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'vendida' } : c));
+      }
       toast({ title: "Venda registrada!" });
-      await loadVendas();
-      await loadCartelas();
-      await loadAtribuicoes();
+      if (!isOfflineQueued(result)) {
+        await loadVendas();
+        await loadCartelas();
+        await loadAtribuicoes();
+      }
     } catch (error: unknown) {
       console.error('Error creating venda:', error);
       toast({
@@ -730,11 +962,16 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const venda = vendas.find(v => v.id === id);
       if (!venda) return;
       
-      await callApi('updateVenda', { id, sorteio_id: sorteioAtivo.id, ...venda, ...updates });
+      const result = await callApi('updateVenda', { id, sorteio_id: sorteioAtivo.id, ...venda, ...updates });
+      if (isOfflineQueued(result)) {
+        setVendas(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
+      }
       toast({ title: "Venda atualizada!" });
-      await loadVendas();
-      await loadCartelas();
-      await loadAtribuicoes();
+      if (!isOfflineQueued(result)) {
+        await loadVendas();
+        await loadCartelas();
+        await loadAtribuicoes();
+      }
     } catch (error: unknown) {
       console.error('Error updating venda:', error);
       toast({
@@ -747,12 +984,23 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const deleteVenda = useCallback(async (id: string) => {
     try {
-      await callApi('deleteVenda', { id });
+      const result = await callApi('deleteVenda', { id });
+      if (isOfflineQueued(result)) {
+        const venda = vendas.find(v => v.id === id);
+        if (venda) {
+          const numeros = parseCartelaList(venda.numeros_cartelas);
+          setCartelas(prev => prev.map(c => numeros.includes(c.numero) ? { ...c, status: 'disponivel' } : c));
+          setLojaCartelas(prev => prev.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'disponivel', comprador_nome: undefined, comprador_email: undefined, comprador_endereco: undefined, comprador_cidade: undefined, comprador_telefone: undefined } : c));
+        }
+        setVendas(prev => prev.filter(v => v.id !== id));
+      }
       toast({ title: "Venda excluída!" });
-      await loadVendas();
-      await loadCartelas();
-      await loadAtribuicoes();
-      await loadMinhaLoja();
+      if (!isOfflineQueued(result)) {
+        await loadVendas();
+        await loadCartelas();
+        await loadAtribuicoes();
+        await loadMinhaLoja();
+      }
     } catch (error: unknown) {
       console.error('Error deleting venda:', error);
       toast({
@@ -761,7 +1009,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         variant: "destructive"
       });
     }
-  }, [callApi, toast, loadVendas, loadCartelas, loadAtribuicoes, loadMinhaLoja]);
+  }, [callApi, toast, loadVendas, loadCartelas, loadAtribuicoes, loadMinhaLoja, vendas]);
 
   // ================== CARTELA LAYOUTS ==================
   const loadCartelaLayouts = useCallback(async () => {

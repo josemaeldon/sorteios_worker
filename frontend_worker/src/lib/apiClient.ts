@@ -1,7 +1,14 @@
 // API Client for selfhosted backend
 // Connects directly to the backend API via HTTP
-import { enqueueOfflineRequest, getOfflineQueue, isOfflineModeEnabled, OFFLINE_EVENT_NAMES, setOfflineQueue } from './offlineMode';
-import { setOfflineSyncing } from './offlineMode';
+import {
+  enqueueOfflineRequest,
+  getOfflineAppState,
+  getOfflineQueue,
+  isOfflineModeEnabled,
+  OFFLINE_EVENT_NAMES,
+  setOfflineQueue,
+  setOfflineSyncing,
+} from './offlineMode';
 
 interface ApiConfig {
   baseUrl: string;
@@ -88,6 +95,45 @@ const stableStringify = (value: unknown): string => {
 
 const getCacheKey = (action: string, data: Record<string, unknown>): string => `${OFFLINE_CACHE_PREFIX}${action}:${stableStringify(data)}`;
 const isLikelyReadAction = (action: string): boolean => /^(get|load|check|list|fetch|export|search|download)/i.test(action);
+
+const getOfflineResponse = (action: string): any | null => {
+  const state = getOfflineAppState();
+  const bingo = (state.bingo || {}) as Record<string, unknown>;
+  const auth = (state.auth || {}) as Record<string, unknown>;
+  const asArray = (value: unknown) => (Array.isArray(value) ? value : []);
+
+  switch (action) {
+    case 'getMyProfile':
+      return { user: auth.user || null };
+    case 'getSorteios':
+      return { data: asArray(bingo.sorteios) };
+    case 'getVendedores':
+      return { data: asArray(bingo.vendedores) };
+    case 'getCartelas':
+      return { data: asArray(bingo.cartelas) };
+    case 'getAtribuicoes':
+      return { data: asArray(bingo.atribuicoes) };
+    case 'getVendas':
+      return { data: asArray(bingo.vendas) };
+    case 'getCartelaLayouts':
+      return { data: asArray(bingo.cartelaLayouts) };
+    case 'getCartelasValidadas':
+      return { data: asArray(bingo.cartelasValidadas) };
+    case 'getMinhaLoja':
+      return { data: asArray(bingo.lojaCartelas) };
+    case 'getAllUsers':
+      return { data: asArray(auth.users) };
+    case 'getPublicPlanos':
+    case 'getPlanos':
+      return { data: asArray(bingo.planos) };
+    case 'getConfiguracoes':
+    case 'getUserConfiguracoes':
+    case 'getUserConfiguracoesByUserId':
+      return { data: bingo.configuracoes || {} };
+    default:
+      return null;
+  }
+};
 
 const readCachedResponse = (action: string, data: Record<string, unknown>): unknown | null => {
   try {
@@ -191,10 +237,12 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
   console.log(`API Call: ${action}`, data);
 
   const offlineEnabled = isOfflineModeEnabled();
-  if (offlineEnabled && !navigator.onLine) {
+  if (offlineEnabled) {
     if (isLikelyReadAction(action)) {
       const cached = readCachedResponse(action, data);
       if (cached !== null) return cached;
+      const fallback = getOfflineResponse(action);
+      if (fallback !== null) return fallback;
       return { data: [], success: true, offline: true };
     }
 
@@ -209,6 +257,8 @@ export const callApi = async (action: string, data: Record<string, unknown> = {}
       if (isLikelyReadAction(action)) {
         const cached = readCachedResponse(action, data);
         if (cached !== null) return cached;
+        const fallback = getOfflineResponse(action);
+        if (fallback !== null) return fallback;
       } else {
         enqueueOfflineRequest({ action, data });
         return { success: true, offlineQueued: true };

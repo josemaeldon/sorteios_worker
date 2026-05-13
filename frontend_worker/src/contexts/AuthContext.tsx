@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
-import { OFFLINE_EVENT_NAMES, isOfflineModeEnabled } from '@/lib/offlineMode';
+import { OFFLINE_EVENT_NAMES, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { useNavigate } from 'react-router-dom';
@@ -674,6 +674,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Intentionally no background polling here.
     };
   }, [token, refreshUser]);
+
+  useEffect(() => {
+    patchOfflineAppState({
+      auth: {
+        user,
+      },
+    });
+  }, [user]);
 
   useEffect(() => {
     const handleSyncComplete = () => {
