@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
+import { OFFLINE_EVENT_NAMES, isOfflineModeEnabled } from '@/lib/offlineMode';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { useNavigate } from 'react-router-dom';
@@ -87,8 +88,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
           }
         } catch (e) {
-          localStorage.removeItem(AUTH_KEY);
-          clearStoredToken();
+          if (!isOfflineModeEnabled()) {
+            localStorage.removeItem(AUTH_KEY);
+            clearStoredToken();
+          }
         }
       }
       setIsLoading(false);
@@ -671,6 +674,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Intentionally no background polling here.
     };
   }, [token, refreshUser]);
+
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      void refreshUser();
+    };
+    window.addEventListener(OFFLINE_EVENT_NAMES.syncComplete, handleSyncComplete);
+    return () => window.removeEventListener(OFFLINE_EVENT_NAMES.syncComplete, handleSyncComplete);
+  }, [refreshUser]);
 
   const confirmStripeCheckout = useCallback(async (sessionId: string): Promise<{ success: boolean; pending?: boolean; message?: string; error?: string }> => {
     try {

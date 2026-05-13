@@ -407,6 +407,19 @@
   }
 }
 
+@keyframes softPulse {
+  0%, 100% {
+    opacity: 0.82;
+    transform: translateY(0) scale(1);
+    box-shadow: 0 10px 20px hsl(222 47% 11% / 0.18);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.01);
+    box-shadow: 0 14px 28px hsl(222 47% 11% / 0.28);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
@@ -429,4 +442,8 @@
 
 .animate-bingo-globe-bounce {
   animation: bingoGlobeBounce 0.6s ease-in-out;
+}
+
+.offline-sync-pulse {
+  animation: softPulse 1.6s ease-in-out infinite;
 }

@@ -17,6 +17,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { callApi as callBackendApi } from '@/lib/apiClient';
+import { OFFLINE_EVENT_NAMES } from '@/lib/offlineMode';
 
 interface BingoContextType {
   // State
@@ -914,6 +915,18 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       loadSorteios();
     }
   }, [user, loadSorteios]);
+
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      if (sorteioAtivo) {
+        void refreshData();
+      } else {
+        void loadSorteios();
+      }
+    };
+    window.addEventListener(OFFLINE_EVENT_NAMES.syncComplete, handleSyncComplete);
+    return () => window.removeEventListener(OFFLINE_EVENT_NAMES.syncComplete, handleSyncComplete);
+  }, [sorteioAtivo, refreshData, loadSorteios]);
 
   const value: BingoContextType = {
     sorteioAtivo,

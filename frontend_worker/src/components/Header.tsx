@@ -1,10 +1,11 @@
 import React from 'react';
-import { Dice5, Target, LogOut, Settings, User } from 'lucide-react';
+import { Dice5, Target, LogOut, Settings, User, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { useBingo } from '@/contexts/BingoContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useOfflineMode } from '@/lib/offlineMode';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,22 @@ const Header: React.FC = () => {
   const { sorteioAtivo } = useBingo();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { enabled, online, queueSize, syncing, toggle } = useOfflineMode();
+
+  const badgeState = !online ? {
+    label: 'Offline',
+    className: 'bg-rose-500 text-white border-rose-400',
+    icon: WifiOff,
+  } : syncing ? {
+    label: 'Sincronizando',
+    className: 'bg-amber-500 text-white border-amber-400',
+    icon: RefreshCw,
+  } : {
+    label: 'Online',
+    className: 'bg-emerald-500 text-white border-emerald-400',
+    icon: Wifi,
+  };
+  const BadgeIcon = badgeState.icon;
 
   const getInitials = (name: string) => {
     return name
@@ -29,7 +46,18 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="gradient-header text-primary-foreground shadow-lg">
+    <header className="gradient-header text-primary-foreground shadow-lg relative">
+      <div className={`pointer-events-none fixed top-4 right-4 z-50 rounded-full border px-3 py-1.5 shadow-lg backdrop-blur-md ${badgeState.className} ${syncing ? 'offline-sync-pulse' : ''}`}>
+        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide">
+          <BadgeIcon className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+          <span>{badgeState.label}</span>
+          {enabled && queueSize > 0 && !syncing && online ? (
+            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+              {queueSize}
+            </span>
+          ) : null}
+        </div>
+      </div>
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
@@ -51,6 +79,22 @@ const Header: React.FC = () => {
                 {sorteioAtivo ? sorteioAtivo.nome : 'Nenhum sorteio selecionado'}
               </div>
             </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-primary-foreground hover:bg-primary-foreground/10 gap-2"
+              onClick={toggle}
+              title={enabled ? 'Desativar modo offline' : 'Ativar modo offline'}
+            >
+              {enabled && online ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              <span className="text-sm hidden sm:inline">
+                {enabled ? `Offline pronto${queueSize > 0 ? ` (${queueSize})` : ''}` : 'Ativar offline'}
+              </span>
+              <span className="text-xs sm:hidden">
+                {enabled ? 'Offline' : 'Offline'}
+              </span>
+            </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
