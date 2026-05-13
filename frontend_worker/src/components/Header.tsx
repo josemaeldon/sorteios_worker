@@ -85,10 +85,16 @@ const Header: React.FC = () => {
                   Meu Perfil
                 </DropdownMenuItem>
                 {user?.role === 'admin' && (
-                  <DropdownMenuItem onClick={() => navigate('/admin')}>
-                    <Settings className="h-4 w-4 mr-2" />
-                    Configurações
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onClick={() => navigate('/admin/usuarios')}>
+                      <User className="h-4 w-4 mr-2" />
+                      Usuários e assinaturas
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Configurações
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-destructive">

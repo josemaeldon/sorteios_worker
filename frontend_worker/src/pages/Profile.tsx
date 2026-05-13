@@ -18,6 +18,7 @@ import {
   CreditCard, CheckCircle, Settings, Users, Plus, Pencil, Trash2,
   HelpCircle, Dice5, BarChart3, Shuffle, Grid3X3, LayoutGrid,
   ListTodo, ShoppingCart, PieChart, Store, Eye, Image as ImageIcon,
+  Clock,
 } from 'lucide-react';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
@@ -797,6 +798,23 @@ const Profile: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-sm px-3 py-1">Gratuidade Vitalícia</Badge>
                     <span className="text-muted-foreground text-sm">Acesso completo sem custo</span>
+                  </div>
+                ) : isPaymentPending ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-amber-600" />
+                      <span className="font-medium">Aguardando confirmação do pagamento</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.plano_pagamento_metodo === 'boleto'
+                        ? 'Seu boleto foi emitido e a assinatura será ativada assim que a Stripe confirmar a compensação.'
+                        : 'Seu pagamento está em processamento pela Stripe.'}
+                    </p>
+                    {user?.plano_pagamento_voucher_url && (
+                      <Button size="sm" variant="outline" onClick={() => window.open(user.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
+                        Ver boleto
+                      </Button>
+                    )}
                   </div>
                 ) : user?.plano_id ? (
                   <div className="space-y-2">

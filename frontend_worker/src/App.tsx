@@ -12,6 +12,7 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AdminUsuarios = lazy(() => import("./pages/AdminUsuarios"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Planos = lazy(() => import("./pages/Planos"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -56,6 +57,14 @@ const AppRoutes = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <Admin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/usuarios"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminUsuarios />
               </ProtectedRoute>
             }
           />

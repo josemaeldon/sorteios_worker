@@ -616,6 +616,12 @@ const Admin: React.FC = () => {
                 <p className="text-primary-foreground/80 text-sm">Gerencie os acessos do sistema</p>
               </div>
             </div>
+            <div className="ml-auto">
+              <Button variant="secondary" onClick={() => navigate('/admin/usuarios')}>
+                <Users className="h-4 w-4 mr-2" />
+                Usuários e assinaturas
+              </Button>
+            </div>
           </div>
         </div>
       </header>
