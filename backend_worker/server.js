@@ -78,21 +78,6 @@ function resolvePlanVencimentoFromPlan(planLike, startedAt) {
   return result;
 }
 
-async function getStripeBoletoVoucherUrl(stripe, session) {
-  try {
-    const paymentIntentId = typeof session?.payment_intent === 'string'
-      ? session.payment_intent
-      : session?.payment_intent?.id;
-    if (!paymentIntentId) return null;
-
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    return paymentIntent?.next_action?.boleto_display_details?.hosted_voucher_url || null;
-  } catch (err) {
-    console.warn('Could not resolve boleto voucher URL:', err?.message || err);
-    return null;
-  }
-}
-
 async function updateUserPlanPaymentState(dbClient, userId, payload) {
   const fields = [];
   const values = [];
@@ -154,7 +139,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
       event = JSON.parse(req.body.toString());
     }
 
-    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded' || event.type === 'checkout.session.async_payment_failed') {
+    if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
       const userId = session.metadata && session.metadata.user_id;
       const planoId = session.metadata && session.metadata.plano_id;
@@ -173,30 +158,13 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
           const vencimento = plano
             ? resolvePlanVencimentoFromPlan(plano, now)
             : await resolvePlanVencimentoFromStripeSession(stripe, session, now);
-          const isPaid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
-          const isFailed = event.type === 'checkout.session.async_payment_failed';
-          const isPendingBoleto = !isPaid && !isFailed;
-          const method = isPendingBoleto || event.type === 'checkout.session.async_payment_succeeded' || event.type === 'checkout.session.async_payment_failed'
-            ? 'boleto'
-            : 'card';
-
-          if (isPaid) {
-            await updateClient.query(
-              'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, plano_pagamento_status = $4, plano_pagamento_metodo = $5, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $6',
-              [planoId, now, vencimento, 'paid', method, userId]
-            );
-          } else if (isPendingBoleto) {
-            const voucherUrl = await getStripeBoletoVoucherUrl(stripe, session);
-            await updateClient.query(
-              'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = $4, updated_at = NOW() WHERE id = $5',
-              ['pending', method, session.id, voucherUrl, userId]
-            );
-          } else {
-            await updateClient.query(
-              'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $4',
-              ['failed', method, session.id, userId]
-            );
+          if (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
+            return res.json({ received: true });
           }
+          await updateClient.query(
+            'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, plano_pagamento_status = $4, plano_pagamento_metodo = $5, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $6',
+            [planoId, now, vencimento, 'paid', 'card', userId]
+          );
         } finally {
           updateClient.release();
         }
@@ -4195,11 +4163,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         };
 
         const valorCentavos = Math.round(Number(plano.valor) * 100);
-        const paymentMethodTypes = ['card'];
-        if (valorCentavos >= 500) {
-          paymentMethodTypes.push('boleto');
-        }
-        sessionParams.payment_method_types = paymentMethodTypes;
+        sessionParams.payment_method_types = ['card'];
         sessionParams.line_items = [{
           price_data: {
             currency: 'brl',
@@ -4263,17 +4227,6 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const confirmVencimento = confirmPlano
           ? resolvePlanVencimentoFromPlan(confirmPlano, confirmNow)
           : await resolvePlanVencimentoFromStripeSession(confirmStripe, checkoutSession, confirmNow);
-        if (checkoutSession.payment_status === 'unpaid') {
-          await client.query(
-            'UPDATE usuarios SET plano_pagamento_status = $1, plano_pagamento_metodo = $2, plano_pagamento_sessao_id = $3, plano_pagamento_voucher_url = $4, updated_at = NOW() WHERE id = $5',
-            ['pending', 'boleto', checkoutSession.id, await getStripeBoletoVoucherUrl(confirmStripe, checkoutSession), data.authenticated_user_id]
-          );
-          const pendingUserResult = await client.query(
-            'SELECT id, email, nome, role, ativo, titulo_sistema, avatar_url, created_at, updated_at, plano_id, gratuidade_vitalicia, plano_inicio, plano_vencimento, plano_pagamento_status, plano_pagamento_metodo, plano_pagamento_sessao_id, plano_pagamento_voucher_url FROM usuarios WHERE id = $1',
-            [data.authenticated_user_id]
-          );
-          return res.json({ user: pendingUserResult.rows[0], pending: true, message: 'Boleto emitido. Aguarde a compensação do pagamento.' });
-        }
         await client.query(
           'UPDATE usuarios SET plano_id = $1, plano_inicio = $2, plano_vencimento = $3, ativo = true, plano_pagamento_status = $4, plano_pagamento_metodo = $5, plano_pagamento_sessao_id = NULL, plano_pagamento_voucher_url = NULL, updated_at = NOW() WHERE id = $6',
           [sessionPlanoId, confirmNow, confirmVencimento, 'paid', 'card', data.authenticated_user_id]

@@ -780,15 +780,11 @@ const Profile: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-medium">Pagamento pendente</p>
-                        <p className="text-sm">
-                          {user?.plano_pagamento_metodo === 'boleto'
-                            ? 'Seu boleto foi gerado. O plano será ativado quando a Stripe confirmar o pagamento.'
-                            : 'Seu pagamento está em processamento. O plano será ativado assim que a Stripe confirmar.'}
-                        </p>
+                        <p className="text-sm">Seu pagamento está em processamento. O plano será ativado assim que a Stripe confirmar.</p>
                       </div>
                       {user?.plano_pagamento_voucher_url && (
                         <Button size="sm" variant="outline" onClick={() => window.open(user.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
-                          Ver boleto
+                          Ver comprovante
                         </Button>
                       )}
                     </div>
@@ -806,13 +802,11 @@ const Profile: React.FC = () => {
                       <span className="font-medium">Aguardando confirmação do pagamento</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {user?.plano_pagamento_metodo === 'boleto'
-                        ? 'Seu boleto foi emitido e a assinatura será ativada assim que a Stripe confirmar a compensação.'
-                        : 'Seu pagamento está em processamento pela Stripe.'}
+                      Seu pagamento está em processamento pela Stripe.
                     </p>
                     {user?.plano_pagamento_voucher_url && (
                       <Button size="sm" variant="outline" onClick={() => window.open(user.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
-                        Ver boleto
+                        Ver comprovante
                       </Button>
                     )}
                   </div>

@@ -788,7 +788,7 @@ const Admin: React.FC = () => {
                         {u.plano_pagamento_status === 'pending' && (
                           <div className="mt-1 flex flex-col gap-1">
                             <Badge variant="secondary" className="w-fit bg-amber-100 text-amber-900 hover:bg-amber-100">
-                              Boleto pendente
+                              Pagamento pendente
                             </Badge>
                             <span className="text-xs text-muted-foreground">
                               Aguardando confirmação da Stripe
@@ -799,7 +799,7 @@ const Admin: React.FC = () => {
                                 className="h-auto w-fit p-0 text-xs"
                                 onClick={() => window.open(u.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}
                               >
-                                Abrir boleto
+                                Abrir comprovante
                               </Button>
                             )}
                           </div>

@@ -15,7 +15,7 @@ export interface User {
   plano_inicio?: string | null;
   plano_vencimento?: string | null;
   plano_pagamento_status?: 'pending' | 'paid' | 'failed' | null;
-  plano_pagamento_metodo?: 'boleto' | 'card' | 'free' | 'manual' | null;
+  plano_pagamento_metodo?: 'card' | 'free' | 'manual' | null;
   plano_pagamento_sessao_id?: string | null;
   plano_pagamento_voucher_url?: string | null;
 }

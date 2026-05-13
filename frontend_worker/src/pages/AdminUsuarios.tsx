@@ -46,7 +46,7 @@ const AdminUsuarios: React.FC = () => {
   const [selectedPlanId, setSelectedPlanId] = useState<string>(NO_PLAN_VALUE);
   const [extensionDays, setExtensionDays] = useState<string>('0');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'overdue'>('all');
-  const [paymentFilter, setPaymentFilter] = useState<'all' | 'boleto' | 'card'>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'card'>('all');
   const [formData, setFormData] = useState<Partial<CreateUserData>>({
     nome: '',
     email: '',
@@ -88,7 +88,6 @@ const AdminUsuarios: React.FC = () => {
         || (statusFilter === 'pending' && isPending)
         || (statusFilter === 'overdue' && isOverdue);
       const matchesPayment = paymentFilter === 'all'
-        || (paymentFilter === 'boleto' && paymentMethod === 'boleto')
         || (paymentFilter === 'card' && paymentMethod === 'card');
       const haystack = [
         u.nome,
@@ -133,12 +132,11 @@ const AdminUsuarios: React.FC = () => {
     const activeRevenue = activePlanUsers.reduce((sum, u) => sum + getUserPlanValue(u), 0);
     const pendingRevenue = pendingPayments.reduce((sum, u) => sum + getUserPlanValue(u), 0);
     const overdueRevenue = failedPayments.reduce((sum, u) => sum + getUserPlanValue(u), 0);
-    const boletoCount = users.filter((u) => getUserPaymentMethod(u) === 'boleto').length;
     const cardCount = users.filter((u) => getUserPaymentMethod(u) === 'card').length;
     const manualCount = users.filter((u) => getUserPaymentMethod(u) === 'manual').length;
     const freeCount = users.filter((u) => getUserPaymentMethod(u) === 'free').length;
     const activePercent = users.length > 0 ? Math.round((activePlanUsers.length / users.length) * 100) : 0;
-    return { activeRevenue, pendingRevenue, overdueRevenue, boletoCount, cardCount, manualCount, freeCount, activePercent };
+    return { activeRevenue, pendingRevenue, overdueRevenue, cardCount, manualCount, freeCount, activePercent };
   }, [users, activePlanUsers, pendingPayments, failedPayments, planos]);
 
   const formatDate = (date?: string | null) => {
@@ -375,18 +373,6 @@ const AdminUsuarios: React.FC = () => {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Wallet className="h-4 w-4" />
-                Boletos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{financialStats.boletoCount}</div>
-              <p className="text-sm text-muted-foreground">Pagamentos gerados via boleto.</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CreditCard className="h-4 w-4" />
                 Cartão
               </CardTitle>
             </CardHeader>
@@ -417,11 +403,7 @@ const AdminUsuarios: React.FC = () => {
             </CardTitle>
             <CardDescription>Distribuição operacional por método de cobrança.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-lg border p-3">
-              <div className="text-sm text-muted-foreground">Boleto</div>
-              <div className="text-xl font-semibold">{financialStats.boletoCount}</div>
-            </div>
+          <CardContent className="grid gap-3 md:grid-cols-3">
             <div className="rounded-lg border p-3">
               <div className="text-sm text-muted-foreground">Cartão</div>
               <div className="text-xl font-semibold">{financialStats.cardCount}</div>
@@ -451,7 +433,6 @@ const AdminUsuarios: React.FC = () => {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant={paymentFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPaymentFilter('all')}>Todos os meios</Button>
-              <Button variant={paymentFilter === 'boleto' ? 'default' : 'outline'} size="sm" onClick={() => setPaymentFilter('boleto')}>Boleto</Button>
               <Button variant={paymentFilter === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setPaymentFilter('card')}>Cartão</Button>
             </div>
           </CardContent>
@@ -605,7 +586,7 @@ const AdminUsuarios: React.FC = () => {
                     {selectedUser.plano_pagamento_voucher_url && (
                       <Button variant="outline" className="w-full" onClick={() => window.open(selectedUser.plano_pagamento_voucher_url as string, '_blank', 'noopener,noreferrer')}>
                         <ExternalLink className="h-4 w-4 mr-2" />
-                        Abrir boleto
+                        Abrir comprovante
                       </Button>
                     )}
                   </div>
