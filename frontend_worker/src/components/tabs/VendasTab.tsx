@@ -10,6 +10,7 @@ import VendaModal from '@/components/modals/VendaModal';
 import PagamentoModal from '@/components/modals/PagamentoModal';
 import ReciboModal from '@/components/modals/ReciboModal';
 import { useToast } from '@/hooks/use-toast';
+import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,15 +33,46 @@ const VendasTab: React.FC = () => {
     isLoading
   } = useBingo();
   const { toast } = useToast();
+  const vendasTabSnapshot = (getOfflineAppState().bingo?.vendasTab || {}) as Record<string, unknown>;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingVendaId, setEditingVendaId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingVendaId, setDeletingVendaId] = useState<string | null>(null);
-  const [isPagamentoOpen, setIsPagamentoOpen] = useState(false);
-  const [pagamentoVendaId, setPagamentoVendaId] = useState<string | null>(null);
-  const [isReciboOpen, setIsReciboOpen] = useState(false);
-  const [reciboVendaId, setReciboVendaId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(!!vendasTabSnapshot.isModalOpen);
+  const [editingVendaId, setEditingVendaId] = useState<string | null>((vendasTabSnapshot.editingVendaId as string | null) || null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(!!vendasTabSnapshot.deleteDialogOpen);
+  const [deletingVendaId, setDeletingVendaId] = useState<string | null>((vendasTabSnapshot.deletingVendaId as string | null) || null);
+  const [isPagamentoOpen, setIsPagamentoOpen] = useState(!!vendasTabSnapshot.isPagamentoOpen);
+  const [pagamentoVendaId, setPagamentoVendaId] = useState<string | null>((vendasTabSnapshot.pagamentoVendaId as string | null) || null);
+  const [isReciboOpen, setIsReciboOpen] = useState(!!vendasTabSnapshot.isReciboOpen);
+  const [reciboVendaId, setReciboVendaId] = useState<string | null>((vendasTabSnapshot.reciboVendaId as string | null) || null);
+
+  React.useEffect(() => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        vendasTab: {
+          isModalOpen,
+          editingVendaId,
+          deleteDialogOpen,
+          deletingVendaId,
+          isPagamentoOpen,
+          pagamentoVendaId,
+          isReciboOpen,
+          reciboVendaId,
+          filtrosVendas,
+        },
+      },
+    });
+  }, [
+    isModalOpen,
+    editingVendaId,
+    deleteDialogOpen,
+    deletingVendaId,
+    isPagamentoOpen,
+    pagamentoVendaId,
+    isReciboOpen,
+    reciboVendaId,
+    filtrosVendas,
+  ]);
 
   if (!sorteioAtivo) {
     return (

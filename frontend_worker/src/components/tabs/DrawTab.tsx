@@ -30,6 +30,7 @@ import { callApi } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 import { formatarData } from '@/lib/utils/formatters';
 import { getBingoMaxNumber } from '@/lib/utils/bingoCardUtils';
+import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,12 +81,13 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
 const DrawTab: React.FC = () => {
   const { sorteioAtivo, cartelasValidadas, loadCartelasValidadas } = useBingo();
   const { toast } = useToast();
+  const drawTabSnapshot = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
 
   // Winning score = total cells in the grid (cols × rows), defaults to 25 (5×5)
   const winningScore = (sorteioAtivo?.grade_colunas ?? 5) * (sorteioAtivo?.grade_linhas ?? 5);
   
   // Rodadas state
-  const [rodadas, setRodadas] = useState<RodadaSorteio[]>([]);
+  const [rodadas, setRodadas] = useState<RodadaSorteio[]>((drawTabSnapshot.rodadas as RodadaSorteio[]) || []);
   const [isLoadingRodadas, setIsLoadingRodadas] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRodada, setEditingRodada] = useState<RodadaSorteio | null>(null);
@@ -99,30 +101,30 @@ const DrawTab: React.FC = () => {
   });
   
   // Drawing state
-  const [currentNumber, setCurrentNumber] = useState<number | null>(null);
-  const [drawnNumbers, setDrawnNumbers] = useState<number[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [availableNumbers, setAvailableNumbers] = useState<number[]>([]);
+  const [currentNumber, setCurrentNumber] = useState<number | null>((drawTabSnapshot.currentNumber as number | null) ?? null);
+  const [drawnNumbers, setDrawnNumbers] = useState<number[]>((drawTabSnapshot.drawnNumbers as number[]) || []);
+  const [isDrawing, setIsDrawing] = useState<boolean>(!!drawTabSnapshot.isDrawing);
+  const [availableNumbers, setAvailableNumbers] = useState<number[]>((drawTabSnapshot.availableNumbers as number[]) || []);
   const [fontSize, setFontSize] = useState<number>(300);
   const [fullscreenFontSize, setFullscreenFontSize] = useState<number>(FULLSCREEN_FONT_SIZE_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDrawnHistoryFullscreen, setIsDrawnHistoryFullscreen] = useState(false);
-  const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>(null);
-  const [showDrawing, setShowDrawing] = useState(false);
-  const [justDrawn, setJustDrawn] = useState(false);
-  const [vencedoras, setVencedoras] = useState<number[]>([]);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [selectedRodada, setSelectedRodada] = useState<RodadaSorteio | null>((drawTabSnapshot.selectedRodada as RodadaSorteio | null) || null);
+  const [showDrawing, setShowDrawing] = useState(!!drawTabSnapshot.showDrawing);
+  const [justDrawn, setJustDrawn] = useState(!!drawTabSnapshot.justDrawn);
+  const [vencedoras, setVencedoras] = useState<number[]>((drawTabSnapshot.vencedoras as number[]) || []);
+  const [isVerifying, setIsVerifying] = useState<boolean>(!!drawTabSnapshot.isVerifying);
   const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[] } | null>(null);
-  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>([]);
-  const [manualNumberInput, setManualNumberInput] = useState('');
-  const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>([]);
-  const [isQrCodeModalOpen, setIsQrCodeModalOpen] = useState(false);
+  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []);
+  const [manualNumberInput, setManualNumberInput] = useState((drawTabSnapshot.manualNumberInput as string) || '');
+  const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>((drawTabSnapshot.cardsWithGrade as ValidatedCartelaComGrade[]) || []);
+  const [isQrCodeModalOpen, setIsQrCodeModalOpen] = useState(!!drawTabSnapshot.isQrCodeModalOpen);
 
   // Random cartela raffle state
-  const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(false);
-  const [cartelasSorteadasHistory, setCartelasSorteadasHistory] = useState<{ numero: number; nome?: string }[]>([]);
-  const [isCartelaSorteioAnimating, setIsCartelaSorteioAnimating] = useState(false);
-  const [cartelaSorteioPreview, setCartelaSorteioPreview] = useState<number | null>(null);
+  const [isCartelaSorteioModalOpen, setIsCartelaSorteioModalOpen] = useState(!!drawTabSnapshot.isCartelaSorteioModalOpen);
+  const [cartelasSorteadasHistory, setCartelasSorteadasHistory] = useState<{ numero: number; nome?: string }[]>((drawTabSnapshot.cartelasSorteadasHistory as { numero: number; nome?: string }[]) || []);
+  const [isCartelaSorteioAnimating, setIsCartelaSorteioAnimating] = useState(!!drawTabSnapshot.isCartelaSorteioAnimating);
+  const [cartelaSorteioPreview, setCartelaSorteioPreview] = useState<number | null>((drawTabSnapshot.cartelaSorteioPreview as number | null) ?? null);
   const cartelaSorteioIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -132,12 +134,134 @@ const DrawTab: React.FC = () => {
     ? `${window.location.origin}/sorteio-live/${selectedRodada.id}`
     : '';
 
-  useEffect(() => {
-    if (sorteioAtivo) {
-      loadRodadas();
-      loadCartelasValidadas();
-    }
+  const persistDrawTabState = useCallback((patch: Record<string, unknown>) => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+    const currentDrawTab = (currentBingo.drawTab || {}) as Record<string, unknown>;
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        drawTab: {
+          ...currentDrawTab,
+          ...patch,
+          sorteioId: selectedRodada?.sorteio_id || sorteioAtivo?.id || currentDrawTab.sorteioId || null,
+        },
+      },
+    });
+  }, [selectedRodada?.sorteio_id, sorteioAtivo?.id]);
+
+  const resetDrawTabState = useCallback(() => {
+    setSelectedRodada(null);
+    setShowDrawing(false);
+    setCurrentNumber(null);
+    setDrawnNumbers([]);
+    setIsDrawing(false);
+    setJustDrawn(false);
+    setVencedoras([]);
+    setGanhadoresPop([]);
+    setManualNumberInput('');
+    setCardsWithGrade([]);
+    setIsQrCodeModalOpen(false);
+    setIsCartelaSorteioModalOpen(false);
     setCartelasSorteadasHistory([]);
+    setIsCartelaSorteioAnimating(false);
+    setCartelaSorteioPreview(null);
+    setAvailableNumbers([]);
+    persistDrawTabState({
+      selectedRodada: null,
+      showDrawing: false,
+      currentNumber: null,
+      drawnNumbers: [],
+      isDrawing: false,
+      justDrawn: false,
+      vencedoras: [],
+      ganhadoresPop: [],
+      manualNumberInput: '',
+      cardsWithGrade: [],
+      isQrCodeModalOpen: false,
+      isCartelaSorteioModalOpen: false,
+      cartelasSorteadasHistory: [],
+      isCartelaSorteioAnimating: false,
+      cartelaSorteioPreview: null,
+      availableNumbers: [],
+      sorteioId: null,
+    });
+  }, [persistDrawTabState]);
+
+  useEffect(() => {
+    persistDrawTabState({
+      rodadas,
+      selectedRodada,
+      showDrawing,
+      currentNumber,
+      drawnNumbers,
+      isDrawing,
+      availableNumbers,
+      justDrawn,
+      vencedoras,
+      isVerifying,
+      ganhadoresPop,
+      manualNumberInput,
+      cardsWithGrade,
+      isQrCodeModalOpen,
+      isCartelaSorteioModalOpen,
+      cartelasSorteadasHistory,
+      isCartelaSorteioAnimating,
+      cartelaSorteioPreview,
+    });
+  }, [
+    persistDrawTabState,
+    rodadas,
+    selectedRodada,
+    showDrawing,
+    currentNumber,
+    drawnNumbers,
+    isDrawing,
+    availableNumbers,
+    justDrawn,
+    vencedoras,
+    isVerifying,
+    ganhadoresPop,
+    manualNumberInput,
+    cardsWithGrade,
+    isQrCodeModalOpen,
+    isCartelaSorteioModalOpen,
+    cartelasSorteadasHistory,
+    isCartelaSorteioAnimating,
+    cartelaSorteioPreview,
+  ]);
+
+  useEffect(() => {
+    if (!sorteioAtivo) return;
+
+    const offlineDrawTab = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
+    const snapshotSorteioId = offlineDrawTab.sorteioId as string | undefined;
+    const matchesSnapshot = !snapshotSorteioId || snapshotSorteioId === sorteioAtivo.id;
+
+    if (matchesSnapshot) {
+      if (Array.isArray(offlineDrawTab.rodadas)) setRodadas(offlineDrawTab.rodadas as RodadaSorteio[]);
+      if (offlineDrawTab.selectedRodada) setSelectedRodada(offlineDrawTab.selectedRodada as RodadaSorteio);
+      if (typeof offlineDrawTab.showDrawing === 'boolean') setShowDrawing(offlineDrawTab.showDrawing);
+      if (typeof offlineDrawTab.currentNumber === 'number' || offlineDrawTab.currentNumber === null) setCurrentNumber(offlineDrawTab.currentNumber as number | null);
+      if (Array.isArray(offlineDrawTab.drawnNumbers)) setDrawnNumbers(offlineDrawTab.drawnNumbers as number[]);
+      if (Array.isArray(offlineDrawTab.availableNumbers)) setAvailableNumbers(offlineDrawTab.availableNumbers as number[]);
+      if (typeof offlineDrawTab.isDrawing === 'boolean') setIsDrawing(offlineDrawTab.isDrawing);
+      if (typeof offlineDrawTab.justDrawn === 'boolean') setJustDrawn(offlineDrawTab.justDrawn);
+      if (Array.isArray(offlineDrawTab.vencedoras)) setVencedoras(offlineDrawTab.vencedoras as number[]);
+      if (typeof offlineDrawTab.isVerifying === 'boolean') setIsVerifying(offlineDrawTab.isVerifying);
+      if (Array.isArray(offlineDrawTab.ganhadoresPop)) setGanhadoresPop(offlineDrawTab.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]);
+      if (typeof offlineDrawTab.manualNumberInput === 'string') setManualNumberInput(offlineDrawTab.manualNumberInput);
+      if (Array.isArray(offlineDrawTab.cardsWithGrade)) setCardsWithGrade(offlineDrawTab.cardsWithGrade as ValidatedCartelaComGrade[]);
+      if (typeof offlineDrawTab.isQrCodeModalOpen === 'boolean') setIsQrCodeModalOpen(offlineDrawTab.isQrCodeModalOpen);
+      if (typeof offlineDrawTab.isCartelaSorteioModalOpen === 'boolean') setIsCartelaSorteioModalOpen(offlineDrawTab.isCartelaSorteioModalOpen);
+      if (Array.isArray(offlineDrawTab.cartelasSorteadasHistory)) setCartelasSorteadasHistory(offlineDrawTab.cartelasSorteadasHistory as { numero: number; nome?: string }[]);
+      if (typeof offlineDrawTab.isCartelaSorteioAnimating === 'boolean') setIsCartelaSorteioAnimating(offlineDrawTab.isCartelaSorteioAnimating);
+      if (typeof offlineDrawTab.cartelaSorteioPreview === 'number' || offlineDrawTab.cartelaSorteioPreview === null) setCartelaSorteioPreview(offlineDrawTab.cartelaSorteioPreview as number | null);
+    } else {
+      resetDrawTabState();
+    }
+
+    void loadRodadas();
+    void loadCartelasValidadas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sorteioAtivo?.id]);
 

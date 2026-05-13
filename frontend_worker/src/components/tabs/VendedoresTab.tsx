@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { formatarMoeda, getStatusLabel } from '@/lib/utils/formatters';
 import VendedorModal from '@/components/modals/VendedorModal';
 import { useToast } from '@/hooks/use-toast';
+import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,11 +32,28 @@ const VendedoresTab: React.FC = () => {
     isLoading
   } = useBingo();
   const { toast } = useToast();
+  const vendedoresTabSnapshot = (getOfflineAppState().bingo?.vendedoresTab || {}) as Record<string, unknown>;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingVendedorId, setEditingVendedorId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingVendedorId, setDeletingVendedorId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(!!vendedoresTabSnapshot.isModalOpen);
+  const [editingVendedorId, setEditingVendedorId] = useState<string | null>((vendedoresTabSnapshot.editingVendedorId as string | null) || null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(!!vendedoresTabSnapshot.deleteDialogOpen);
+  const [deletingVendedorId, setDeletingVendedorId] = useState<string | null>((vendedoresTabSnapshot.deletingVendedorId as string | null) || null);
+
+  React.useEffect(() => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        vendedoresTab: {
+          isModalOpen,
+          editingVendedorId,
+          deleteDialogOpen,
+          deletingVendedorId,
+          filtrosVendedores,
+        },
+      },
+    });
+  }, [isModalOpen, editingVendedorId, deleteDialogOpen, deletingVendedorId, filtrosVendedores]);
 
   if (!sorteioAtivo) {
     return (

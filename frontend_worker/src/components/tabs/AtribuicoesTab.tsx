@@ -25,6 +25,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { getOfflineAppState, patchOfflineAppState } from '@/lib/offlineMode';
 
 const AtribuicoesTab: React.FC = () => {
   const { 
@@ -38,18 +39,51 @@ const AtribuicoesTab: React.FC = () => {
     updateCartelaStatusInAtribuicao
   } = useBingo();
   const { toast } = useToast();
+  const atribuicoesTabSnapshot = (getOfflineAppState().bingo?.atribuicoesTab || {}) as Record<string, unknown>;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAtribuicao, setEditingAtribuicao] = useState<Atribuicao | null>(null);
-  const [expandedAtribuicao, setExpandedAtribuicao] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingAtribuicao, setDeletingAtribuicao] = useState<{ id: string; vendedorId: string; cartela?: number } | null>(null);
-  const [actionType, setActionType] = useState<'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar'>('excluir-atribuicao');
+  const [isModalOpen, setIsModalOpen] = useState(!!atribuicoesTabSnapshot.isModalOpen);
+  const [editingAtribuicao, setEditingAtribuicao] = useState<Atribuicao | null>((atribuicoesTabSnapshot.editingAtribuicao as Atribuicao | null) || null);
+  const [expandedAtribuicao, setExpandedAtribuicao] = useState<string | null>((atribuicoesTabSnapshot.expandedAtribuicao as string | null) || null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(!!atribuicoesTabSnapshot.deleteDialogOpen);
+  const [deletingAtribuicao, setDeletingAtribuicao] = useState<{ id: string; vendedorId: string; cartela?: number } | null>((atribuicoesTabSnapshot.deletingAtribuicao as { id: string; vendedorId: string; cartela?: number } | null) || null);
+  const [actionType, setActionType] = useState<'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar'>((atribuicoesTabSnapshot.actionType as 'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar') || 'excluir-atribuicao');
   
   // Transfer modal state
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [transferAtribuicao, setTransferAtribuicao] = useState<Atribuicao | null>(null);
-  const [transferCartelaNumero, setTransferCartelaNumero] = useState<number | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(!!atribuicoesTabSnapshot.isTransferModalOpen);
+  const [transferAtribuicao, setTransferAtribuicao] = useState<Atribuicao | null>((atribuicoesTabSnapshot.transferAtribuicao as Atribuicao | null) || null);
+  const [transferCartelaNumero, setTransferCartelaNumero] = useState<number | null>((atribuicoesTabSnapshot.transferCartelaNumero as number | null) || null);
+
+  React.useEffect(() => {
+    const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
+    patchOfflineAppState({
+      bingo: {
+        ...currentBingo,
+        atribuicoesTab: {
+          isModalOpen,
+          editingAtribuicao,
+          expandedAtribuicao,
+          deleteDialogOpen,
+          deletingAtribuicao,
+          actionType,
+          isTransferModalOpen,
+          transferAtribuicao,
+          transferCartelaNumero,
+          filtrosAtribuicoes,
+        },
+      },
+    });
+  }, [
+    isModalOpen,
+    editingAtribuicao,
+    expandedAtribuicao,
+    deleteDialogOpen,
+    deletingAtribuicao,
+    actionType,
+    isTransferModalOpen,
+    transferAtribuicao,
+    transferCartelaNumero,
+    filtrosAtribuicoes,
+  ]);
 
   if (!sorteioAtivo) {
     return (
