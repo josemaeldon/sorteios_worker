@@ -68,14 +68,44 @@ type RankingCartela = {
   score: number;
 };
 
-const normalizeNumerosGrade = (raw: unknown): number[][] => {
+const chunkFlatGrid = (flat: number[], columns: number): number[][] => {
+  if (!Array.isArray(flat) || flat.length === 0 || columns <= 0) return [];
+  const rows: number[][] = [];
+  for (let i = 0; i < flat.length; i += columns) {
+    rows.push(flat.slice(i, i + columns));
+  }
+  return rows.filter((row) => row.length > 0);
+};
+
+const extractGradeMatrices = (raw: unknown, columns = 5, rows = 5): number[][][] => {
   if (!raw) return [];
   const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
   if (!Array.isArray(parsed) || parsed.length === 0) return [];
-  if (Array.isArray(parsed[0])) return (parsed as unknown[])
-    .map(row => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
-    .filter((row) => row.length > 0);
-  return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+  const toNumbers = (value: unknown): number[] => Array.isArray(value)
+    ? value.map((n) => Number(n)).filter((n) => !Number.isNaN(n))
+    : [];
+
+  const parsedArray = parsed as unknown[];
+  if (!Array.isArray(parsedArray[0])) {
+    const flat = parsedArray.map((n) => Number(n)).filter((n) => !Number.isNaN(n));
+    return flat.length > 0 ? [chunkFlatGrid(flat, columns || rows || 5)] : [];
+  }
+
+  const looksLikeMatrix = parsedArray.length === rows && parsedArray.every((row) => Array.isArray(row) && toNumbers(row).length <= columns);
+  if (looksLikeMatrix) {
+    const matrix = parsedArray.map((row) => toNumbers(row)).filter((row) => row.length > 0);
+    return matrix.length > 0 ? [matrix] : [];
+  }
+
+  return parsedArray
+    .map((grid) => {
+      const numbers = toNumbers(grid);
+      if (numbers.length === 0) return [];
+      if (numbers.length === rows * columns) return chunkFlatGrid(numbers, columns);
+      if (numbers.length <= columns) return [numbers];
+      return chunkFlatGrid(numbers, columns);
+    })
+    .filter((grid) => Array.isArray(grid) && grid.length > 0) as number[][][];
 };
 
 const isQuinaWinner = (grade: number[][], drawnSet: Set<number>): boolean => {
@@ -114,6 +144,8 @@ const DrawTab: React.FC = () => {
   const { toast } = useToast();
   const drawTabSnapshot = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
   const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
+  const gridColumns = sorteioAtivo?.grade_colunas ?? 5;
+  const gridRows = sorteioAtivo?.grade_linhas ?? 5;
 
   // Rodadas state
   const [rodadas, setRodadas] = useState<RodadaSorteio[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.rodadas as RodadaSorteio[]) || []) : []);
@@ -540,30 +572,30 @@ const DrawTab: React.FC = () => {
       const mergedByNumero = new Map<number, ValidatedCartelaComGrade>();
 
       for (const card of validatedWithGradeData) {
-        const normalized = normalizeNumerosGrade(card?.numeros_grade);
-        if (normalized.length > 0) {
-          mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
+        const matrices = extractGradeMatrices(card?.numeros_grade, gridColumns, gridRows);
+        if (matrices.length > 0) {
+          mergedByNumero.set(card.numero, { ...card, numeros_grade: matrices[0] });
         }
       }
 
       for (const card of allCardsData) {
         if (!validatedNumbers.has(card.numero)) continue;
         if (mergedByNumero.has(card.numero)) continue;
-        const normalized = normalizeNumerosGrade(card?.numeros_grade);
-        if (normalized.length === 0) continue;
-        mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
+        const matrices = extractGradeMatrices(card?.numeros_grade, gridColumns, gridRows);
+        if (matrices.length === 0) continue;
+        mergedByNumero.set(card.numero, { ...card, numeros_grade: matrices[0] });
       }
 
       const missingValidated = freshValidadas.filter((cv) => !mergedByNumero.has(cv.numero));
       for (const cv of missingValidated) {
         try {
           const res = await callApi('getCartelaDetalhe', { sorteio_id: sorteioAtivo.id, numero: cv.numero });
-          const normalized = normalizeNumerosGrade(res?.data?.numeros_grade);
-          if (normalized.length === 0) continue;
+          const matrices = extractGradeMatrices(res?.data?.numeros_grade, gridColumns, gridRows);
+          if (matrices.length === 0) continue;
           mergedByNumero.set(cv.numero, {
             numero: cv.numero,
             comprador_nome: cv.comprador_nome || res?.data?.comprador_nome,
-            numeros_grade: normalized,
+            numeros_grade: matrices[0],
           });
         } catch (_err) {
           // ignore individual cartela detail failure
@@ -572,10 +604,10 @@ const DrawTab: React.FC = () => {
 
       const persistedGradeCards = (cartelasComGrade as unknown as ValidatedCartelaComGrade[]) || [];
       for (const card of persistedGradeCards) {
-        const normalized = normalizeNumerosGrade(card?.numeros_grade);
-        if (normalized.length === 0) continue;
+        const matrices = extractGradeMatrices(card?.numeros_grade, gridColumns, gridRows);
+        if (matrices.length === 0) continue;
         if (!mergedByNumero.has(card.numero)) {
-          mergedByNumero.set(card.numero, { ...card, numeros_grade: normalized });
+          mergedByNumero.set(card.numero, { ...card, numeros_grade: matrices[0] });
         }
       }
 
@@ -883,11 +915,11 @@ const DrawTab: React.FC = () => {
     return source
       .filter((card) => validatedNumbers.has(Number(card.numero)))
       .map((card) => {
-        const normalized = normalizeNumerosGrade(card.numeros_grade);
-        return { ...card, numeros_grade: normalized };
+        const matrices = extractGradeMatrices(card.numeros_grade, gridColumns, gridRows);
+        return { ...card, numeros_grade: matrices[0] || [] };
       })
       .filter((card) => card.numeros_grade.length > 0);
-  }, [cardsWithGrade, cartelasComGrade, cartelasValidadas, shouldHydrateOfflineState]);
+  }, [cardsWithGrade, cartelasComGrade, cartelasValidadas, gridColumns, gridRows]);
 
   const handleCartelaClick = (numero: number, nome?: string) => {
     const cartela = rankingCardsWithGrade.find(c => c.numero === numero);
@@ -946,7 +978,7 @@ const DrawTab: React.FC = () => {
 
     return rankingCardsWithGrade
       .filter((card) => {
-        const grids = normalizeNumerosGrade(card.numeros_grade);
+        const grids = extractGradeMatrices(card.numeros_grade, gridColumns, gridRows);
         if (grids.length === 0) return false;
         if (victoryMode === 'quina') {
           return grids.some((grid) => Array.isArray(grid) && isQuinaWinner(grid, drawnSet));
@@ -958,7 +990,7 @@ const DrawTab: React.FC = () => {
         });
       })
       .map((card) => ({ numero: card.numero, nome: card.comprador_nome }));
-  }, [drawnNumbers, rankingCardsWithGrade, selectedRodada, cartelasValidadas, sorteioAtivo?.tipo]);
+  }, [drawnNumbers, rankingCardsWithGrade, selectedRodada, cartelasValidadas, sorteioAtivo?.tipo, gridColumns, gridRows]);
 
   // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
   const groupedTop = useMemo(() => {

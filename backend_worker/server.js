@@ -1933,7 +1933,16 @@ app.post('/api', checkBasicAuth, async (req, res) => {
   try {
     let result;
 
-    const normalizeGrade = (raw) => {
+    const chunkFlatGrid = (flat, columns) => {
+      if (!Array.isArray(flat) || flat.length === 0 || columns <= 0) return [];
+      const rows = [];
+      for (let i = 0; i < flat.length; i += columns) {
+        rows.push(flat.slice(i, i + columns).map((n) => Number(n)).filter((n) => !Number.isNaN(n)));
+      }
+      return rows.filter((row) => row.length > 0);
+    };
+
+    const extractGradeMatrices = (raw, columns = 5, rows = 5) => {
       if (!raw) return [];
       let parsed = raw;
       if (typeof parsed === 'string') {
@@ -1944,20 +1953,43 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         }
       }
       if (!Array.isArray(parsed) || parsed.length === 0) return [];
-      if (typeof parsed[0] === 'number') {
-        return [parsed.map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+
+      const toMatrix = (grid) => {
+        if (!Array.isArray(grid) || grid.length === 0) return [];
+        if (!Array.isArray(grid[0])) {
+          const flat = grid.map((n) => Number(n)).filter((n) => !Number.isNaN(n));
+          return chunkFlatGrid(flat, columns);
+        }
+        return grid
+          .map((row) => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
+          .filter((row) => row.length > 0);
+      };
+
+      const parsedArray = parsed;
+      const looksLikeMatrix = parsedArray.length === rows
+        && parsedArray.every((row) => Array.isArray(row) && row.length <= columns);
+
+      if (looksLikeMatrix) {
+        const matrix = toMatrix(parsedArray);
+        return matrix.length > 0 ? [matrix] : [];
       }
-      return parsed
-        .map((row) => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
-        .filter((row) => row.length > 0);
+
+      if (!Array.isArray(parsedArray[0])) {
+        const flat = parsedArray.map((n) => Number(n)).filter((n) => !Number.isNaN(n));
+        return flat.length > 0 ? [chunkFlatGrid(flat, columns)] : [];
+      }
+
+      return parsedArray
+        .map((grid) => toMatrix(grid))
+        .filter((grid) => Array.isArray(grid) && grid.length > 0);
     };
 
-        const isWinningLine = (grade, drawnSet) => {
-          if (!Array.isArray(grade) || grade.length === 0) return false;
-          const rows = normalizeGrade(grade).filter(Array.isArray);
-          if (rows.length === 0) return false;
-          const maxCols = Math.max(...rows.map((row) => row.length), 0);
-          if (maxCols === 0) return false;
+    const isWinningLine = (grid, drawnSet) => {
+      if (!Array.isArray(grid) || grid.length === 0) return false;
+      const rows = grid.filter(Array.isArray);
+      if (rows.length === 0) return false;
+      const maxCols = Math.max(...rows.map((row) => row.length), 0);
+      if (maxCols === 0) return false;
 
       for (const row of rows) {
         const filled = row.filter((n) => Number(n) > 0);
@@ -1978,13 +2010,16 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       return false;
     };
 
-        const isWinnerForMode = (grade, drawnSet, mode) => {
-          if (String(mode || '') === 'quina') {
-            return isWinningLine(grade, drawnSet);
-          }
-          const rows = normalizeGrade(grade);
-          const allNums = [...new Set(rows.flatMap((row) => row.filter((n) => Number(n) !== 0)))];
-      return allNums.length > 0 && allNums.every((n) => drawnSet.has(Number(n)));
+    const isWinnerForMode = (grids, drawnSet, mode) => {
+      if (!Array.isArray(grids) || grids.length === 0) return false;
+      if (String(mode || '') === 'quina') {
+        return grids.some((grid) => isWinningLine(grid, drawnSet));
+      }
+      return grids.some((grid) => {
+        if (!Array.isArray(grid) || grid.length === 0) return false;
+        const allNums = [...new Set(grid.flatMap((row) => Array.isArray(row) ? row : []).filter((n) => Number(n) !== 0))];
+        return allNums.length > 0 && allNums.every((n) => drawnSet.has(Number(n)));
+      });
     };
 
     if (authResult.user && authResult.user.role !== 'admin') {
@@ -3026,6 +3061,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           return res.status(404).json({ error: 'Rodada não encontrada.' });
         }
         const rodadaRow = result.rows[0];
+        const gradeCols = Number(rodadaRow.grade_colunas || 5) || 5;
+        const gradeRows = Number(rodadaRow.grade_linhas || 5) || 5;
         const historico = await client.query(
           'SELECT numero_sorteado, ordem, data_sorteio FROM sorteio_historico WHERE rodada_id = $1 ORDER BY ordem ASC',
           [data.rodada_id]
@@ -3062,18 +3099,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         // Build Top10 grouped by score (each entry: { score, cartelas: [numero], count })
         const isRifa = String(rodadaRow.tipo || '') === 'rifa' || !!rodadaRow.apenas_numero_rifa;
         const perCard = normalizedCards.map(c => {
+          const grids = extractGradeMatrices(c.numeros_grade, gradeCols, gradeRows);
           let score = 0;
           if (isRifa) {
             score = drawnSet.has(Number(c.numero)) ? 1 : 0;
           } else {
-            const allNums = [...new Set((c.numeros_grade || []).flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []))];
+            const allNums = [...new Set(grids.flatMap((grid) => grid.flatMap((row) => Array.isArray(row) ? row : [])))];
             score = allNums.filter(n => drawnSet.has(Number(n))).length;
           }
           return {
             numero: c.numero,
             nome: c.comprador_nome,
             score,
-            winner: isRifa ? drawnSet.has(Number(c.numero)) : isWinnerForMode(c.numeros_grade, drawnSet, rodadaRow.tipo_vitoria),
+            winner: isRifa ? drawnSet.has(Number(c.numero)) : isWinnerForMode(grids, drawnSet, rodadaRow.tipo_vitoria),
           };
         }).filter(c => c.score > 0);
 
@@ -3709,6 +3747,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         );
         const tipoVitoria = rodadaInfo.rows[0]?.tipo_vitoria || 'bingo';
         const isRifa = String(rodadaInfo.rows[0]?.sorteio_tipo || '') === 'rifa' || !!rodadaInfo.rows[0]?.apenas_numero_rifa;
+        const gradeCols = Number(rodadaInfo.rows[0]?.grade_colunas || 5) || 5;
+        const gradeRows = Number(rodadaInfo.rows[0]?.grade_linhas || 5) || 5;
         const cartelasResult = await client.query(
           `SELECT c.numero, c.numeros_grade
            FROM cartelas c
@@ -3731,7 +3771,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             }
             continue;
           }
-          const grade = normalizeGrade(raw);
+          const grade = extractGradeMatrices(raw, gradeCols, gradeRows);
           if (grade.length === 0) continue;
           if (isWinnerForMode(grade, numerosSet, tipoVitoria)) {
             vencedoras.push(row.numero);
