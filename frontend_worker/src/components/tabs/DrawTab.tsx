@@ -1476,7 +1476,7 @@ const DrawTab: React.FC = () => {
             </div>
           )}
 
-          {!isFullscreen && drawnNumbers.length > 0 && (
+          {!isFullscreen && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
@@ -1495,30 +1495,34 @@ const DrawTab: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {drawnNumbers.map((num, index) => (
-                    <div
-                      key={num}
-                      className={cn(
-                        "relative flex items-center justify-center w-16 h-16 rounded-lg font-bold text-xl border-2 transition-all duration-300 group",
-                        num === currentNumber && !isDrawing
-                          ? "bg-primary text-primary-foreground border-primary scale-110"
-                          : "bg-muted text-foreground border-border"
-                      )}
-                    >
-                      <span className="absolute top-0.5 left-1 text-[9px] font-normal opacity-50 leading-none">{index + 1}º</span>
-                      {num}
-                      <button
-                        onClick={() => removeDrawnNumber(num)}
-                        disabled={isDrawing}
-                        className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] leading-none shadow"
-                        title={`Excluir número ${num}`}
+                {drawnNumbers.length === 0 ? (
+                  <p className="text-muted-foreground">Nenhum número sorteado ainda.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {drawnNumbers.map((num, index) => (
+                      <div
+                        key={num}
+                        className={cn(
+                          "relative flex items-center justify-center w-16 h-16 rounded-lg font-bold text-xl border-2 transition-all duration-300 group",
+                          num === currentNumber && !isDrawing
+                            ? "bg-primary text-primary-foreground border-primary scale-110"
+                            : "bg-muted text-foreground border-border"
+                        )}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                        <span className="absolute top-0.5 left-1 text-[9px] font-normal opacity-50 leading-none">{index + 1}º</span>
+                        {num}
+                        <button
+                          onClick={() => removeDrawnNumber(num)}
+                          disabled={isDrawing}
+                          className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] leading-none shadow"
+                          title={`Excluir número ${num}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1553,15 +1557,17 @@ const DrawTab: React.FC = () => {
             </Card>
           </div>
 
-          {cartelasSorteadasHistory.length > 0 && (
-            <Card className="border-2 border-primary">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <Ticket className="w-5 h-5" />
-                  Cartelas Sorteadas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+          <Card className="border-2 border-primary">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-primary">
+                <Ticket className="w-5 h-5" />
+                Cartelas Sorteadas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {cartelasSorteadasHistory.length === 0 ? (
+                <p className="text-muted-foreground">Nenhuma cartela sorteada ainda.</p>
+              ) : (
                 <div className="space-y-1 max-h-[300px] overflow-y-auto">
                   {cartelasSorteadasHistory.map((cartela, idx) => (
                     <div key={idx} className={cn("flex items-center gap-2 py-1.5 px-2 rounded", idx === 0 && "bg-primary/10")}>
@@ -1575,9 +1581,9 @@ const DrawTab: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           </div>
 
