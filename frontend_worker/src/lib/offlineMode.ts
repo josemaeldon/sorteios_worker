@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clearLocalStoragePrefix, safeLocalStorageRemoveItem, safeLocalStorageSetItem } from './storageUtils';
 
 const OFFLINE_MODE_KEY = 'sorteios_offline_mode_enabled';
 const OFFLINE_QUEUE_KEY = 'sorteios_offline_queue_v1';
@@ -27,14 +28,14 @@ const readBoolean = (key: string): boolean => localStorage.getItem(key) === 'tru
 export const isOfflineModeEnabled = (): boolean => readBoolean(OFFLINE_MODE_KEY);
 
 export const setOfflineModeEnabled = (enabled: boolean): void => {
-  localStorage.setItem(OFFLINE_MODE_KEY, enabled ? 'true' : 'false');
+  safeLocalStorageSetItem(OFFLINE_MODE_KEY, enabled ? 'true' : 'false');
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_MODE, { detail: { enabled } }));
 };
 
 export const clearOfflineSessionState = (): void => {
-  localStorage.removeItem(OFFLINE_QUEUE_KEY);
-  localStorage.removeItem(OFFLINE_SYNCING_KEY);
-  localStorage.removeItem(OFFLINE_APP_STATE_KEY);
+  safeLocalStorageRemoveItem(OFFLINE_QUEUE_KEY);
+  safeLocalStorageRemoveItem(OFFLINE_SYNCING_KEY);
+  safeLocalStorageRemoveItem(OFFLINE_APP_STATE_KEY);
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_QUEUE, { detail: { size: 0 } }));
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_SYNC_STATE, { detail: { syncing: false } }));
 };
@@ -57,14 +58,18 @@ export const getOfflineQueue = (): OfflineQueueItem[] => {
 };
 
 export const setOfflineQueue = (queue: OfflineQueueItem[]): void => {
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue.slice(-500)));
+  const payload = JSON.stringify(queue.slice(-200));
+  if (!safeLocalStorageSetItem(OFFLINE_QUEUE_KEY, payload)) {
+    clearLocalStoragePrefix('sorteios_offline_cache_v1:');
+    safeLocalStorageSetItem(OFFLINE_QUEUE_KEY, payload);
+  }
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_QUEUE, { detail: { size: queue.length } }));
 };
 
 export const isOfflineSyncing = (): boolean => readBoolean(OFFLINE_SYNCING_KEY);
 
 export const setOfflineSyncing = (syncing: boolean): void => {
-  localStorage.setItem(OFFLINE_SYNCING_KEY, syncing ? 'true' : 'false');
+  safeLocalStorageSetItem(OFFLINE_SYNCING_KEY, syncing ? 'true' : 'false');
   window.dispatchEvent(new CustomEvent(OFFLINE_EVENT_SYNC_STATE, { detail: { syncing } }));
 };
 
@@ -80,7 +85,34 @@ export const getOfflineAppState = (): OfflineAppState => {
 };
 
 export const setOfflineAppState = (state: OfflineAppState): void => {
-  localStorage.setItem(OFFLINE_APP_STATE_KEY, JSON.stringify(state));
+  const payload = JSON.stringify(state);
+  if (safeLocalStorageSetItem(OFFLINE_APP_STATE_KEY, payload)) return;
+
+  const next = { ...state } as OfflineAppState;
+  const auth = (next.auth || {}) as Record<string, unknown>;
+  const bingo = (next.bingo || {}) as Record<string, unknown>;
+  const drawTab = (bingo.drawTab || {}) as Record<string, unknown>;
+
+  delete auth.users;
+  delete auth.planos;
+  delete auth.lojaCompradores;
+  delete auth.cartelasCompradorByEmail;
+  delete bingo.cartelasComGrade;
+  delete drawTab.cardsWithGrade;
+
+  const pruned: OfflineAppState = {
+    ...next,
+    auth,
+    bingo: {
+      ...bingo,
+      drawTab,
+    },
+  };
+
+  if (!safeLocalStorageSetItem(OFFLINE_APP_STATE_KEY, JSON.stringify(pruned))) {
+    clearLocalStoragePrefix('sorteios_offline_cache_v1:');
+    safeLocalStorageSetItem(OFFLINE_APP_STATE_KEY, JSON.stringify(pruned));
+  }
 };
 
 export const patchOfflineAppState = (patch: Partial<OfflineAppState>): OfflineAppState => {

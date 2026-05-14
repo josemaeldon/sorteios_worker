@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
 import { OFFLINE_EVENT_NAMES, getOfflineAppState, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
+import { safeLocalStorageRemoveItem, safeLocalStorageSetItem } from '@/lib/storageUtils';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { useNavigate } from 'react-router-dom';
@@ -90,6 +91,10 @@ const getDaysUntilDate = (date: Date): number => {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 };
 
+const safeSetAuthUser = (value: User): void => {
+  safeLocalStorageSetItem(AUTH_KEY, JSON.stringify(value));
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -113,11 +118,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const result = await callApi('getMyProfile');
           if (result.user) {
             setUser(result.user);
-            localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+            safeSetAuthUser(result.user);
           }
         } catch (e) {
           if (!isOfflineModeEnabled()) {
-            localStorage.removeItem(AUTH_KEY);
+            safeLocalStorageRemoveItem(AUTH_KEY);
             clearStoredToken();
           }
         }
@@ -169,7 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (result.user) {
         setUser(result.user);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        safeSetAuthUser(result.user);
         updateOfflineAuthSnapshot({ user: result.user });
         toast({
           title: "Administrador criado",
@@ -193,7 +198,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.user && result.token) {
         setUser(result.user);
         setToken(result.token);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        safeSetAuthUser(result.user);
         setStoredToken(result.token);
         updateOfflineAuthSnapshot({ user: result.user });
         toast({
@@ -214,7 +219,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem(AUTH_KEY);
+    safeLocalStorageRemoveItem(AUTH_KEY);
     clearStoredToken();
     toast({
       title: "Logout realizado",
@@ -228,7 +233,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.success && result.user && result.token) {
         setUser(result.user);
         setToken(result.token);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        safeSetAuthUser(result.user);
         setStoredToken(result.token);
         updateOfflineAuthSnapshot({ user: result.user });
         toast({
@@ -415,7 +420,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           avatar_url: data.avatar_url 
         };
         setUser(updatedUser);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+        safeSetAuthUser(result.user);
         updateOfflineAuthSnapshot({ user: updatedUser });
         return { success: true };
       }
@@ -840,7 +845,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('getMyProfile');
       if (result.user) {
         setUser(result.user);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        safeSetAuthUser(result.user);
         updateOfflineAuthSnapshot({ user: result.user });
       }
     } catch (error) {
@@ -877,7 +882,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await callApi('confirmStripeCheckout', { session_id: sessionId });
       if (result.user) {
         setUser(result.user);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(result.user));
+        safeSetAuthUser(result.user);
         updateOfflineAuthSnapshot({ user: result.user });
         return { success: true, pending: !!result.pending, message: result.message };
       }

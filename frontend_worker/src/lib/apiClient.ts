@@ -11,6 +11,7 @@ import {
   setOfflineQueue,
   setOfflineSyncing,
 } from './offlineMode';
+import { clearLocalStoragePrefix, safeLocalStorageSetItem } from './storageUtils';
 
 interface ApiConfig {
   baseUrl: string;
@@ -49,11 +50,18 @@ export const getStoredToken = (): string | null => {
 };
 
 export const setStoredToken = (token: string): void => {
-  localStorage.setItem(TOKEN_KEY, token);
+  if (!safeLocalStorageSetItem(TOKEN_KEY, token)) {
+    clearLocalStoragePrefix(OFFLINE_CACHE_PREFIX);
+    safeLocalStorageSetItem(TOKEN_KEY, token);
+  }
 };
 
 export const clearStoredToken = (): void => {
-  localStorage.removeItem(TOKEN_KEY);
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Ignore remove failures.
+  }
 };
 
 // Build authorization header
@@ -197,7 +205,12 @@ const readCachedResponse = (action: string, data: Record<string, unknown>): unkn
 
 const writeCachedResponse = (action: string, data: Record<string, unknown>, response: unknown): void => {
   try {
-    localStorage.setItem(getCacheKey(action, data), JSON.stringify(response));
+    const payload = JSON.stringify(response);
+    if (payload.length > 100_000) return;
+    if (!safeLocalStorageSetItem(getCacheKey(action, data), payload)) {
+      clearLocalStoragePrefix(OFFLINE_CACHE_PREFIX);
+      safeLocalStorageSetItem(getCacheKey(action, data), payload);
+    }
   } catch {
     // Ignore cache write failures.
   }
