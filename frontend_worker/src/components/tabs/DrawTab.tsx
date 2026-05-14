@@ -729,9 +729,19 @@ const DrawTab: React.FC = () => {
   const toggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement) {
-        await fullscreenRef.current?.requestFullscreen();
+        const target = fullscreenRef.current as (HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }) | null;
+        if (target?.requestFullscreen) {
+          await target.requestFullscreen();
+        } else if (target?.webkitRequestFullscreen) {
+          await target.webkitRequestFullscreen();
+        }
       } else {
-        await document.exitFullscreen();
+        const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> | void };
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        }
       }
     } catch (error) {
       console.error('Fullscreen toggle error:', error);
@@ -740,11 +750,16 @@ const DrawTab: React.FC = () => {
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      setIsFullscreen(!!document.fullscreenElement || !!doc.webkitFullscreenElement);
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    };
   }, []);
 
   const increaseFontSize = () => {
@@ -1211,7 +1226,11 @@ const DrawTab: React.FC = () => {
                             ? "text-primary animate-bingo-globe-emerge animate-bingo-globe-shine"
                             : "text-primary"
                       )}
-                      style={{ fontSize: isFullscreen ? `clamp(6rem, 20vw, ${fullscreenFontSize}px)` : `clamp(4rem, 18vw, ${fontSize}px)` }}
+                      style={{
+                        fontSize: isFullscreen
+                          ? `clamp(6rem, calc(20vw + ${fullscreenFontSize - FULLSCREEN_FONT_SIZE_DEFAULT}px), 600px)`
+                          : `clamp(4rem, calc(18vw + ${fontSize - 300}px), 500px)`,
+                      }}
                     >
                       {currentNumber}
                     </div>
