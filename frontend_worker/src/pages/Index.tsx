@@ -19,26 +19,27 @@ const validTabs: TabType[] = ['sorteios', 'dashboard', 'rodadas', 'vendedores', 
 const MainContent = () => {
   const { currentTab, setCurrentTab, sorteioAtivo, sorteios, setSorteioAtivo } = useBingo();
   const { tab, sorteioId } = useParams<{ tab: string; sorteioId?: string }>();
-
-  if (!tab || !validTabs.includes(tab as TabType)) {
-    return <Navigate to="/app/sorteios" replace />;
-  }
-
-  const routeTab = tab as TabType;
+  const routeTab = tab && validTabs.includes(tab as TabType) ? (tab as TabType) : null;
   React.useEffect(() => {
+    if (!routeTab) return;
     if (currentTab !== routeTab) {
       setCurrentTab(routeTab);
     }
   }, [currentTab, routeTab, setCurrentTab]);
 
   React.useEffect(() => {
+    if (!routeTab) return;
     if (sorteioId) {
       const selected = sorteios.find((s) => s.id === sorteioId) || null;
       if (selected && sorteioAtivo?.id !== selected.id) {
         setSorteioAtivo(selected);
       }
     }
-  }, [sorteioId, sorteios, sorteioAtivo, setSorteioAtivo]);
+  }, [routeTab, sorteioId, sorteios, sorteioAtivo, setSorteioAtivo]);
+
+  if (!routeTab) {
+    return <Navigate to="/app/sorteios" replace />;
+  }
 
   const renderTab = () => {
     switch (routeTab) {
