@@ -481,6 +481,47 @@ const AtribuicoesTab: React.FC = () => {
                       <Button type="button" size="sm" variant="destructive" onClick={() => handleAcaoEmLote(atribuicao, 'excluir-cartela')}>Excluir selecionadas</Button>
                     </div>
 
+                    <div className="border rounded-lg p-3 bg-background/70">
+                      <p className="text-sm font-semibold text-foreground mb-2">Atribuições Registradas</p>
+                      {(historicoPorVendedor[atribuicao.vendedor_id] || []).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhuma atribuição registrada ainda para este vendedor.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {(historicoPorVendedor[atribuicao.vendedor_id] || []).map((h) => (
+                            <div key={h.id} className="rounded-md border bg-card p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-medium">{h.acao}</p>
+                                  <p className="text-xs text-muted-foreground">{h.dataHora}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  onClick={() => {
+                                    setComprovanteData({
+                                      sorteioNome: sorteioAtivo.nome,
+                                      vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
+                                      numeros: h.numeros,
+                                      valorCartela: sorteioAtivo.valor_cartela || 0,
+                                      dataHora: h.dataHora,
+                                    });
+                                    setComprovanteOpen(true);
+                                  }}
+                                >
+                                  <Printer className="w-3 h-3" />
+                                  Comprovante
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {h.numeros.length} cartela(s): {h.numeros.slice(0, 20).map(n => formatarNumeroCartela(n)).join(', ')}{h.numeros.length > 20 ? ` ... (+${h.numeros.length - 20})` : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {atribuicao.cartelas.length === 0 ? (
                       <p className="text-center text-muted-foreground py-4">Nenhuma cartela atribuída a este vendedor</p>
                     ) : (
@@ -524,46 +565,6 @@ const AtribuicoesTab: React.FC = () => {
                         </table>
                       </div>
                     )}
-                    <div className="mt-3 border-t pt-3">
-                      <p className="text-sm font-semibold text-foreground mb-2">Histórico da atribuição</p>
-                      {(historicoPorVendedor[atribuicao.vendedor_id] || []).length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Sem histórico registrado ainda.</p>
-                      ) : (
-                        <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                          {(historicoPorVendedor[atribuicao.vendedor_id] || []).map((h) => (
-                            <div key={h.id} className="rounded-md border bg-background p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="text-sm font-medium">{h.acao}</p>
-                                  <p className="text-xs text-muted-foreground">{h.dataHora}</p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1"
-                                  onClick={() => {
-                                    setComprovanteData({
-                                      sorteioNome: sorteioAtivo.nome,
-                                      vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
-                                      numeros: h.numeros,
-                                      valorCartela: sorteioAtivo.valor_cartela || 0,
-                                      dataHora: h.dataHora,
-                                    });
-                                    setComprovanteOpen(true);
-                                  }}
-                                >
-                                  <Printer className="w-3 h-3" />
-                                  Comprovante
-                                </Button>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Cartelas: {h.numeros.slice(0, 20).map(n => formatarNumeroCartela(n)).join(', ')}{h.numeros.length > 20 ? ` ... (+${h.numeros.length - 20})` : ''}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </CollapsibleContent>
               </div>
