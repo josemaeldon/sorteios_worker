@@ -942,6 +942,12 @@ const DrawTab: React.FC = () => {
     }
   };
 
+  const getWinnerLote = useCallback((numero: number): number | undefined => {
+    const loteSize = sorteioAtivo?.tamanho_lote ?? LOTE_SIZE;
+    const idx = cartelasValidadas.findIndex((cv) => cv.numero === numero);
+    return idx !== -1 ? Math.floor(idx / loteSize) + 1 : undefined;
+  }, [cartelasValidadas, sorteioAtivo?.tamanho_lote]);
+
   const rankingCardsWithGrade = useMemo<ValidatedCartelaComGrade[]>(() => {
     const validatedNumbers = new Set(cartelasValidadas.map((cv) => Number(cv.numero)));
     const source = cartelasComGrade.length > 0
@@ -1597,12 +1603,10 @@ const DrawTab: React.FC = () => {
                         onClick={() => handleCartelaClick(num, rankingCardsWithGrade.find((card) => card.numero === num)?.comprador_nome)}
                         className="w-full text-left px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold hover:bg-success/20 transition-colors"
                       >
-                        <span className="block">Cartela {num.toString().padStart(3, '0')}</span>
-                        {ganhadoresPop.find((item) => item.numero === num)?.lote !== undefined && (
-                          <span className="block text-xs font-medium text-success/80 mt-0.5">
-                            Lote {ganhadoresPop.find((item) => item.numero === num)?.lote}
-                          </span>
-                        )}
+                        <span className="block">
+                          Cartela {num.toString().padStart(3, '0')}
+                          {getWinnerLote(num) !== undefined ? ` - Lote ${getWinnerLote(num)}` : ''}
+                        </span>
                       </button>
                     ))}
                   </div>
