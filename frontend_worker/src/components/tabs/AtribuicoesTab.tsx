@@ -127,20 +127,7 @@ const AtribuicoesTab: React.FC = () => {
     }));
   };
 
-  const atribuicoesComEspaco = vendedores.map((v) => {
-    const existente = atribuicoes.find(a => a.vendedor_id === v.id);
-    return existente || {
-      id: `placeholder-${v.id}`,
-      sorteio_id: sorteioAtivo.id,
-      vendedor_id: v.id,
-      vendedor_nome: v.nome,
-      cartelas: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as Atribuicao;
-  });
-
-  const atribuicoesFiltradas = atribuicoesComEspaco.filter(a => {
+  const atribuicoesFiltradas = atribuicoes.filter(a => {
     if (filtrosAtribuicoes.busca) {
       const busca = filtrosAtribuicoes.busca.toLowerCase();
       const matchVendedor = a.vendedor_nome && a.vendedor_nome.toLowerCase().includes(busca);
@@ -369,7 +356,6 @@ const AtribuicoesTab: React.FC = () => {
 
       <div className="space-y-4">
         {atribuicoesFiltradas.map((atribuicao) => {
-          const isPlaceholder = atribuicao.id.startsWith('placeholder-');
           const counts = getStatusCounts(atribuicao.cartelas);
           const isExpanded = expandedAtribuicao === atribuicao.id;
           const possuiCartelaVendida = atribuicao.cartelas.some(c => c.status === 'vendida');
@@ -408,8 +394,8 @@ const AtribuicoesTab: React.FC = () => {
                           {counts.extraviadas > 0 && <span className="status-badge status-extraviada">{counts.extraviadas} extraviada(s)</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); if (isPlaceholder) { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); return; } handleEditarAtribuicao(atribuicao); }}><Edit className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="destructive" disabled={possuiCartelaVendida || isPlaceholder} onClick={(e) => { e.stopPropagation(); if (!isPlaceholder) handleExcluirAtribuicao(atribuicao.id, atribuicao.vendedor_id); }}><Trash2 className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handleEditarAtribuicao(atribuicao); }}><Edit className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" disabled={possuiCartelaVendida} onClick={(e) => { e.stopPropagation(); handleExcluirAtribuicao(atribuicao.id, atribuicao.vendedor_id); }}><Trash2 className="w-4 h-4" /></Button>
                           {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
                         </div>
                       </div>
