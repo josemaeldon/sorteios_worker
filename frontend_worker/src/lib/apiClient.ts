@@ -105,6 +105,24 @@ const stableStringify = (value: unknown): string => {
 
 const getCacheKey = (action: string, data: Record<string, unknown>): string => `${OFFLINE_CACHE_PREFIX}${action}:${stableStringify(data)}`;
 const isLikelyReadAction = (action: string): boolean => /^(get|load|check|list|fetch|export|search|download)/i.test(action);
+const isLargeOfflineCacheAction = (action: string): boolean => new Set([
+  'getAllUsers',
+  'getPlanos',
+  'getPublicPlanos',
+  'getLojaCompradores',
+  'getCartelasComprador',
+  'getCartelas',
+  'getCartelasValidadas',
+  'getCartelasValidadasComGrade',
+  'getCartelaDetalhe',
+  'getRodadas',
+  'getRodadaHistorico',
+  'getRodadaCartelaHistorico',
+  'getVendedores',
+  'getVendas',
+  'getAtribuicoes',
+  'getMinhaLoja',
+]).has(action);
 
 const getOfflineResponse = (action: string, data: Record<string, unknown> = {}): any | null => {
   const state = getOfflineAppState();
@@ -205,8 +223,9 @@ const readCachedResponse = (action: string, data: Record<string, unknown>): unkn
 
 const writeCachedResponse = (action: string, data: Record<string, unknown>, response: unknown): void => {
   try {
+    if (isLargeOfflineCacheAction(action)) return;
     const payload = JSON.stringify(response);
-    if (payload.length > 100_000) return;
+    if (payload.length > 25_000) return;
     if (!safeLocalStorageSetItem(getCacheKey(action, data), payload)) {
       clearLocalStoragePrefix(OFFLINE_CACHE_PREFIX);
       safeLocalStorageSetItem(getCacheKey(action, data), payload);
