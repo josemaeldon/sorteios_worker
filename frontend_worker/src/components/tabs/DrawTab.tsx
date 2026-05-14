@@ -176,7 +176,7 @@ const DrawTab: React.FC = () => {
   const [justDrawn, setJustDrawn] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.justDrawn : false);
   const [vencedoras, setVencedoras] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.vencedoras as number[]) || []) : []);
   const [isVerifying, setIsVerifying] = useState<boolean>(shouldHydrateOfflineState ? !!drawTabSnapshot.isVerifying : false);
-  const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[] } | null>(null);
+  const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[][] } | null>(null);
   const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []) : []);
   const [manualNumberInput, setManualNumberInput] = useState(shouldHydrateOfflineState ? ((drawTabSnapshot.manualNumberInput as string) || '') : '');
   const [cardsWithGrade, setCardsWithGrade] = useState<ValidatedCartelaComGrade[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.cardsWithGrade as ValidatedCartelaComGrade[]) || []) : []);
@@ -939,7 +939,7 @@ const DrawTab: React.FC = () => {
   const handleCartelaClick = (numero: number, nome?: string) => {
     const cartela = rankingCardsWithGrade.find(c => c.numero === numero);
     if (!cartela || !cartela.numeros_grade || cartela.numeros_grade.length === 0) return;
-    setSelectedCartelaModal({ numero, nome, grade: cartela.numeros_grade[0] });
+    setSelectedCartelaModal({ numero, nome, grade: cartela.numeros_grade });
   };
 
   const goBackToList = () => {
@@ -1684,20 +1684,24 @@ const DrawTab: React.FC = () => {
             </DialogTitle>
           </DialogHeader>
           {selectedCartelaModal && (
-            <div className="grid grid-cols-5 gap-2 mt-2">
-              {selectedCartelaModal.grade.map((num, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center justify-center w-full aspect-square rounded font-bold text-sm border-2",
-                    num === 0
-                      ? "bg-muted/50 text-muted-foreground border-muted"
-                      : drawnNumbers.includes(num)
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-card text-foreground border-border"
-                  )}
-                >
-                  {num !== 0 ? num : '★'}
+            <div className="grid gap-2 mt-2">
+              {selectedCartelaModal.grade.map((row, rowIndex) => (
+                <div key={rowIndex} className="grid grid-cols-5 gap-2">
+                  {row.map((num, colIndex) => (
+                    <div
+                      key={`${rowIndex}-${colIndex}`}
+                      className={cn(
+                        "flex items-center justify-center w-full aspect-square rounded font-bold text-sm border-2",
+                        num === 0
+                          ? "bg-muted/50 text-muted-foreground border-muted"
+                          : drawnNumbers.includes(num)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card text-foreground border-border"
+                      )}
+                    >
+                      {num !== 0 ? num : '★'}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
