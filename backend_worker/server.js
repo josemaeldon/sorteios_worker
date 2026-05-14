@@ -2796,6 +2796,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
           const atribuicaoIdMap = new Map();
           for (const atribuicao of atribuicoes) {
+            if (atribuicao.vendedor_id && !vendedorIdMap.has(atribuicao.vendedor_id)) {
+              console.warn('Skipping orphaned atribuicao during backup import: missing vendedor mapping', atribuicao.id);
+              continue;
+            }
             const newId = crypto.randomUUID();
             atribuicaoIdMap.set(atribuicao.id, newId);
             await client.query(
@@ -2836,6 +2840,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
 
           for (const pagamento of pagamentos) {
+            if (pagamento.venda_id && !vendaIdMap.has(pagamento.venda_id)) {
+              console.warn('Skipping orphaned pagamento during backup import: missing venda mapping', pagamento.id);
+              continue;
+            }
             await client.query(
               `INSERT INTO pagamentos (id, venda_id, valor, forma_pagamento, observacao, data_pagamento, created_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -2901,6 +2909,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
 
           for (const atribuicaoCartela of atribuicaoCartelas) {
+            if (atribuicaoCartela.atribuicao_id && !atribuicaoIdMap.has(atribuicaoCartela.atribuicao_id)) {
+              console.warn('Skipping orphaned atribuicao_cartela during backup import: missing atribuicao mapping', atribuicaoCartela.id);
+              continue;
+            }
             await client.query(
               `INSERT INTO atribuicao_cartelas (id, atribuicao_id, numero_cartela, status, data_atribuicao, data_devolucao, venda_id, created_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -2969,7 +2981,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         } catch (err) {
           await client.query('ROLLBACK');
           console.error('Backup import error:', err?.stack || err);
-          return res.status(500).json({ error: 'Erro ao importar backup.' });
+          return res.status(500).json({ error: err?.message ? `Erro ao importar backup: ${err.message}` : 'Erro ao importar backup.' });
         }
       }
 
