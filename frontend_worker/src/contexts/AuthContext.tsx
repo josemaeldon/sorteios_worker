@@ -82,6 +82,14 @@ const updateOfflineAuthMap = (key: string, value: Record<string, unknown>): void
   updateOfflineAuthSnapshot({ [key]: { ...prevMap, ...value } });
 };
 
+const getDaysUntilDate = (date: Date): number => {
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffMs = targetLocal.getTime() - todayLocal.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -124,8 +132,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user?.id || !user.plano_vencimento || user.gratuidade_vitalicia) return;
     const venc = new Date(user.plano_vencimento);
     if (Number.isNaN(venc.getTime())) return;
-    const diffMs = venc.getTime() - Date.now();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const diffDays = getDaysUntilDate(venc);
     if (diffDays < 0 || diffDays > 7) return;
     const key = `${user.id}:${user.plano_vencimento}`;
     if (shownExpirationWarningRef.current === key) return;

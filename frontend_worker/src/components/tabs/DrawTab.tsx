@@ -1597,7 +1597,12 @@ const DrawTab: React.FC = () => {
                         onClick={() => handleCartelaClick(num, rankingCardsWithGrade.find((card) => card.numero === num)?.comprador_nome)}
                         className="w-full text-left px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold hover:bg-success/20 transition-colors"
                       >
-                        Cartela {num.toString().padStart(3, '0')}
+                        <span className="block">Cartela {num.toString().padStart(3, '0')}</span>
+                        {ganhadoresPop.find((item) => item.numero === num)?.lote !== undefined && (
+                          <span className="block text-xs font-medium text-success/80 mt-0.5">
+                            Lote {ganhadoresPop.find((item) => item.numero === num)?.lote}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
