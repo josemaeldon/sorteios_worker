@@ -1984,7 +1984,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         .filter((grid) => Array.isArray(grid) && grid.length > 0);
     };
 
-    const isWinningLine = (grid, drawnSet) => {
+    const isWinningLine = (grid, drawnSet, expectedRows, expectedCols) => {
       if (!Array.isArray(grid) || grid.length === 0) return false;
       const rows = grid.filter(Array.isArray);
       if (rows.length === 0) return false;
@@ -1993,7 +1993,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       for (const row of rows) {
         const filled = row.filter((n) => Number(n) > 0);
-        if (filled.length === 5 && filled.every((n) => drawnSet.has(Number(n)))) {
+        if (rows.length === expectedRows && filled.length === expectedCols && filled.every((n) => drawnSet.has(Number(n)))) {
           return true;
         }
       }
@@ -2002,7 +2002,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         const column = rows
           .map((row) => row[colIndex])
           .filter((n) => Number(n) > 0);
-        if (column.length === 5 && column.every((n) => drawnSet.has(Number(n)))) {
+        if (rows.length === expectedRows && column.length === expectedRows && column.every((n) => drawnSet.has(Number(n)))) {
           return true;
         }
       }
@@ -2010,10 +2010,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       return false;
     };
 
-    const isWinnerForMode = (grids, drawnSet, mode) => {
+    const isWinnerForMode = (grids, drawnSet, mode, expectedRows, expectedCols) => {
       if (!Array.isArray(grids) || grids.length === 0) return false;
       if (String(mode || '') === 'quina') {
-        return grids.some((grid) => isWinningLine(grid, drawnSet));
+        return grids.some((grid) => isWinningLine(grid, drawnSet, expectedRows, expectedCols));
       }
       return grids.some((grid) => {
         if (!Array.isArray(grid) || grid.length === 0) return false;
@@ -3111,7 +3111,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             numero: c.numero,
             nome: c.comprador_nome,
             score,
-            winner: isRifa ? drawnSet.has(Number(c.numero)) : isWinnerForMode(grids, drawnSet, rodadaRow.tipo_vitoria),
+            winner: isRifa ? drawnSet.has(Number(c.numero)) : isWinnerForMode(grids, drawnSet, rodadaRow.tipo_vitoria, gradeRows, gradeCols),
           };
         }).filter(c => c.score > 0);
 
@@ -3773,7 +3773,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           }
           const grade = extractGradeMatrices(raw, gradeCols, gradeRows);
           if (grade.length === 0) continue;
-          if (isWinnerForMode(grade, numerosSet, tipoVitoria)) {
+          if (isWinnerForMode(grade, numerosSet, tipoVitoria, gradeRows, gradeCols)) {
             vencedoras.push(row.numero);
           }
         }

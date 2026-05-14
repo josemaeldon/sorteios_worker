@@ -108,7 +108,7 @@ const extractGradeMatrices = (raw: unknown, columns = 5, rows = 5): number[][][]
     .filter((grid) => Array.isArray(grid) && grid.length > 0) as number[][][];
 };
 
-const isQuinaWinner = (grade: number[][], drawnSet: Set<number>): boolean => {
+const isQuinaWinner = (grade: number[][], drawnSet: Set<number>, expectedRows: number, expectedCols: number): boolean => {
   if (!Array.isArray(grade) || grade.length === 0) return false;
   const rows = grade.filter(Array.isArray) as number[][];
   if (rows.length === 0) return false;
@@ -117,7 +117,7 @@ const isQuinaWinner = (grade: number[][], drawnSet: Set<number>): boolean => {
 
   for (const row of rows) {
     const filled = row.filter((n) => Number(n) > 0);
-    if (filled.length === 5 && filled.every((n) => drawnSet.has(Number(n)))) {
+    if (rows.length === expectedRows && filled.length === expectedCols && filled.every((n) => drawnSet.has(Number(n)))) {
       return true;
     }
   }
@@ -126,7 +126,7 @@ const isQuinaWinner = (grade: number[][], drawnSet: Set<number>): boolean => {
     const column = rows
       .map((row) => row[colIndex])
       .filter((n) => Number(n) > 0);
-    if (column.length === 5 && column.every((n) => drawnSet.has(Number(n)))) {
+    if (rows.length === expectedRows && column.length === expectedRows && column.every((n) => drawnSet.has(Number(n)))) {
       return true;
     }
   }
@@ -996,7 +996,7 @@ const DrawTab: React.FC = () => {
         const grids = extractGradeMatrices(card.numeros_grade, gridColumns, gridRows);
         if (grids.length === 0) return false;
         if (victoryMode === 'quina') {
-          return grids.some((grid) => Array.isArray(grid) && isQuinaWinner(grid, drawnSet));
+          return grids.some((grid) => Array.isArray(grid) && isQuinaWinner(grid, drawnSet, gridRows, gridColumns));
         }
         return grids.some((grid) => {
           if (!Array.isArray(grid)) return false;

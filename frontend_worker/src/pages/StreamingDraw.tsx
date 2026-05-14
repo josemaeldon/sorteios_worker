@@ -158,6 +158,9 @@ const StreamingDraw: React.FC = () => {
               {rodada.tipo_vitoria === 'quina' ? 'Quina' : 'Cartela cheia'}
             </span>
           </div>
+          <p className="whitespace-nowrap text-[11px] md:text-xs text-white/55">
+            Regra: {rodada.tipo_vitoria === 'quina' ? `Quina ${rodada.grade_colunas ?? 5}x${rodada.grade_linhas ?? 5}` : `Cartela cheia ${rodada.grade_colunas ?? 5}x${rodada.grade_linhas ?? 5}`}
+          </p>
           <p className="whitespace-nowrap">{rodada.range_start} a {rodada.range_end}</p>
           <p className="whitespace-nowrap">{sortedHistorico.length} sorteado{sortedHistorico.length !== 1 ? 's' : ''}</p>
         </div>
