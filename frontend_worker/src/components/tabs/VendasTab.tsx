@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
-import { ShoppingCart, Plus, Search, Filter, Eraser, Edit, Trash2, DollarSign, Calendar, User, Loader2, Hash, Receipt } from 'lucide-react';
+import { ShoppingCart, Plus, Search, Filter, Eraser, Edit, Trash2, DollarSign, Calendar, User, Loader2, Hash, Receipt, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { formatarData, formatarMoeda, getStatusLabel, formatarNumeroCartela } from '@/lib/utils/formatters';
+import { formatarData, formatarMoeda, formatarNumeroCartela } from '@/lib/utils/formatters';
 import VendaModal from '@/components/modals/VendaModal';
 import PagamentoModal from '@/components/modals/PagamentoModal';
 import ReciboModal from '@/components/modals/ReciboModal';
@@ -44,6 +44,7 @@ const VendasTab: React.FC = () => {
   const [pagamentoVendaId, setPagamentoVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.pagamentoVendaId as string | null) || null) : null);
   const [isReciboOpen, setIsReciboOpen] = useState(shouldHydrateOfflineState ? !!vendasTabSnapshot.isReciboOpen : false);
   const [reciboVendaId, setReciboVendaId] = useState<string | null>(shouldHydrateOfflineState ? ((vendasTabSnapshot.reciboVendaId as string | null) || null) : null);
+  const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
@@ -148,6 +149,18 @@ const VendasTab: React.FC = () => {
 
   const limparFiltros = () => {
     setFiltrosVendas({ busca: '', status: 'todos', vendedor: 'todos', periodo: 'todos' });
+  };
+
+  const toggleExpandedSale = (id: string) => {
+    setExpandedSales((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   return (
@@ -273,86 +286,28 @@ const VendasTab: React.FC = () => {
           <thead>
             <tr className="bg-muted/50">
               <th className="p-4 text-left font-semibold text-foreground">Data</th>
-              <th className="p-4 text-left font-semibold text-foreground">Cliente</th>
               <th className="p-4 text-left font-semibold text-foreground">Vendedor</th>
-              <th className="p-4 text-left font-semibold text-foreground">
-                <span className="flex items-center gap-1">
-                  <Hash className="w-4 h-4" />
-                  Números Vendidos
-                </span>
-              </th>
               <th className="p-4 text-right font-semibold text-foreground">Valor Total</th>
-              <th className="p-4 text-right font-semibold text-foreground">Valor Pago</th>
-              <th className="p-4 text-center font-semibold text-foreground">Status</th>
               <th className="p-4 text-center font-semibold text-foreground">Ações</th>
             </tr>
           </thead>
           <tbody>
             {vendasFiltradas.map((venda) => (
-              <tr key={venda.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                <td className="p-4 text-muted-foreground">{formatarData(venda.data_venda)}</td>
-                <td className="p-4 font-semibold text-foreground">{venda.cliente_nome}</td>
-                <td className="p-4 text-muted-foreground">{venda.vendedor_nome || 'N/A'}</td>
-                <td className="p-4">
-                  <div className="flex flex-wrap gap-1.5 max-w-xs">
-                    {venda.numeros_cartelas.split(',').map((num, idx) => (
-                      <span 
-                        key={idx} 
-                        className="inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 bg-emerald-500 text-white rounded-md text-sm font-bold shadow-sm"
-                      >
-                        {formatarNumeroCartela(parseInt(num.trim()))}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="p-4 text-right font-bold text-foreground">{formatarMoeda(venda.valor_total)}</td>
-                <td className="p-4 text-right">
-                  {venda.pagamentos && venda.pagamentos.length > 0 ? (
-                    <div className="flex flex-col gap-1 items-end">
-                      {venda.pagamentos.map((pag, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground capitalize">
-                            {pag.forma_pagamento}:
-                          </span>
-                          <span className={cn(
-                            'px-2 py-0.5 rounded-full text-xs font-semibold',
-                            Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
-                              ? 'bg-success/10 text-success' 
-                              : 'bg-warning/10 text-warning'
-                          )}>
-                            {formatarMoeda(pag.valor)}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="border-t border-border pt-1 mt-1">
-                        <span className={cn(
-                          'px-2 py-0.5 rounded-full text-sm font-bold',
-                          Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
-                            ? 'bg-success/10 text-success' 
-                            : 'bg-warning/10 text-warning'
-                        )}>
-                          Total: {formatarMoeda(venda.valor_pago)}
-                        </span>
-                      </div>
+              <React.Fragment key={venda.id}>
+                <tr
+                  className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => toggleExpandedSale(venda.id)}
+                >
+                  <td className="p-4 text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      {expandedSales.has(venda.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      {formatarData(venda.data_venda)}
                     </div>
-                  ) : (
-                    <span className={cn(
-                      'px-2 py-1 rounded-full text-sm font-semibold',
-                      Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
-                        ? 'bg-success/10 text-success' 
-                        : 'bg-warning/10 text-warning'
-                    )}>
-                      {formatarMoeda(venda.valor_pago)}
-                    </span>
-                  )}
-                </td>
-                <td className="p-4 text-center">
-                  <span className={cn('status-badge', venda.status === 'concluida' ? 'status-pago' : 'status-pendente')}>
-                    {venda.status === 'concluida' ? 'Concluída' : 'Pendente'}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <div className="flex justify-center gap-2">
+                  </td>
+                  <td className="p-4 text-muted-foreground">{venda.vendedor_nome || 'N/A'}</td>
+                  <td className="p-4 text-right font-bold text-foreground">{formatarMoeda(venda.valor_total)}</td>
+                  <td className="p-4">
+                    <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button size="sm" variant="outline" onClick={() => handleEdit(venda.id)} title="Editar">
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -378,12 +333,88 @@ const VendasTab: React.FC = () => {
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+                {expandedSales.has(venda.id) && (
+                  <tr className="border-b border-border bg-muted/20">
+                    <td colSpan={4} className="p-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Cliente</p>
+                          <p className="font-semibold text-foreground">{venda.cliente_nome}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Status</p>
+                          <span className={cn('status-badge', venda.status === 'concluida' ? 'status-pago' : 'status-pendente')}>
+                            {venda.status === 'concluida' ? 'Concluída' : 'Pendente'}
+                          </span>
+                        </div>
+                        <div className="lg:col-span-2">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1">
+                            <Hash className="w-3 h-3" />
+                            Números Vendidos
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {venda.numeros_cartelas.split(',').map((num, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 bg-emerald-500 text-white rounded-md text-sm font-bold shadow-sm"
+                              >
+                                {formatarNumeroCartela(parseInt(num.trim()))}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="lg:col-span-2">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Valor Pago</p>
+                          {venda.pagamentos && venda.pagamentos.length > 0 ? (
+                            <div className="flex flex-col gap-1 items-start">
+                              {venda.pagamentos.map((pag, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground capitalize">
+                                    {pag.forma_pagamento}:
+                                  </span>
+                                  <span className={cn(
+                                    'px-2 py-0.5 rounded-full text-xs font-semibold',
+                                    Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
+                                      ? 'bg-success/10 text-success'
+                                      : 'bg-warning/10 text-warning'
+                                  )}>
+                                    {formatarMoeda(pag.valor)}
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="border-t border-border pt-1 mt-1">
+                                <span className={cn(
+                                  'px-2 py-0.5 rounded-full text-sm font-bold',
+                                  Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
+                                    ? 'bg-success/10 text-success'
+                                    : 'bg-warning/10 text-warning'
+                                )}>
+                                  Total: {formatarMoeda(venda.valor_pago)}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={cn(
+                              'px-2 py-1 rounded-full text-sm font-semibold',
+                              Number(venda.valor_pago || 0) >= Number(venda.valor_total || 0)
+                                ? 'bg-success/10 text-success'
+                                : 'bg-warning/10 text-warning'
+                            )}>
+                              {formatarMoeda(venda.valor_pago)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
             {vendasFiltradas.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={4} className="p-8 text-center text-muted-foreground">
                   {vendas.length === 0 ? (
                     <div>
                       <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
