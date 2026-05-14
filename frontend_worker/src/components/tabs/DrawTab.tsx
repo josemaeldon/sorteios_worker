@@ -1543,9 +1543,14 @@ const DrawTab: React.FC = () => {
                 <CardContent>
                   <div className="space-y-2">
                     {vencedoras.map((num) => (
-                      <div key={num} className="px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold">
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleCartelaClick(num, getCartelaNome(num))}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold hover:bg-success/20 transition-colors"
+                      >
                         Cartela {num.toString().padStart(3, '0')}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </CardContent>
