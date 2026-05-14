@@ -28,6 +28,7 @@ interface TransferenciaModalProps {
   atribuicaoOrigem: Atribuicao | null;
   cartelaNumero: number | null; // If null, show multi-select mode
   initialSelectedCartelas?: number[];
+  onTransferSuccess?: (payload: { origemVendedorId: string; origemVendedorNome: string; destinoVendedorId: string; destinoVendedorNome: string; numeros: number[] }) => void;
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ 
@@ -36,6 +37,7 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({
   atribuicaoOrigem, 
   cartelaNumero,
   initialSelectedCartelas = [],
+  onTransferSuccess,
 }) => {
   const { vendedores, atribuicoes, transferirCartelas } = useBingo();
   const { toast } = useToast();
@@ -102,6 +104,15 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({
       );
 
       const vendedorDestino = vendedores.find(v => v.id === vendedorDestinoId);
+      if (vendedorDestino && atribuicaoOrigem) {
+        onTransferSuccess?.({
+          origemVendedorId: atribuicaoOrigem.vendedor_id,
+          origemVendedorNome: atribuicaoOrigem.vendedor_nome || 'Vendedor',
+          destinoVendedorId: vendedorDestino.id,
+          destinoVendedorNome: vendedorDestino.nome,
+          numeros: [...selectedCartelas],
+        });
+      }
       
       toast({
         title: "Transferência realizada",

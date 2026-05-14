@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
-import { ListTodo, Plus, Search, Filter, Eraser, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, ArrowRightLeft, DollarSign, AlertTriangle } from 'lucide-react';
+import { ListTodo, Plus, Search, Filter, Eraser, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, ArrowRightLeft, DollarSign, AlertTriangle, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,7 +8,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { formatarData, formatarNumeroCartela, getStatusLabel, formatarMoeda } from '@/lib/utils/formatters';
 import AtribuicaoModal from '@/components/modals/AtribuicaoModal';
+import { AtribuicaoHistoricoPayload } from '@/components/modals/AtribuicaoModal';
 import TransferenciaModal from '@/components/modals/TransferenciaModal';
+import ComprovanteAtribuicaoModal, { ComprovanteAtribuicaoData } from '@/components/modals/ComprovanteAtribuicaoModal';
 import { useToast } from '@/hooks/use-toast';
 import { CartelaAtribuida, Atribuicao } from '@/types/bingo';
 import {
@@ -29,15 +31,15 @@ import {
 import { getOfflineAppState, getOfflineQueue, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 
 const AtribuicoesTab: React.FC = () => {
-  const { 
-    sorteioAtivo, 
+  const {
+    sorteioAtivo,
     atribuicoes,
     vendedores,
-    filtrosAtribuicoes, 
+    filtrosAtribuicoes,
     setFiltrosAtribuicoes,
     deleteAtribuicao,
     removeCartelaFromAtribuicao,
-    updateCartelaStatusInAtribuicao
+    updateCartelaStatusInAtribuicao,
   } = useBingo();
   const { toast } = useToast();
   const atribuicoesTabSnapshot = (getOfflineAppState().bingo?.atribuicoesTab || {}) as Record<string, unknown>;
@@ -49,15 +51,22 @@ const AtribuicoesTab: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(shouldHydrateOfflineState ? !!atribuicoesTabSnapshot.deleteDialogOpen : false);
   const [deletingAtribuicao, setDeletingAtribuicao] = useState<{ id: string; vendedorId: string; cartela?: number; cartelas?: number[] } | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.deletingAtribuicao as { id: string; vendedorId: string; cartela?: number; cartelas?: number[] } | null) || null) : null);
   const [actionType, setActionType] = useState<'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar' | 'reverter-extravio'>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.actionType as 'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar' | 'reverter-extravio') || 'excluir-atribuicao') : 'excluir-atribuicao');
+
   const [initialVendedorId, setInitialVendedorId] = useState<string | null>(null);
   const [filtrosPorAtribuicao, setFiltrosPorAtribuicao] = useState<Record<string, { busca: string; status: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada' }>>({});
   const [selecionadasPorAtribuicao, setSelecionadasPorAtribuicao] = useState<Record<string, number[]>>({});
-  
-  // Transfer modal state
+  const [faixaAcaoPorAtribuicao, setFaixaAcaoPorAtribuicao] = useState<Record<string, string>>({});
+
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(shouldHydrateOfflineState ? !!atribuicoesTabSnapshot.isTransferModalOpen : false);
   const [transferAtribuicao, setTransferAtribuicao] = useState<Atribuicao | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferAtribuicao as Atribuicao | null) || null) : null);
   const [transferCartelaNumero, setTransferCartelaNumero] = useState<number | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferCartelaNumero as number | null) || null) : null);
   const [transferCartelasSelecionadas, setTransferCartelasSelecionadas] = useState<number[]>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferCartelasSelecionadas as number[]) || []) : []);
+
+  const [comprovanteOpen, setComprovanteOpen] = useState(false);
+  const [comprovanteData, setComprovanteData] = useState<ComprovanteAtribuicaoData | null>(null);
+  const [historicoPorVendedor, setHistoricoPorVendedor] = useState<Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>>(
+    shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.historicoPorVendedor as Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>) || {}) : {}
+  );
 
   React.useEffect(() => {
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
@@ -75,23 +84,12 @@ const AtribuicoesTab: React.FC = () => {
           transferAtribuicao,
           transferCartelaNumero,
           transferCartelasSelecionadas,
+          historicoPorVendedor,
           filtrosAtribuicoes,
         },
       },
     });
-  }, [
-    isModalOpen,
-    editingAtribuicao,
-    expandedAtribuicao,
-    deleteDialogOpen,
-    deletingAtribuicao,
-    actionType,
-    isTransferModalOpen,
-    transferAtribuicao,
-    transferCartelaNumero,
-    transferCartelasSelecionadas,
-    filtrosAtribuicoes,
-  ]);
+  }, [isModalOpen, editingAtribuicao, expandedAtribuicao, deleteDialogOpen, deletingAtribuicao, actionType, isTransferModalOpen, transferAtribuicao, transferCartelaNumero, transferCartelasSelecionadas, historicoPorVendedor, filtrosAtribuicoes]);
 
   if (!sorteioAtivo) {
     return (
@@ -103,16 +101,53 @@ const AtribuicoesTab: React.FC = () => {
     );
   }
 
-  const atribuicoesFiltradas = atribuicoes.filter(a => {
+  const parseFaixa = (input: string): [number, number] | null => {
+    const clean = input.trim().toLowerCase().replace(/\s+/g, '');
+    const parts = clean.split(/-|a/);
+    if (parts.length !== 2) return null;
+    const ini = Number(parts[0]);
+    const fim = Number(parts[1]);
+    if (!Number.isFinite(ini) || !Number.isFinite(fim) || ini <= 0 || fim <= 0 || fim < ini) return null;
+    return [ini, fim];
+  };
+
+  const registrarHistorico = (payload: { vendedorId: string; acao: string; numeros: number[] }) => {
+    if (payload.numeros.length === 0) return;
+    setHistoricoPorVendedor(prev => ({
+      ...prev,
+      [payload.vendedorId]: [
+        {
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          dataHora: new Date().toLocaleString('pt-BR'),
+          acao: payload.acao,
+          numeros: [...payload.numeros].sort((a, b) => a - b),
+        },
+        ...(prev[payload.vendedorId] || []),
+      ],
+    }));
+  };
+
+  const atribuicoesComEspaco = vendedores.map((v) => {
+    const existente = atribuicoes.find(a => a.vendedor_id === v.id);
+    return existente || {
+      id: `placeholder-${v.id}`,
+      sorteio_id: sorteioAtivo.id,
+      vendedor_id: v.id,
+      vendedor_nome: v.nome,
+      cartelas: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as Atribuicao;
+  });
+
+  const atribuicoesFiltradas = atribuicoesComEspaco.filter(a => {
     if (filtrosAtribuicoes.busca) {
       const busca = filtrosAtribuicoes.busca.toLowerCase();
       const matchVendedor = a.vendedor_nome && a.vendedor_nome.toLowerCase().includes(busca);
       const matchCartela = a.cartelas.some(c => c.numero.toString().includes(busca));
       if (!matchVendedor && !matchCartela) return false;
     }
-    if (filtrosAtribuicoes.vendedor !== 'todos') {
-      if (a.vendedor_id !== filtrosAtribuicoes.vendedor) return false;
-    }
+    if (filtrosAtribuicoes.vendedor !== 'todos' && a.vendedor_id !== filtrosAtribuicoes.vendedor) return false;
     if (filtrosAtribuicoes.status !== 'todos') {
       const hasCartelaWithStatus = a.cartelas.some(c => c.status === filtrosAtribuicoes.status);
       if (!hasCartelaWithStatus) return false;
@@ -125,19 +160,16 @@ const AtribuicoesTab: React.FC = () => {
     setActionType('devolver');
     setDeleteDialogOpen(true);
   };
-
   const handleExtraviada = (atribuicaoId: string, numeroCartela: number) => {
     setDeletingAtribuicao({ id: atribuicaoId, vendedorId: '', cartela: numeroCartela });
     setActionType('extraviar');
     setDeleteDialogOpen(true);
   };
-
   const handleExcluirCartela = (atribuicaoId: string, numeroCartela: number) => {
     setDeletingAtribuicao({ id: atribuicaoId, vendedorId: '', cartela: numeroCartela });
     setActionType('excluir-cartela');
     setDeleteDialogOpen(true);
   };
-
   const handleReverterExtravio = (atribuicaoId: string, numeroCartela: number) => {
     setDeletingAtribuicao({ id: atribuicaoId, vendedorId: '', cartela: numeroCartela });
     setActionType('reverter-extravio');
@@ -151,18 +183,33 @@ const AtribuicoesTab: React.FC = () => {
       return { ...prev, [atribuicaoId]: proximo };
     });
   };
-
   const selecionarTodasFiltradas = (atribuicaoId: string, numeros: number[]) => {
     setSelecionadasPorAtribuicao(prev => ({ ...prev, [atribuicaoId]: numeros }));
   };
-
   const limparSelecao = (atribuicaoId: string) => {
     setSelecionadasPorAtribuicao(prev => ({ ...prev, [atribuicaoId]: [] }));
   };
 
+  const selecionarPorFaixa = (atribuicao: Atribuicao) => {
+    const valor = faixaAcaoPorAtribuicao[atribuicao.id] || '';
+    const faixa = parseFaixa(valor);
+    if (!faixa) {
+      toast({ title: 'Faixa inválida', description: 'Use o formato 10-100 ou 10 a 100.', variant: 'destructive' });
+      return;
+    }
+    const [ini, fim] = faixa;
+    const numeros = atribuicao.cartelas.filter(c => c.numero >= ini && c.numero <= fim).map(c => c.numero);
+    if (numeros.length === 0) {
+      toast({ title: 'Sem cartelas na faixa', description: 'Nenhuma cartela encontrada no intervalo informado.', variant: 'destructive' });
+      return;
+    }
+    selecionarTodasFiltradas(atribuicao.id, numeros);
+    toast({ title: 'Faixa aplicada', description: `${numeros.length} cartela(s) selecionada(s).` });
+  };
+
   const handleAcaoEmLote = (
     atribuicao: Atribuicao,
-    action: 'devolver' | 'extraviar' | 'reverter-extravio' | 'transferir',
+    action: 'devolver' | 'extraviar' | 'reverter-extravio' | 'transferir' | 'excluir-cartela',
     filtroStatus?: CartelaAtribuida['status'],
   ) => {
     const selecionadas = selecionadasPorAtribuicao[atribuicao.id] || [];
@@ -192,14 +239,9 @@ const AtribuicoesTab: React.FC = () => {
     const atribuicao = atribuicoes.find(a => a.id === id);
     const possuiCartelaVendida = atribuicao?.cartelas.some(c => c.status === 'vendida');
     if (possuiCartelaVendida) {
-      toast({
-        title: "Ação não permitida",
-        description: "Não é possível excluir uma atribuição que possui cartela(s) vendida(s).",
-        variant: "destructive"
-      });
+      toast({ title: 'Ação não permitida', description: 'Não é possível excluir uma atribuição que possui cartela(s) vendida(s).', variant: 'destructive' });
       return;
     }
-
     setDeletingAtribuicao({ id, vendedorId });
     setActionType('excluir-atribuicao');
     setDeleteDialogOpen(true);
@@ -219,90 +261,63 @@ const AtribuicoesTab: React.FC = () => {
 
   const confirmAction = async () => {
     if (!deletingAtribuicao) return;
-    
     const atribuicao = atribuicoes.find(a => a.id === deletingAtribuicao.id);
     if (!atribuicao) return;
 
     if (actionType === 'devolver' && deletingAtribuicao.cartela) {
-      // Mark as returned in the attribution but make available for new assignments
       await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela, 'devolvida');
-      toast({
-        title: "Cartela devolvida",
-        description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi devolvida e está disponível para novas atribuições.`
-      });
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Devolução', numeros: [deletingAtribuicao.cartela] });
+      toast({ title: 'Cartela devolvida', description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi devolvida.` });
     } else if (actionType === 'devolver' && deletingAtribuicao.cartelas?.length) {
-      for (const numero of deletingAtribuicao.cartelas) {
-        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'devolvida');
-      }
-      toast({
-        title: "Cartelas devolvidas",
-        description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como devolvidas.`
-      });
+      for (const numero of deletingAtribuicao.cartelas) await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'devolvida');
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Devolução em lote', numeros: deletingAtribuicao.cartelas });
+      toast({ title: 'Cartelas devolvidas', description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como devolvidas.` });
       limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'extraviar' && deletingAtribuicao.cartela) {
       await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela, 'extraviada');
-      toast({
-        title: "Cartela marcada como Extraviada",
-        description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi marcada como extraviada.`
-      });
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Extravio', numeros: [deletingAtribuicao.cartela] });
+      toast({ title: 'Cartela marcada como extraviada', description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi marcada como extraviada.` });
     } else if (actionType === 'extraviar' && deletingAtribuicao.cartelas?.length) {
-      for (const numero of deletingAtribuicao.cartelas) {
-        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'extraviada');
-      }
-      toast({
-        title: "Cartelas extraviadas",
-        description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como extraviadas.`
-      });
+      for (const numero of deletingAtribuicao.cartelas) await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'extraviada');
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Extravio em lote', numeros: deletingAtribuicao.cartelas });
+      toast({ title: 'Cartelas extraviadas', description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como extraviadas.` });
       limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'reverter-extravio' && deletingAtribuicao.cartela) {
       await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela, 'ativa');
-      toast({
-        title: "Extravio revertido",
-        description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} voltou para ativa.`
-      });
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Reversão de status', numeros: [deletingAtribuicao.cartela] });
+      toast({ title: 'Status revertido', description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} voltou para ativa.` });
     } else if (actionType === 'reverter-extravio' && deletingAtribuicao.cartelas?.length) {
-      for (const numero of deletingAtribuicao.cartelas) {
-        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'ativa');
-      }
-      toast({
-        title: "Cartelas reativadas",
-        description: `${deletingAtribuicao.cartelas.length} cartela(s) voltaram para ativa.`
-      });
+      for (const numero of deletingAtribuicao.cartelas) await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'ativa');
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Reversão de status em lote', numeros: deletingAtribuicao.cartelas });
+      toast({ title: 'Cartelas reativadas', description: `${deletingAtribuicao.cartelas.length} cartela(s) voltaram para ativa.` });
       limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'excluir-cartela' && deletingAtribuicao.cartela) {
       await removeCartelaFromAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela);
-      toast({
-        title: "Cartela removida",
-        description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi removida da atribuição.`
-      });
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Exclusão de cartela', numeros: [deletingAtribuicao.cartela] });
+      toast({ title: 'Cartela removida', description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi removida da atribuição.` });
+    } else if (actionType === 'excluir-cartela' && deletingAtribuicao.cartelas?.length) {
+      for (const numero of deletingAtribuicao.cartelas) await removeCartelaFromAtribuicao(deletingAtribuicao.id, numero);
+      registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Exclusão de cartelas em lote', numeros: deletingAtribuicao.cartelas });
+      toast({ title: 'Cartelas removidas', description: `${deletingAtribuicao.cartelas.length} cartela(s) removidas da atribuição.` });
+      limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'excluir-atribuicao') {
       await deleteAtribuicao(deletingAtribuicao.id);
-      toast({
-        title: "Atribuição excluída",
-        description: `A atribuição de ${atribuicao.vendedor_nome} foi excluída.`
-      });
+      toast({ title: 'Atribuição excluída', description: `A atribuição de ${atribuicao.vendedor_nome} foi excluída.` });
     }
 
     setDeleteDialogOpen(false);
     setDeletingAtribuicao(null);
   };
 
-  const limparFiltros = () => {
-    setFiltrosAtribuicoes({ busca: '', status: 'todos', vendedor: 'todos' });
-  };
+  const limparFiltros = () => setFiltrosAtribuicoes({ busca: '', status: 'todos', vendedor: 'todos' });
+  const toggleExpand = (id: string) => setExpandedAtribuicao(prev => (prev === id ? null : id));
 
-  const toggleExpand = (id: string) => {
-    setExpandedAtribuicao(prev => prev === id ? null : id);
-  };
-
-  const getStatusCounts = (cartelas: CartelaAtribuida[]) => {
-    return {
-      ativas: cartelas.filter(c => c.status === 'ativa').length,
-      vendidas: cartelas.filter(c => c.status === 'vendida').length,
-      devolvidas: cartelas.filter(c => c.status === 'devolvida').length,
-      extraviadas: cartelas.filter(c => c.status === 'extraviada').length,
-    };
-  };
+  const getStatusCounts = (cartelas: CartelaAtribuida[]) => ({
+    ativas: cartelas.filter(c => c.status === 'ativa').length,
+    vendidas: cartelas.filter(c => c.status === 'vendida').length,
+    devolvidas: cartelas.filter(c => c.status === 'devolvida').length,
+    extraviadas: cartelas.filter(c => c.status === 'extraviada').length,
+  });
 
   return (
     <div className="animate-fade-in">
@@ -317,32 +332,16 @@ const AtribuicoesTab: React.FC = () => {
         </Button>
       </div>
 
-      {/* Filtros */}
       <div className="filter-bar">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-1">
-              <Search className="w-4 h-4" />
-              Buscar
-            </label>
-            <Input
-              placeholder="Vendedor ou número..."
-              value={filtrosAtribuicoes.busca}
-              onChange={(e) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, busca: e.target.value })}
-            />
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1"><Search className="w-4 h-4" />Buscar</label>
+            <Input placeholder="Vendedor ou número..." value={filtrosAtribuicoes.busca} onChange={(e) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, busca: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-1">
-              <Filter className="w-4 h-4" />
-              Status Cartelas
-            </label>
-            <Select 
-              value={filtrosAtribuicoes.status} 
-              onValueChange={(value: string) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, status: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1"><Filter className="w-4 h-4" />Status Cartelas</label>
+            <Select value={filtrosAtribuicoes.status} onValueChange={(value: string) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, status: value })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="ativa">Ativas</SelectItem>
@@ -353,40 +352,27 @@ const AtribuicoesTab: React.FC = () => {
             </Select>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-1">
-              Vendedor
-            </label>
-            <Select 
-              value={filtrosAtribuicoes.vendedor} 
-              onValueChange={(value) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, vendedor: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+            <label className="text-sm font-semibold text-foreground">Vendedor</label>
+            <Select value={filtrosAtribuicoes.vendedor} onValueChange={(value) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, vendedor: value })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
-                {vendedores.map(v => (
-                  <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
-                ))}
+                {vendedores.map(v => <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-end">
-            <Button variant="outline" onClick={limparFiltros} className="w-full gap-2">
-              <Eraser className="w-4 h-4" />
-              Limpar
-            </Button>
+            <Button variant="outline" onClick={limparFiltros} className="w-full gap-2"><Eraser className="w-4 h-4" />Limpar</Button>
           </div>
         </div>
       </div>
 
-      {/* Lista de Atribuições */}
       <div className="space-y-4">
         {atribuicoesFiltradas.map((atribuicao) => {
+          const isPlaceholder = atribuicao.id.startsWith('placeholder-');
           const counts = getStatusCounts(atribuicao.cartelas);
           const isExpanded = expandedAtribuicao === atribuicao.id;
           const possuiCartelaVendida = atribuicao.cartelas.some(c => c.status === 'vendida');
-          
           const cartelasFiltradasDaAtribuicao = atribuicao.cartelas.filter((cartela) => {
             const filtro = filtrosPorAtribuicao[atribuicao.id];
             const busca = (filtro?.busca || '').trim();
@@ -406,199 +392,104 @@ const AtribuicoesTab: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                          <span className="text-primary font-bold text-lg">
-                            {atribuicao.vendedor_nome?.charAt(0).toUpperCase()}
-                          </span>
+                          <span className="text-primary font-bold text-lg">{atribuicao.vendedor_nome?.charAt(0).toUpperCase()}</span>
                         </div>
-                                        <div>
-                                          <h3 className="font-bold text-foreground text-lg">{atribuicao.vendedor_nome}</h3>
-                                          <p className="text-sm text-muted-foreground">
-                                            {atribuicao.cartelas.length} cartela(s) atribuída(s)
-                                          </p>
-                                          <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                                            <DollarSign className="w-3 h-3" />
-                                            Previsão: {formatarMoeda(atribuicao.cartelas.length * (sorteioAtivo?.valor_cartela || 0))}
-                                          </p>
-                                        </div>
+                        <div>
+                          <h3 className="font-bold text-foreground text-lg">{atribuicao.vendedor_nome}</h3>
+                          <p className="text-sm text-muted-foreground">{atribuicao.cartelas.length} cartela(s) atribuída(s)</p>
+                          <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium"><DollarSign className="w-3 h-3" />Previsão: {formatarMoeda(atribuicao.cartelas.length * (sorteioAtivo?.valor_cartela || 0))}</p>
+                        </div>
                       </div>
-                      
                       <div className="flex items-center gap-4">
                         <div className="hidden sm:flex gap-2">
-                          {counts.ativas > 0 && (
-                            <span className="status-badge status-ativa">
-                              {counts.ativas} ativa(s)
-                            </span>
-                          )}
-                          {counts.vendidas > 0 && (
-                            <span className="status-badge status-vendida">
-                              {counts.vendidas} vendida(s)
-                            </span>
-                          )}
-                          {counts.devolvidas > 0 && (
-                            <span className="status-badge status-devolvida">
-                              {counts.devolvidas} devolvida(s)
-                            </span>
-                          )}
-                          {counts.extraviadas > 0 && (
-                            <span className="status-badge status-extraviada">
-                              {counts.extraviadas} extraviada(s)
-                            </span>
-                          )}
+                          {counts.ativas > 0 && <span className="status-badge status-ativa">{counts.ativas} ativa(s)</span>}
+                          {counts.vendidas > 0 && <span className="status-badge status-vendida">{counts.vendidas} vendida(s)</span>}
+                          {counts.devolvidas > 0 && <span className="status-badge status-devolvida">{counts.devolvidas} devolvida(s)</span>}
+                          {counts.extraviadas > 0 && <span className="status-badge status-extraviada">{counts.extraviadas} extraviada(s)</span>}
                         </div>
-                        
                         <div className="flex items-center gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditarAtribuicao(atribuicao);
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            disabled={possuiCartelaVendida}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleExcluirAtribuicao(atribuicao.id, atribuicao.vendedor_id);
-                            }}
-                            title={possuiCartelaVendida ? 'Não é possível excluir atribuição com cartela vendida' : 'Excluir atribuição'}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                          {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                          )}
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); if (isPlaceholder) { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); return; } handleEditarAtribuicao(atribuicao); }}><Edit className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" disabled={possuiCartelaVendida || isPlaceholder} onClick={(e) => { e.stopPropagation(); if (!isPlaceholder) handleExcluirAtribuicao(atribuicao.id, atribuicao.vendedor_id); }}><Trash2 className="w-4 h-4" /></Button>
+                          {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
                         </div>
                       </div>
                     </div>
                   </div>
                 </CollapsibleTrigger>
-                
                 <CollapsibleContent>
-                  <div className="border-t border-border p-4 bg-muted/20">
-                    <div className="mb-4 flex justify-between items-center">
+                  <div className="border-t border-border p-4 bg-muted/20 space-y-3">
+                    <div className="mb-2 flex justify-between items-center">
                       <h4 className="font-semibold text-foreground">Cartelas Atribuídas</h4>
                       <div className="flex gap-2">
                         {atribuicao.cartelas.filter(c => c.status === 'ativa').length > 1 && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => {
-                              setTransferAtribuicao(atribuicao);
-                              setTransferCartelaNumero(null); // null = multi-select mode
-                              setTransferCartelasSelecionadas([]);
-                              setIsTransferModalOpen(true);
-                            }}
-                            className="gap-1"
-                          >
-                            <ArrowRightLeft className="w-4 h-4" />
-                            Transferir Várias
+                          <Button size="sm" variant="outline" onClick={() => { setTransferAtribuicao(atribuicao); setTransferCartelaNumero(null); setTransferCartelasSelecionadas([]); setIsTransferModalOpen(true); }} className="gap-1">
+                            <ArrowRightLeft className="w-4 h-4" />Transferir Várias
                           </Button>
                         )}
-                        <Button 
-                          size="sm" 
+                        <Button size="sm" variant="outline" onClick={() => { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); }} className="gap-1"><Plus className="w-4 h-4" />Adicionar Cartelas</Button>
+                        <Button
+                          size="sm"
                           variant="outline"
-                          onClick={() => { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); }}
                           className="gap-1"
+                          onClick={() => {
+                            const nums = atribuicao.cartelas.map(c => c.numero);
+                            if (nums.length === 0) {
+                              toast({ title: 'Sem cartelas', description: 'Este vendedor ainda não tem cartelas para comprovante.', variant: 'destructive' });
+                              return;
+                            }
+                            setComprovanteData({
+                              sorteioNome: sorteioAtivo.nome,
+                              vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
+                              numeros: nums,
+                              valorCartela: sorteioAtivo.valor_cartela || 0,
+                              dataHora: new Date().toLocaleString('pt-BR'),
+                            });
+                            setComprovanteOpen(true);
+                            registrarHistorico({ vendedorId: atribuicao.vendedor_id, acao: 'Comprovante impresso/gerado', numeros: nums });
+                          }}
                         >
-                          <Plus className="w-4 h-4" />
-                          Adicionar Cartelas
+                          <Printer className="w-4 h-4" />
+                          Imprimir Comprovante
                         </Button>
                       </div>
                     </div>
-                    
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <Input placeholder="Filtrar por número..." value={filtrosPorAtribuicao[atribuicao.id]?.busca || ''} onChange={(e) => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: e.target.value, status: prev[atribuicao.id]?.status || 'todos' } }))} />
+                      <Select value={filtrosPorAtribuicao[atribuicao.id]?.status || 'todos'} onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: prev[atribuicao.id]?.busca || '', status: value } }))}>
+                        <SelectTrigger><SelectValue placeholder="Status da cartela" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os status</SelectItem>
+                          <SelectItem value="ativa">Ativa</SelectItem>
+                          <SelectItem value="vendida">Vendida</SelectItem>
+                          <SelectItem value="devolvida">Devolvida</SelectItem>
+                          <SelectItem value="extraviada">Extraviada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="outline" onClick={() => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: '', status: 'todos' } }))}>Limpar filtros desta atribuição</Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Input placeholder="Faixa para ação (ex: 10-100)" value={faixaAcaoPorAtribuicao[atribuicao.id] || ''} onChange={(e) => setFaixaAcaoPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: e.target.value }))} className="w-56" />
+                      <Button type="button" size="sm" variant="outline" onClick={() => selecionarPorFaixa(atribuicao)}>Selecionar Faixa</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero))}>Selecionar filtradas</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => limparSelecao(atribuicao.id)}>Limpar seleção</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'extraviar', 'ativa')}>Extraviar selecionadas</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'devolver', 'ativa')}>Devolver selecionadas</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'reverter-extravio')}>Reverter selecionadas</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'transferir', 'ativa')}>Transferir selecionadas</Button>
+                      <Button type="button" size="sm" variant="destructive" onClick={() => handleAcaoEmLote(atribuicao, 'excluir-cartela')}>Excluir selecionadas</Button>
+                    </div>
+
                     {atribuicao.cartelas.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-4">
-                        Nenhuma cartela atribuída a este vendedor
-                      </p>
+                      <p className="text-center text-muted-foreground py-4">Nenhuma cartela atribuída a este vendedor</p>
                     ) : (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          <Input
-                            placeholder="Filtrar por número..."
-                            value={filtrosPorAtribuicao[atribuicao.id]?.busca || ''}
-                            onChange={(e) => setFiltrosPorAtribuicao(prev => ({
-                              ...prev,
-                              [atribuicao.id]: {
-                                busca: e.target.value,
-                                status: prev[atribuicao.id]?.status || 'todos',
-                              },
-                            }))}
-                          />
-                          <Select
-                            value={filtrosPorAtribuicao[atribuicao.id]?.status || 'todos'}
-                            onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosPorAtribuicao(prev => ({
-                              ...prev,
-                              [atribuicao.id]: {
-                                busca: prev[atribuicao.id]?.busca || '',
-                                status: value,
-                              },
-                            }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Status da cartela" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="todos">Todos os status</SelectItem>
-                              <SelectItem value="ativa">Ativa</SelectItem>
-                              <SelectItem value="vendida">Vendida</SelectItem>
-                              <SelectItem value="devolvida">Devolvida</SelectItem>
-                              <SelectItem value="extraviada">Extraviada</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setFiltrosPorAtribuicao(prev => ({
-                              ...prev,
-                              [atribuicao.id]: { busca: '', status: 'todos' },
-                            }))}
-                          >
-                            Limpar filtros desta atribuição
-                          </Button>
-                        </div>
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero))}>
-                            Selecionar filtradas
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => limparSelecao(atribuicao.id)}>
-                            Limpar seleção
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'extraviar', 'ativa')}>
-                            Extraviar selecionadas
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'devolver', 'ativa')}>
-                            Devolver selecionadas
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'reverter-extravio')}>
-                            Reverter selecionadas
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'transferir', 'ativa')}>
-                            Transferir selecionadas
-                          </Button>
-                        </div>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="bg-muted/50">
                               <th className="p-3 text-center font-semibold text-foreground">
-                                <Checkbox
-                                  checked={todasFiltradasSelecionadas}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero));
-                                      return;
-                                    }
-                                    limparSelecao(atribuicao.id);
-                                  }}
-                                />
+                                <Checkbox checked={todasFiltradasSelecionadas} onCheckedChange={(checked) => checked ? selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero)) : limparSelecao(atribuicao.id)} />
                               </th>
                               <th className="p-3 text-left font-semibold text-foreground">Cartela</th>
                               <th className="p-3 text-left font-semibold text-foreground">Data Atribuição</th>
@@ -609,92 +500,22 @@ const AtribuicoesTab: React.FC = () => {
                           <tbody>
                             {cartelasFiltradasDaAtribuicao.map((cartela) => (
                               <tr key={cartela.numero} className="border-b border-border hover:bg-muted/30 transition-colors">
-                                <td className="p-3 text-center">
-                                  <Checkbox
-                                    checked={selecionadas.includes(cartela.numero)}
-                                    onCheckedChange={(checked) => toggleCartelaSelecionada(atribuicao.id, cartela.numero, !!checked)}
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <span className="px-3 py-1 bg-primary/10 text-primary rounded-full font-bold">
-                                    {formatarNumeroCartela(cartela.numero)}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-muted-foreground">
-                                  {formatarData(cartela.data_atribuicao)}
-                                </td>
-                                <td className="p-3 text-center">
-                                  <span className={cn('status-badge', `status-${cartela.status}`)}>
-                                    {getStatusLabel(cartela.status)}
-                                  </span>
-                                </td>
+                                <td className="p-3 text-center"><Checkbox checked={selecionadas.includes(cartela.numero)} onCheckedChange={(checked) => toggleCartelaSelecionada(atribuicao.id, cartela.numero, !!checked)} /></td>
+                                <td className="p-3"><span className="px-3 py-1 bg-primary/10 text-primary rounded-full font-bold">{formatarNumeroCartela(cartela.numero)}</span></td>
+                                <td className="p-3 text-muted-foreground">{formatarData(cartela.data_atribuicao)}</td>
+                                <td className="p-3 text-center"><span className={cn('status-badge', `status-${cartela.status}`)}>{getStatusLabel(cartela.status)}</span></td>
                                 <td className="p-3">
                                   <div className="flex justify-center gap-2">
                                     {cartela.status === 'ativa' && (
                                       <>
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline"
-                                          onClick={() => handleExtraviada(atribuicao.id, cartela.numero)}
-                                          className="gap-1 border-orange-400 text-orange-600 hover:border-orange-600 hover:bg-orange-600 hover:text-white"
-                                          title="Marcar como extraviada"
-                                        >
-                                          <AlertTriangle className="w-4 h-4" />
-                                        </Button>
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline" 
-                                          onClick={() => handleTransferirCartela(atribuicao, cartela.numero)}
-                                          className="gap-1"
-                                          title="Transferir para outro vendedor"
-                                        >
-                                          <ArrowRightLeft className="w-4 h-4" />
-                                          Transferir
-                                        </Button>
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline" 
-                                          onClick={() => handleDevolverCartela(atribuicao.id, cartela.numero)}
-                                          className="gap-1"
-                                        >
-                                          <RotateCcw className="w-4 h-4" />
-                                          Devolver
-                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={() => handleExtraviada(atribuicao.id, cartela.numero)} className="gap-1 border-orange-400 text-orange-600 hover:border-orange-600 hover:bg-orange-600 hover:text-white" title="Marcar como extraviada"><AlertTriangle className="w-4 h-4" /></Button>
+                                        <Button size="sm" variant="outline" onClick={() => handleTransferirCartela(atribuicao, cartela.numero)} className="gap-1" title="Transferir para outro vendedor"><ArrowRightLeft className="w-4 h-4" />Transferir</Button>
+                                        <Button size="sm" variant="outline" onClick={() => handleDevolverCartela(atribuicao.id, cartela.numero)} className="gap-1"><RotateCcw className="w-4 h-4" />Devolver</Button>
                                       </>
                                     )}
-                                    {cartela.status === 'extraviada' && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)}
-                                        className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
-                                        title="Reverter extravio e voltar para ativa"
-                                      >
-                                        <RotateCcw className="w-4 h-4" />
-                                        Reverter
-                                      </Button>
-                                    )}
-                                    {cartela.status === 'devolvida' && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)}
-                                        className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
-                                        title="Reverter devolução e voltar para ativa"
-                                      >
-                                        <RotateCcw className="w-4 h-4" />
-                                        Reverter Devolução
-                                      </Button>
-                                    )}
-                                    {cartela.status !== 'vendida' && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="destructive" 
-                                        onClick={() => handleExcluirCartela(atribuicao.id, cartela.numero)}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    )}
+                                    {cartela.status === 'extraviada' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter</Button>}
+                                    {cartela.status === 'devolvida' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter Devolução</Button>}
+                                    {cartela.status !== 'vendida' && <Button size="sm" variant="destructive" onClick={() => handleExcluirCartela(atribuicao.id, cartela.numero)}><Trash2 className="w-4 h-4" /></Button>}
                                   </div>
                                 </td>
                               </tr>
@@ -702,16 +523,54 @@ const AtribuicoesTab: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
-                      </div>
-                      </div>
                     )}
+                    <div className="mt-3 border-t pt-3">
+                      <p className="text-sm font-semibold text-foreground mb-2">Histórico da atribuição</p>
+                      {(historicoPorVendedor[atribuicao.vendedor_id] || []).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Sem histórico registrado ainda.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                          {(historicoPorVendedor[atribuicao.vendedor_id] || []).map((h) => (
+                            <div key={h.id} className="rounded-md border bg-background p-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-medium">{h.acao}</p>
+                                  <p className="text-xs text-muted-foreground">{h.dataHora}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  onClick={() => {
+                                    setComprovanteData({
+                                      sorteioNome: sorteioAtivo.nome,
+                                      vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
+                                      numeros: h.numeros,
+                                      valorCartela: sorteioAtivo.valor_cartela || 0,
+                                      dataHora: h.dataHora,
+                                    });
+                                    setComprovanteOpen(true);
+                                  }}
+                                >
+                                  <Printer className="w-3 h-3" />
+                                  Comprovante
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Cartelas: {h.numeros.slice(0, 20).map(n => formatarNumeroCartela(n)).join(', ')}{h.numeros.length > 20 ? ` ... (+${h.numeros.length - 20})` : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CollapsibleContent>
               </div>
             </Collapsible>
           );
         })}
-        
+
         {atribuicoesFiltradas.length === 0 && (
           <div className="text-center py-12 bg-card border border-border rounded-xl">
             {atribuicoes.length === 0 ? (
@@ -719,10 +578,7 @@ const AtribuicoesTab: React.FC = () => {
                 <ListTodo className="w-12 h-12 mx-auto mb-4 opacity-50 text-muted-foreground" />
                 <p className="text-lg text-foreground">Nenhuma atribuição encontrada</p>
                 <p className="text-sm mt-2 text-muted-foreground">Atribua cartelas aos vendedores para começar</p>
-                <Button onClick={() => setIsModalOpen(true)} className="mt-4 gap-2">
-                  <Plus className="w-4 h-4" />
-                  Nova Atribuição
-                </Button>
+                <Button onClick={() => setIsModalOpen(true)} className="mt-4 gap-2"><Plus className="w-4 h-4" />Nova Atribuição</Button>
               </div>
             ) : (
               <div>
@@ -740,19 +596,26 @@ const AtribuicoesTab: React.FC = () => {
         onClose={() => { setIsModalOpen(false); setEditingAtribuicao(null); setInitialVendedorId(null); }}
         editingAtribuicao={editingAtribuicao}
         initialVendedorId={initialVendedorId}
+        onShowComprovante={(data) => { setComprovanteData(data); setComprovanteOpen(true); }}
+        onRegistrarHistorico={(payload: AtribuicaoHistoricoPayload) => {
+          registrarHistorico({
+            vendedorId: payload.vendedorId,
+            acao: payload.acao,
+            numeros: payload.numeros,
+          });
+        }}
       />
 
       <TransferenciaModal
         isOpen={isTransferModalOpen}
-        onClose={() => {
-          setIsTransferModalOpen(false);
-          setTransferAtribuicao(null);
-          setTransferCartelaNumero(null);
-          setTransferCartelasSelecionadas([]);
-        }}
+        onClose={() => { setIsTransferModalOpen(false); setTransferAtribuicao(null); setTransferCartelaNumero(null); setTransferCartelasSelecionadas([]); }}
         atribuicaoOrigem={transferAtribuicao}
         cartelaNumero={transferCartelaNumero}
         initialSelectedCartelas={transferCartelasSelecionadas}
+        onTransferSuccess={({ origemVendedorId, destinoVendedorId, numeros }) => {
+          registrarHistorico({ vendedorId: origemVendedorId, acao: 'Transferência enviada', numeros });
+          registrarHistorico({ vendedorId: destinoVendedorId, acao: 'Transferência recebida', numeros });
+        }}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -761,24 +624,21 @@ const AtribuicoesTab: React.FC = () => {
             <AlertDialogTitle>
               {actionType === 'devolver' && 'Devolver Cartela'}
               {actionType === 'extraviar' && 'Marcar como Extraviada'}
-              {actionType === 'reverter-extravio' && 'Reverter Extravio'}
-              {actionType === 'excluir-cartela' && 'Remover Cartela'}
+              {actionType === 'reverter-extravio' && 'Reverter Status'}
+              {actionType === 'excluir-cartela' && 'Remover Cartela(s)'}
               {actionType === 'excluir-atribuicao' && 'Excluir Atribuição'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {actionType === 'devolver' && `Tem certeza que deseja devolver ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'}? Ela(s) será(ão) marcada(s) como devolvida(s).`}
+              {actionType === 'devolver' && `Tem certeza que deseja devolver ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'}?`}
               {actionType === 'extraviar' && `Tem certeza que deseja marcar ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'} como extraviada?`}
-              {actionType === 'reverter-extravio' && `Tem certeza que deseja reverter ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'o extravio desta cartela'}?`}
-              {actionType === 'excluir-cartela' && 'Tem certeza que deseja remover esta cartela da atribuição? Ela voltará a ficar disponível.'}
+              {actionType === 'reverter-extravio' && `Tem certeza que deseja reverter ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'} para ativa?`}
+              {actionType === 'excluir-cartela' && `Tem certeza que deseja remover ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'} da atribuição?`}
               {actionType === 'excluir-atribuicao' && 'Tem certeza que deseja excluir esta atribuição? Todas as cartelas voltarão a ficar disponíveis.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmAction}
-              className={actionType !== 'devolver' ? 'bg-danger text-danger-foreground hover:bg-danger/90' : ''}
-            >
+            <AlertDialogAction onClick={confirmAction} className={actionType !== 'devolver' ? 'bg-danger text-danger-foreground hover:bg-danger/90' : ''}>
               {actionType === 'devolver' && 'Devolver'}
               {actionType === 'extraviar' && 'Marcar Extraviada'}
               {actionType === 'reverter-extravio' && 'Reverter'}
@@ -788,6 +648,8 @@ const AtribuicoesTab: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ComprovanteAtribuicaoModal isOpen={comprovanteOpen} onClose={() => setComprovanteOpen(false)} data={comprovanteData} />
     </div>
   );
 };

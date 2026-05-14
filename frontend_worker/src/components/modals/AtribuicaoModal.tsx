@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
-import { Atribuicao, CartelaAtribuida } from '@/types/bingo';
-import { gerarId, formatarNumeroCartela } from '@/lib/utils/formatters';
+import { Atribuicao } from '@/types/bingo';
+import { formatarNumeroCartela } from '@/lib/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -22,17 +22,27 @@ import {
 } from '@/components/ui/select';
 import { ListTodo, Save, Eraser, AlertCircle, X, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ComprovanteAtribuicaoData } from '@/components/modals/ComprovanteAtribuicaoModal';
+
+export interface AtribuicaoHistoricoPayload {
+  vendedorId: string;
+  vendedorNome: string;
+  numeros: number[];
+  acao: string;
+}
 
 interface AtribuicaoModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingAtribuicao?: Atribuicao | null;
   initialVendedorId?: string | null;
+  onShowComprovante?: (data: ComprovanteAtribuicaoData) => void;
+  onRegistrarHistorico?: (payload: AtribuicaoHistoricoPayload) => void;
 }
 
 type TipoSelecao = 'individual' | 'faixa' | 'aleatorio';
 
-const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, editingAtribuicao, initialVendedorId }) => {
+const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, editingAtribuicao, initialVendedorId, onShowComprovante, onRegistrarHistorico }) => {
   const { 
     sorteioAtivo, 
     vendedores, 
@@ -40,8 +50,7 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
     atribuicoes,
     addAtribuicaoComProgresso, 
     addCartelasToAtribuicaoComProgresso,
-    removeCartelaFromAtribuicao,
-    atualizarStatusCartela 
+    removeCartelaFromAtribuicao
   } = useBingo();
   const { toast } = useToast();
   
@@ -74,68 +83,15 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
     }
   }, [isOpen, editingAtribuicao, initialVendedorId]);
 
-  const gerarComprovanteAtribuicao = (vendedorNome: string, numeros: number[]) => {
-    if (numeros.length === 0) return;
-    const numerosOrdenados = [...numeros].sort((a, b) => a - b);
-    const totalPrevisto = (sorteioAtivo?.valor_cartela || 0) * numerosOrdenados.length;
-    const conteudo = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="UTF-8" />
-          <title>Comprovante de Atribuição</title>
-          <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial, sans-serif; font-size: 14px; color: #111; padding: 24px; }
-            .header { text-align: center; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; }
-            .header h1 { font-size: 22px; font-weight: bold; }
-            .header p { font-size: 13px; color: #555; margin-top: 4px; }
-            .section { margin-bottom: 16px; }
-            .section h2 { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 8px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-            .row .label { color: #555; }
-            .row .value { font-weight: 600; text-align: right; }
-            .numeros { display: flex; flex-wrap: wrap; gap: 6px; }
-            .numero { background: #1d4ed8; color: white; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 13px; min-width: 40px; text-align: center; }
-            .assinaturas { display: flex; justify-content: space-between; gap: 32px; margin-top: 48px; }
-            .assinaturas > div { flex: 1; text-align: center; }
-            .linha { border-top: 1px solid #111; padding-top: 6px; margin-top: 48px; }
-            .linha p { font-size: 12px; color: #555; margin-top: 2px; }
-            .linha p.titulo { font-weight: bold; color: #111; }
-            .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>COMPROVANTE DE CARTELAS ENTREGUES</h1>
-            <p>${sorteioAtivo?.nome || ''}</p>
-          </div>
-          <div class="section">
-            <h2>Identificação</h2>
-            <div class="row"><span class="label">Data/Hora</span><span class="value">${new Date().toLocaleString('pt-BR')}</span></div>
-            <div class="row"><span class="label">Vendedor</span><span class="value">${vendedorNome}</span></div>
-            <div class="row"><span class="label">Quantidade</span><span class="value">${numerosOrdenados.length} cartela(s)</span></div>
-            <div class="row"><span class="label">Previsão de venda</span><span class="value">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrevisto)}</span></div>
-          </div>
-          <div class="section">
-            <h2>Cartelas Entregues</h2>
-            <div class="numeros">
-              ${numerosOrdenados.map(n => `<span class="numero">${formatarNumeroCartela(n)}</span>`).join('')}
-            </div>
-          </div>
-          <div class="assinaturas">
-            <div><div class="linha"><p>${vendedorNome}</p><p class="titulo">Recebedor</p></div></div>
-            <div><div class="linha"><p>Responsável</p><p class="titulo">Entregador</p></div></div>
-          </div>
-          <div class="footer">Documento gerado automaticamente pelo sistema.</div>
-        </body>
-      </html>
-    `;
-    const janela = window.open('', '_blank', 'width=700,height=900');
-    if (!janela) return;
-    janela.document.write(conteudo);
-    janela.document.close();
-    janela.focus();
+  const abrirComprovante = (vendedorNome: string, numeros: number[]) => {
+    if (!onShowComprovante || numeros.length === 0) return;
+    onShowComprovante({
+      sorteioNome: sorteioAtivo?.nome || '',
+      vendedorNome,
+      numeros: [...numeros].sort((a, b) => a - b),
+      valorCartela: sorteioAtivo?.valor_cartela || 0,
+      dataHora: new Date().toLocaleString('pt-BR'),
+    });
   };
 
   const parseRange = (input: string): number[] => {
@@ -267,7 +223,13 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           description: `Atribuição atualizada com sucesso.`
         });
         if (adicionadas.length > 0) {
-          gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', adicionadas);
+          abrirComprovante(vendedor?.nome || 'Vendedor', adicionadas);
+          onRegistrarHistorico?.({
+            vendedorId,
+            vendedorNome: vendedor?.nome || 'Vendedor',
+            numeros: adicionadas,
+            acao: 'Atribuição adicionada',
+          });
         }
       } else if (atribuicaoExistente) {
         // Add cartelas to existing attribution
@@ -281,7 +243,13 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           title: "Cartelas adicionadas",
           description: `${cartelasSelecionadas.length} cartela(s) adicionada(s) à atribuição existente.`
         });
-        gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
+        abrirComprovante(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
+        onRegistrarHistorico?.({
+          vendedorId,
+          vendedorNome: vendedor?.nome || 'Vendedor',
+          numeros: cartelasSelecionadas,
+          acao: 'Atribuição adicionada',
+        });
       } else {
         // Create new attribution
         await addAtribuicaoComProgresso(
@@ -294,7 +262,13 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           title: "Atribuição realizada",
           description: `${cartelasSelecionadas.length} cartela(s) atribuída(s) com sucesso.`
         });
-        gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
+        abrirComprovante(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
+        onRegistrarHistorico?.({
+          vendedorId,
+          vendedorNome: vendedor?.nome || 'Vendedor',
+          numeros: cartelasSelecionadas,
+          acao: 'Atribuição criada',
+        });
       }
 
       onClose();
