@@ -968,8 +968,8 @@ const DrawTab: React.FC = () => {
     if (rankingCardsWithGrade.length === 0) return [];
 
     const scored: RankingCartela[] = rankingCardsWithGrade.map(c => {
-      const grids = normalizeNumerosGrade(c.numeros_grade);
-      const allNums = [...new Set(grids.flatMap(g => g.filter((n: number) => n !== 0)))];
+      const grids = extractGradeMatrices(c.numeros_grade, gridColumns, gridRows);
+      const allNums = [...new Set(grids.flatMap((grid) => grid.flatMap((row) => Array.isArray(row) ? row : [])).filter((n) => n !== 0))];
       const score = allNums.filter(n => drawnSet.has(n)).length;
       return { numero: c.numero, score, nome: c.comprador_nome };
     });
@@ -977,7 +977,7 @@ const DrawTab: React.FC = () => {
     return scored
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || a.numero - b.numero);
-  }, [drawnNumbers, rankingCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
+  }, [drawnNumbers, rankingCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo, gridColumns, gridRows]);
 
   const winnerEntries = useMemo(() => {
     if (drawnNumbers.length === 0) return [];
