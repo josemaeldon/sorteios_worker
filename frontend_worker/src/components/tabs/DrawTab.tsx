@@ -176,6 +176,7 @@ const DrawTab: React.FC = () => {
   const [justDrawn, setJustDrawn] = useState(shouldHydrateOfflineState ? !!drawTabSnapshot.justDrawn : false);
   const [vencedoras, setVencedoras] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.vencedoras as number[]) || []) : []);
   const [isVerifying, setIsVerifying] = useState<boolean>(shouldHydrateOfflineState ? !!drawTabSnapshot.isVerifying : false);
+  const [winnerCardPulse, setWinnerCardPulse] = useState(false);
   const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[][] } | null>(null);
   const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []) : []);
   const [manualNumberInput, setManualNumberInput] = useState(shouldHydrateOfflineState ? ((drawTabSnapshot.manualNumberInput as string) || '') : '');
@@ -1029,6 +1030,8 @@ const DrawTab: React.FC = () => {
 
   useEffect(() => {
     if (winnerEntries.length > 0) {
+      setVencedoras(winnerEntries.map((c) => c.numero));
+      setWinnerCardPulse(true);
       const newWinners = winnerEntries.filter((c) => !ganhadoresPopShownRef.current.has(c.numero));
       if (newWinners.length > 0) {
         newWinners.forEach((c) => ganhadoresPopShownRef.current.add(c.numero));
@@ -1038,8 +1041,17 @@ const DrawTab: React.FC = () => {
           return { numero: c.numero, nome: c.nome, lote: idx !== -1 ? Math.floor(idx / loteSize) + 1 : undefined };
         }));
       }
+    } else if (!isVerifying) {
+      setVencedoras([]);
+      setWinnerCardPulse(false);
     }
-  }, [winnerEntries, cartelasValidadas, sorteioAtivo]);
+  }, [winnerEntries, cartelasValidadas, sorteioAtivo, isVerifying]);
+
+  useEffect(() => {
+    if (!winnerCardPulse) return;
+    const timer = window.setTimeout(() => setWinnerCardPulse(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [winnerCardPulse]);
 
   if (!sorteioAtivo) {
     return (
@@ -1373,14 +1385,12 @@ const DrawTab: React.FC = () => {
                   <p className="text-muted-foreground mb-6">Cartela(s) com todos os números sorteados</p>
                   <div className="space-y-2 mb-8">
                     {ganhadoresPop.map(({ numero, nome, lote }) => (
-                      <button
+                      <div
                         key={numero}
-                        type="button"
-                        onClick={() => handleCartelaClick(numero, nome)}
-                        className="block w-full text-2xl font-bold text-primary hover:underline"
+                        className="block w-full text-2xl font-bold text-primary"
                       >
                         Cartela {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}{lote !== undefined ? ` · Lote ${lote}` : ''}
-                      </button>
+                      </div>
                     ))}
                   </div>
                   <Button onClick={() => setGanhadoresPop([])} size="lg" className="gap-2">
@@ -1533,7 +1543,7 @@ const DrawTab: React.FC = () => {
           <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
-              <Card className="border-2 border-success bg-success/5">
+              <Card className={cn("border-2 border-success bg-success/5", winnerCardPulse && "animate-pulse shadow-lg shadow-success/20")}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-success flex items-center gap-2">
                     <CheckCircle className="w-5 h-5" />
