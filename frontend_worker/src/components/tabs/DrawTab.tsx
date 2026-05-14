@@ -78,6 +78,30 @@ const normalizeNumerosGrade = (raw: unknown): number[][] => {
   return [(parsed as unknown[]).map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
 };
 
+const isQuinaWinner = (grade: number[][], drawnSet: Set<number>): boolean => {
+  if (!Array.isArray(grade) || grade.length === 0) return false;
+  const maxCols = Math.max(...grade.map((row) => row.length), 0);
+  if (maxCols === 0) return false;
+
+  for (const row of grade) {
+    const filled = row.filter((n) => Number(n) > 0);
+    if (filled.length === 5 && filled.every((n) => drawnSet.has(Number(n)))) {
+      return true;
+    }
+  }
+
+  for (let colIndex = 0; colIndex < maxCols; colIndex++) {
+    const column = grade
+      .map((row) => row[colIndex])
+      .filter((n) => Number(n) > 0);
+    if (column.length === 5 && column.every((n) => drawnSet.has(Number(n)))) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const isOfflineQueued = (result: unknown): boolean =>
   !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
 
@@ -89,9 +113,6 @@ const DrawTab: React.FC = () => {
   const drawTabSnapshot = (getOfflineAppState().bingo?.drawTab || {}) as Record<string, unknown>;
   const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
 
-  // Winning score = total cells in the grid (cols × rows), defaults to 25 (5×5)
-  const winningScore = (sorteioAtivo?.grade_colunas ?? 5) * (sorteioAtivo?.grade_linhas ?? 5);
-  
   // Rodadas state
   const [rodadas, setRodadas] = useState<RodadaSorteio[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.rodadas as RodadaSorteio[]) || []) : []);
   const [isLoadingRodadas, setIsLoadingRodadas] = useState(false);
@@ -103,6 +124,7 @@ const DrawTab: React.FC = () => {
     nome: '',
     range_start: '1',
     range_end: '75',
+    tipo_vitoria: 'bingo' as 'bingo' | 'quina',
     status: 'ativo' as 'ativo' | 'concluido' | 'cancelado'
   });
   
@@ -319,6 +341,7 @@ const DrawTab: React.FC = () => {
       nome: '',
       range_start: '1',
       range_end: isRifa ? (sorteioAtivo?.quantidade_cartelas?.toString() ?? '75') : getBingoMaxNumber(cols, rows).toString(),
+      tipo_vitoria: 'bingo',
       status: 'ativo'
     });
     setIsModalOpen(true);
@@ -330,6 +353,7 @@ const DrawTab: React.FC = () => {
       nome: rodada.nome,
       range_start: rodada.range_start.toString(),
       range_end: rodada.range_end.toString(),
+      tipo_vitoria: (rodada.tipo_vitoria || 'bingo') as 'bingo' | 'quina',
       status: rodada.status
     });
     setIsModalOpen(true);
@@ -408,6 +432,7 @@ const DrawTab: React.FC = () => {
           nome: formData.nome,
           range_start,
           range_end,
+          tipo_vitoria: formData.tipo_vitoria,
           status: formData.status
         });
         offlineQueued = isOfflineQueued(result);
@@ -417,6 +442,7 @@ const DrawTab: React.FC = () => {
             nome: formData.nome,
             range_start,
             range_end,
+            tipo_vitoria: formData.tipo_vitoria,
             status: formData.status,
             updated_at: new Date().toISOString(),
           };
@@ -441,6 +467,7 @@ const DrawTab: React.FC = () => {
           nome: formData.nome,
           range_start,
           range_end,
+          tipo_vitoria: formData.tipo_vitoria,
           status: formData.status,
           client_temp_id: tempId,
         });
@@ -452,6 +479,7 @@ const DrawTab: React.FC = () => {
             nome: formData.nome,
             range_start,
             range_end,
+            tipo_vitoria: formData.tipo_vitoria,
             status: formData.status,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -829,6 +857,7 @@ const DrawTab: React.FC = () => {
     try {
       const result = await callApi('verificarVencedor', {
         sorteio_id: sorteioAtivo.id,
+        rodada_id: selectedRodada?.id,
         numeros_sorteados: drawnNumbers,
       });
       const winners: number[] = result.data || [];
@@ -901,6 +930,33 @@ const DrawTab: React.FC = () => {
       .sort((a, b) => b.score - a.score || a.numero - b.numero);
   }, [drawnNumbers, rankingCardsWithGrade, cartelasValidadas, sorteioAtivo?.tipo]);
 
+  const winnerEntries = useMemo(() => {
+    if (drawnNumbers.length === 0) return [];
+    if (!selectedRodada) return [];
+    const victoryMode = selectedRodada.tipo_vitoria || 'bingo';
+    const drawnSet = new Set(drawnNumbers);
+
+    if (sorteioAtivo?.tipo === 'rifa') {
+      return cartelasValidadas
+        .filter((cv) => drawnSet.has(cv.numero))
+        .map((cv) => ({ numero: cv.numero, nome: cv.comprador_nome }));
+    }
+
+    return rankingCardsWithGrade
+      .filter((card) => {
+        const grids = normalizeNumerosGrade(card.numeros_grade);
+        if (grids.length === 0) return false;
+        if (victoryMode === 'quina') {
+          return grids.some((grid) => isQuinaWinner(grid, drawnSet));
+        }
+        return grids.some((grid) => {
+          const allNums = [...new Set(grid.filter((n) => Number(n) !== 0))];
+          return allNums.length > 0 && allNums.every((n) => drawnSet.has(Number(n)));
+        });
+      })
+      .map((card) => ({ numero: card.numero, nome: card.comprador_nome }));
+  }, [drawnNumbers, rankingCardsWithGrade, selectedRodada, cartelasValidadas, sorteioAtivo?.tipo]);
+
   // Group topScoringCartelas by score for display (score, cartelas: [{numero,nome}], count)
   const groupedTop = useMemo(() => {
     const groups = topScoringCartelas.reduce((acc, cur) => {
@@ -917,19 +973,18 @@ const DrawTab: React.FC = () => {
   }, [topScoringCartelas]);
 
   useEffect(() => {
-    const winnerEntries = topScoringCartelas.filter(entry => entry.score >= winningScore);
     if (winnerEntries.length > 0) {
-      const newWinners = winnerEntries.filter(c => !ganhadoresPopShownRef.current.has(c.numero));
+      const newWinners = winnerEntries.filter((c) => !ganhadoresPopShownRef.current.has(c.numero));
       if (newWinners.length > 0) {
-        newWinners.forEach(c => ganhadoresPopShownRef.current.add(c.numero));
+        newWinners.forEach((c) => ganhadoresPopShownRef.current.add(c.numero));
         const loteSize = sorteioAtivo?.tamanho_lote ?? LOTE_SIZE;
-        setGanhadoresPop(winnerEntries.map(c => {
-          const idx = cartelasValidadas.findIndex(cv => cv.numero === c.numero);
+        setGanhadoresPop(winnerEntries.map((c) => {
+          const idx = cartelasValidadas.findIndex((cv) => cv.numero === c.numero);
           return { numero: c.numero, nome: c.nome, lote: idx !== -1 ? Math.floor(idx / loteSize) + 1 : undefined };
         }));
       }
     }
-  }, [topScoringCartelas, cartelasValidadas, winningScore, sorteioAtivo]);
+  }, [winnerEntries, cartelasValidadas, sorteioAtivo]);
 
   if (!sorteioAtivo) {
     return (
@@ -1787,6 +1842,22 @@ const DrawTab: React.FC = () => {
                   <SelectItem value="ativo">Ativo</SelectItem>
                   <SelectItem value="concluido">Concluído</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tipo_vitoria">Tipo de vitória *</Label>
+              <Select
+                value={formData.tipo_vitoria}
+                onValueChange={(value: 'bingo' | 'quina') => setFormData({ ...formData, tipo_vitoria: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bingo">Cartela cheia</SelectItem>
+                  <SelectItem value="quina">Quina</SelectItem>
                 </SelectContent>
               </Select>
             </div>

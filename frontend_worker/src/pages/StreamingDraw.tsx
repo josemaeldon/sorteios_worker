@@ -11,6 +11,7 @@ type PublicRodada = {
   range_end: number;
   status: string;
   tipo?: string;
+  tipo_vitoria?: 'bingo' | 'quina';
   grade_colunas?: number;
   grade_linhas?: number;
 };
@@ -38,10 +39,10 @@ const StreamingDraw: React.FC = () => {
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [top10, setTop10] = useState<TopCartelaEntry[]>([]);
   const [top10GroupedFromApi, setTop10GroupedFromApi] = useState<GroupedTopEntry[]>([]);
+  const [vencedoras, setVencedoras] = useState<{ numero: number; nome?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const lastCountRef = useRef(0);
-  const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string }[]>([]);
   const ganhadoresPopShownRef = useRef<Set<number>>(new Set());
 
   const loadData = async (silent = false) => {
@@ -49,11 +50,12 @@ const StreamingDraw: React.FC = () => {
     if (!silent) setIsLoading(true);
     try {
       const result = await callApi('getPublicRodadaSorteio', { rodada_id: rodadaId });
-      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: GroupedTopEntry[]; top10_cartelas?: TopCartelaEntry[] } }).data;
+      const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: GroupedTopEntry[]; top10_cartelas?: TopCartelaEntry[]; vencedoras?: { numero: number; nome?: string }[] } }).data;
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
       setTop10(data?.top10_cartelas ?? []);
       setTop10GroupedFromApi(data?.top10 ?? []);
+      setVencedoras(data?.vencedoras ?? []);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar sorteio.');
@@ -115,23 +117,16 @@ const StreamingDraw: React.FC = () => {
     lastCountRef.current = sortedHistorico.length;
   }, [sortedHistorico.length]);
 
-  const winningScore = (rodada?.grade_colunas ?? 5) * (rodada?.grade_linhas ?? 5);
-
   useEffect(() => {
     if (!rodada) return;
 
-    const winnerEntries = groupedTop10
-      .filter(group => group.score >= winningScore)
-      .flatMap(group => group.cartelas);
+    if (vencedoras.length === 0) return;
 
-    if (winnerEntries.length === 0) return;
-
-    const newWinners = winnerEntries.filter(entry => !ganhadoresPopShownRef.current.has(entry.numero));
+    const newWinners = vencedoras.filter(entry => !ganhadoresPopShownRef.current.has(entry.numero));
     if (newWinners.length === 0) return;
 
     newWinners.forEach(entry => ganhadoresPopShownRef.current.add(entry.numero));
-    setGanhadoresPop(winnerEntries.map(({ numero, nome }) => ({ numero, nome })));
-  }, [groupedTop10, winningScore, rodada]);
+  }, [vencedoras, rodada]);
 
   if (isLoading) {
     return (
@@ -157,7 +152,12 @@ const StreamingDraw: React.FC = () => {
           <p className="text-white/60 text-xs md:text-sm uppercase tracking-wide truncate">{rodada.sorteio_nome}</p>
           <h1 className="text-xl md:text-3xl font-bold truncate">{rodada.nome}</h1>
         </div>
-        <div className="text-right text-white/70 text-xs md:text-sm flex-shrink-0">
+        <div className="text-right text-white/70 text-xs md:text-sm flex-shrink-0 space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] md:text-xs font-semibold text-white">
+            <span className={rodada.tipo_vitoria === 'quina' ? 'text-emerald-300' : 'text-sky-300'}>
+              {rodada.tipo_vitoria === 'quina' ? 'Quina' : 'Cartela cheia'}
+            </span>
+          </div>
           <p className="whitespace-nowrap">{rodada.range_start} a {rodada.range_end}</p>
           <p className="whitespace-nowrap">{sortedHistorico.length} sorteado{sortedHistorico.length !== 1 ? 's' : ''}</p>
         </div>
@@ -223,21 +223,21 @@ const StreamingDraw: React.FC = () => {
         )}
       </main>
 
-      {ganhadoresPop.length > 0 && (
+      {vencedoras.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
           <div className="bg-card rounded-2xl p-10 text-center shadow-2xl max-w-lg w-full mx-4 border-4 border-yellow-400">
             <Trophy className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
             <h2 className="text-4xl font-black mb-2 text-foreground">Temos um Ganhador! 🎉</h2>
-            <p className="text-muted-foreground mb-6">Cartela(s) com todos os números sorteados</p>
+            <p className="text-muted-foreground mb-6">{rodada?.tipo_vitoria === 'quina' ? 'Cartela(s) com quina' : 'Cartela(s) com cartela cheia'}</p>
             <div className="space-y-2 mb-8">
-              {ganhadoresPop.map(({ numero, nome }) => (
+              {vencedoras.map(({ numero, nome }) => (
                 <div key={numero} className="text-2xl font-bold text-primary">
                   Cartela {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}
                 </div>
               ))}
             </div>
             <button
-              onClick={() => setGanhadoresPop([])}
+              onClick={() => setVencedoras([])}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
             >
               <CheckCircle className="w-5 h-5" />

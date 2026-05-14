@@ -943,6 +943,7 @@ async function initSchema() {
             nome TEXT NOT NULL,
             range_start INTEGER NOT NULL,
             range_end INTEGER NOT NULL,
+            tipo_vitoria TEXT NOT NULL DEFAULT 'bingo',
             status TEXT NOT NULL DEFAULT 'ativo',
             data_inicio TIMESTAMP WITH TIME ZONE,
             data_fim TIMESTAMP WITH TIME ZONE,
@@ -977,6 +978,9 @@ async function initSchema() {
         // Add numeros_grade column if missing (PostgreSQL)
         await client.query(`
           ALTER TABLE cartelas ADD COLUMN IF NOT EXISTS numeros_grade JSONB
+        `);
+        await client.query(`
+          ALTER TABLE rodadas_sorteio ADD COLUMN IF NOT EXISTS tipo_vitoria TEXT NOT NULL DEFAULT 'bingo'
         `);
         // Create bingo_card_sets table (PostgreSQL)
         await client.query(`
@@ -1928,6 +1932,61 @@ app.post('/api', checkBasicAuth, async (req, res) => {
   
   try {
     let result;
+
+    const normalizeGrade = (raw) => {
+      if (!raw) return [];
+      let parsed = raw;
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          return [];
+        }
+      }
+      if (!Array.isArray(parsed) || parsed.length === 0) return [];
+      if (typeof parsed[0] === 'number') {
+        return [parsed.map((n) => Number(n)).filter((n) => !Number.isNaN(n))];
+      }
+      return parsed
+        .map((row) => Array.isArray(row) ? row.map((n) => Number(n)).filter((n) => !Number.isNaN(n)) : [])
+        .filter((row) => row.length > 0);
+    };
+
+    const isWinningLine = (grade, drawnSet) => {
+      if (!Array.isArray(grade) || grade.length === 0) return false;
+      const rows = normalizeGrade(grade);
+      if (rows.length === 0) return false;
+      const maxCols = Math.max(...rows.map((row) => row.length), 0);
+      if (maxCols === 0) return false;
+
+      for (const row of rows) {
+        const filled = row.filter((n) => Number(n) > 0);
+        if (filled.length === 5 && filled.every((n) => drawnSet.has(Number(n)))) {
+          return true;
+        }
+      }
+
+      for (let colIndex = 0; colIndex < maxCols; colIndex++) {
+        const column = rows
+          .map((row) => row[colIndex])
+          .filter((n) => Number(n) > 0);
+        if (column.length === 5 && column.every((n) => drawnSet.has(Number(n)))) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+        const isWinnerForMode = (grade, drawnSet, mode) => {
+          if (String(mode || '') === 'quina') {
+            return isWinningLine(grade, drawnSet);
+          }
+          const rows = normalizeGrade(grade);
+          const allNums = [...new Set(rows.flatMap((row) => row.filter((n) => Number(n) !== 0)))];
+      return allNums.length > 0 && allNums.every((n) => drawnSet.has(Number(n)));
+    };
+
     if (authResult.user && authResult.user.role !== 'admin') {
       const subscriptionAllowedActions = new Set([
         'getMyProfile',
@@ -2927,19 +2986,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'createRodada':
         result = await client.query(`
-          INSERT INTO rodadas_sorteio (sorteio_id, nome, range_start, range_end, status, data_inicio)
-          VALUES ($1, $2, $3, $4, $5, NOW())
+          INSERT INTO rodadas_sorteio (sorteio_id, nome, range_start, range_end, tipo_vitoria, status, data_inicio)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
           RETURNING *
-        `, [data.sorteio_id, data.nome, data.range_start, data.range_end, data.status || 'ativo']);
+        `, [data.sorteio_id, data.nome, data.range_start, data.range_end, data.tipo_vitoria || 'bingo', data.status || 'ativo']);
         return res.json({ data: result.rows[0] });
 
       case 'updateRodada':
         result = await client.query(`
           UPDATE rodadas_sorteio 
-          SET nome = $2, range_start = $3, range_end = $4, status = $5, updated_at = NOW()
+          SET nome = $2, range_start = $3, range_end = $4, tipo_vitoria = $5, status = $6, updated_at = NOW()
           WHERE id = $1
           RETURNING *
-        `, [data.id, data.nome, data.range_start, data.range_end, data.status]);
+        `, [data.id, data.nome, data.range_start, data.range_end, data.tipo_vitoria || 'bingo', data.status]);
         return res.json({ data: result.rows[0] });
 
       case 'deleteRodada':
@@ -2955,7 +3014,7 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       case 'getPublicRodadaSorteio': {
         result = await client.query(
-          `SELECT r.id, r.nome, r.range_start, r.range_end, r.status, r.sorteio_id,
+          `SELECT r.id, r.nome, r.range_start, r.range_end, r.tipo_vitoria, r.status, r.sorteio_id,
                   s.nome AS sorteio_nome, s.tipo, s.grade_colunas, s.grade_linhas, s.apenas_numero_rifa
            FROM rodadas_sorteio r
            JOIN sorteios s ON s.id = r.sorteio_id
@@ -3010,7 +3069,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
             const allNums = [...new Set((c.numeros_grade || []).flatMap(g => Array.isArray(g) ? g.filter(n => n !== 0) : []))];
             score = allNums.filter(n => drawnSet.has(Number(n))).length;
           }
-          return { numero: c.numero, nome: c.comprador_nome, score };
+          return {
+            numero: c.numero,
+            nome: c.comprador_nome,
+            score,
+            winner: isRifa ? drawnSet.has(Number(c.numero)) : isWinnerForMode(c.numeros_grade, drawnSet, rodadaRow.tipo_vitoria),
+          };
         }).filter(c => c.score > 0);
 
         // Build per-card top10 (individual cartelas ranking)
@@ -3032,7 +3096,8 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           .sort((a, b) => b.score - a.score)
           .slice(0, 10);
 
-        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: grouped, top10_cartelas: perCardTop10 } });
+        const vencedoras = perCard.filter((c) => c.winner).map((c) => ({ numero: c.numero, nome: c.nome }));
+        return res.json({ data: { rodada: rodadaRow, historico: historico.rows, top10: grouped, top10_cartelas: perCardTop10, vencedoras } });
       }
 
       case 'saveRodadaNumero': {
@@ -3631,9 +3696,19 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'verificarVencedor': {
-        // data.sorteio_id, data.numeros_sorteados: number[]
+        // data.sorteio_id, data.rodada_id, data.numeros_sorteados: number[]
         // Only considers validated cartelas (cartelas_validadas table)
         const numerosSet = new Set((data.numeros_sorteados || []).map(Number));
+        const rodadaInfo = await client.query(
+          `SELECT r.tipo_vitoria, s.tipo AS sorteio_tipo, s.apenas_numero_rifa
+           FROM rodadas_sorteio r
+           JOIN sorteios s ON s.id = r.sorteio_id
+           WHERE r.id = $1
+           LIMIT 1`,
+          [data.rodada_id]
+        );
+        const tipoVitoria = rodadaInfo.rows[0]?.tipo_vitoria || 'bingo';
+        const isRifa = String(rodadaInfo.rows[0]?.sorteio_tipo || '') === 'rifa' || !!rodadaInfo.rows[0]?.apenas_numero_rifa;
         const cartelasResult = await client.query(
           `SELECT c.numero, c.numeros_grade
            FROM cartelas c
@@ -3650,16 +3725,15 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           } catch {
             continue;
           }
-          // Normalize to number[][] - use first prize grid for winner check
-          let grade;
-          if (!Array.isArray(raw) || raw.length === 0) continue;
-          if (typeof raw[0] === 'number') {
-            grade = raw; // old flat format
-          } else {
-            grade = Array.isArray(raw[0]) ? raw[0] : []; // new format: take first prize grid
+          if (isRifa) {
+            if (numerosSet.has(Number(row.numero))) {
+              vencedoras.push(row.numero);
+            }
+            continue;
           }
-          const required = grade.filter((n) => n !== 0);
-          if (required.length > 0 && required.every((n) => numerosSet.has(Number(n)))) {
+          const grade = normalizeGrade(raw);
+          if (grade.length === 0) continue;
+          if (isWinnerForMode(grade, numerosSet, tipoVitoria)) {
             vencedoras.push(row.numero);
           }
         }

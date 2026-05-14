@@ -44,6 +44,7 @@ const RodadasTab: React.FC = () => {
     nome: '',
     range_start: '1',
     range_end: '75',
+    tipo_vitoria: 'bingo' as 'bingo' | 'quina',
     status: 'ativo' as 'ativo' | 'concluido' | 'cancelado'
   });
   const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
@@ -129,6 +130,7 @@ const RodadasTab: React.FC = () => {
       nome: '',
       range_start: '1',
       range_end: isRifa ? (sorteioAtivo?.quantidade_cartelas?.toString() ?? '75') : getBingoMaxNumber(cols, rows).toString(),
+      tipo_vitoria: 'bingo',
       status: 'ativo'
     });
     setIsModalOpen(true);
@@ -140,6 +142,7 @@ const RodadasTab: React.FC = () => {
       nome: rodada.nome,
       range_start: rodada.range_start.toString(),
       range_end: rodada.range_end.toString(),
+      tipo_vitoria: (rodada.tipo_vitoria || 'bingo') as 'bingo' | 'quina',
       status: rodada.status
     });
     setIsModalOpen(true);
@@ -205,6 +208,7 @@ const RodadasTab: React.FC = () => {
           nome: formData.nome,
           range_start,
           range_end,
+          tipo_vitoria: formData.tipo_vitoria,
           status: formData.status
         });
         offlineQueued = !!(result && typeof result === 'object' && 'offlineQueued' in result && (result as { offlineQueued?: boolean }).offlineQueued);
@@ -214,6 +218,7 @@ const RodadasTab: React.FC = () => {
             nome: formData.nome,
             range_start,
             range_end,
+            tipo_vitoria: formData.tipo_vitoria,
             status: formData.status,
             updated_at: new Date().toISOString(),
           } : rodada);
@@ -231,6 +236,7 @@ const RodadasTab: React.FC = () => {
           nome: formData.nome,
           range_start,
           range_end,
+          tipo_vitoria: formData.tipo_vitoria,
           status: formData.status,
           client_temp_id: tempId,
         });
@@ -242,6 +248,7 @@ const RodadasTab: React.FC = () => {
             nome: formData.nome,
             range_start,
             range_end,
+            tipo_vitoria: formData.tipo_vitoria,
             status: formData.status,
             numeros_sorteados: 0,
             created_at: new Date().toISOString(),
@@ -473,6 +480,22 @@ const RodadasTab: React.FC = () => {
                   <SelectItem value="ativo">Ativo</SelectItem>
                   <SelectItem value="concluido">Concluído</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tipo_vitoria">Tipo de vitória *</Label>
+              <Select
+                value={formData.tipo_vitoria}
+                onValueChange={(value: 'bingo' | 'quina') => setFormData({ ...formData, tipo_vitoria: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bingo">Cartela cheia</SelectItem>
+                  <SelectItem value="quina">Quina</SelectItem>
                 </SelectContent>
               </Select>
             </div>

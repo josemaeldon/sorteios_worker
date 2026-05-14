@@ -35,6 +35,7 @@ export interface RodadaSorteio {
   nome: string;
   range_start: number;
   range_end: number;
+  tipo_vitoria?: 'bingo' | 'quina';
   status: 'ativo' | 'concluido' | 'cancelado';
   data_inicio?: string;
   data_fim?: string;
