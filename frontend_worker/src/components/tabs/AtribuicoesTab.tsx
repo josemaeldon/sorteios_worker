@@ -674,6 +674,18 @@ const AtribuicoesTab: React.FC = () => {
                                         Reverter
                                       </Button>
                                     )}
+                                    {cartela.status === 'devolvida' && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)}
+                                        className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
+                                        title="Reverter devolução e voltar para ativa"
+                                      >
+                                        <RotateCcw className="w-4 h-4" />
+                                        Reverter Devolução
+                                      </Button>
+                                    )}
                                     {cartela.status !== 'vendida' && (
                                       <Button 
                                         size="sm" 
