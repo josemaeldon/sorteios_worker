@@ -550,12 +550,12 @@ const CartelasTab: React.FC = () => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in overflow-x-hidden">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="flex items-start gap-2 break-words text-xl font-bold text-foreground sm:text-2xl">
             <Grid3X3 className="w-6 h-6" />
-            Cartelas - {sorteioAtivo.nome}
+            <span className="min-w-0 break-words">Cartelas - {sorteioAtivo.nome}</span>
           </h2>
           <p className="text-muted-foreground mt-1">
             {totalFiltrado} cartelas
@@ -565,7 +565,7 @@ const CartelasTab: React.FC = () => {
           </p>
         </div>
         {subTab === 'lista' && (
-          <Button onClick={openNewModal} className="gap-2">
+          <Button onClick={openNewModal} className="w-full gap-2 sm:w-auto">
             <Plus className="w-4 h-4" />
             Nova Cartela
           </Button>
@@ -573,11 +573,11 @@ const CartelasTab: React.FC = () => {
       </div>
 
       {/* Sub-tab navigation */}
-      <div className="flex gap-1 mb-6 border-b border-border">
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
         <button
           onClick={() => setSubTab('lista')}
           className={cn(
-            'px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors',
+            'min-w-0 flex-1 border-b-2 px-3 py-2 text-left text-xs font-semibold transition-colors sm:flex-none sm:px-4 sm:text-sm',
             subTab === 'lista'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -589,7 +589,7 @@ const CartelasTab: React.FC = () => {
         <button
           onClick={() => { setSubTab('validacao'); loadCartelasValidadas(); }}
           className={cn(
-            'px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors',
+            'min-w-0 flex-1 border-b-2 px-3 py-2 text-left text-xs font-semibold transition-colors sm:flex-none sm:px-4 sm:text-sm',
             subTab === 'validacao'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -775,8 +775,8 @@ const CartelasTab: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Adicione os números das cartelas validadas. O sorteio considerará apenas as cartelas validadas aqui.
             </p>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+              <div className="min-w-0 space-y-1.5">
                 <label className="text-sm font-medium text-foreground">Número(s) da Cartela *</label>
                 <Input
                   type="text"
@@ -784,13 +784,13 @@ const CartelasTab: React.FC = () => {
                   value={validacaoNumero}
                   onChange={(e) => setValidacaoNumero(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleValidarCartela()}
-                  className="w-full sm:w-56"
+                  className="w-full"
                 />
                 <p className="text-xs text-muted-foreground">
                   Número único, faixa (1-50) ou lista separada por vírgula
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <label className="text-sm font-medium text-foreground">
                   Nome do Comprador {nomeObrigatorio ? '*' : '(opcional)'}
                 </label>
@@ -799,10 +799,10 @@ const CartelasTab: React.FC = () => {
                   value={validacaoNome}
                   onChange={(e) => setValidacaoNome(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleValidarCartela()}
-                  className="w-full sm:w-56"
+                  className="w-full"
                 />
               </div>
-              <Button onClick={handleValidarCartela} disabled={isValidando} className="gap-2">
+              <Button onClick={handleValidarCartela} disabled={isValidando} className="w-full gap-2 sm:w-auto">
                 {isValidando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Validar
               </Button>
@@ -820,8 +820,8 @@ const CartelasTab: React.FC = () => {
           </div>
 
           {/* Batch size + summary */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium text-foreground">Cartelas por lote:</span>
               <Input
                 type="number"
@@ -845,8 +845,8 @@ const CartelasTab: React.FC = () => {
                 Salvar
               </Button>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
+              <span className="text-sm text-muted-foreground break-words">
                 {cartelasValidadas.length} cartela(s) validada(s)
                 {lotes.length > 0 && ` em ${lotes.length} lote(s)`}
               </span>
@@ -902,7 +902,7 @@ const CartelasTab: React.FC = () => {
                             {formatarNumeroCartela(cv.numero)}
                           </span>
                           {cv.comprador_nome && (
-                            <span className="text-xs text-muted-foreground">— {cv.comprador_nome}</span>
+                            <span className="max-w-[140px] truncate text-xs text-muted-foreground sm:max-w-[220px]">— {cv.comprador_nome}</span>
                           )}
                           <button
                             onClick={() => setEditingValidada({ numero: cv.numero, nome: cv.comprador_nome || '' })}
