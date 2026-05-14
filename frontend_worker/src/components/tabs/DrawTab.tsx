@@ -1814,7 +1814,15 @@ const DrawTab: React.FC = () => {
                       <h3 className="text-xl font-bold text-foreground mb-1">
                         {rodada.nome}
                       </h3>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          'px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border',
+                          (rodada.tipo_vitoria || 'bingo') === 'quina'
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                            : 'bg-sky-500/10 text-sky-600 border-sky-500/30'
+                        )}>
+                          {(rodada.tipo_vitoria || 'bingo') === 'quina' ? 'Quina' : 'Cartela cheia'}
+                        </span>
                         <span className={cn('px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1', getStatusColor(rodada.status))}>
                           {getStatusIcon(rodada.status)}
                           {rodada.status === 'ativo' ? 'Ativo' : rodada.status === 'concluido' ? 'Concluído' : 'Cancelado'}
