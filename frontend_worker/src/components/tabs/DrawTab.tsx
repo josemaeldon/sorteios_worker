@@ -177,6 +177,7 @@ const DrawTab: React.FC = () => {
   const [vencedoras, setVencedoras] = useState<number[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.vencedoras as number[]) || []) : []);
   const [isVerifying, setIsVerifying] = useState<boolean>(shouldHydrateOfflineState ? !!drawTabSnapshot.isVerifying : false);
   const [winnerCardPulse, setWinnerCardPulse] = useState(false);
+  const [winnerPopupEnabled, setWinnerPopupEnabled] = useState(false);
   const [selectedCartelaModal, setSelectedCartelaModal] = useState<{ numero: number; nome?: string; grade: number[][] } | null>(null);
   const [ganhadoresPop, setGanhadoresPop] = useState<{ numero: number; nome?: string; lote?: number }[]>(shouldHydrateOfflineState ? ((drawTabSnapshot.ganhadoresPop as { numero: number; nome?: string; lote?: number }[]) || []) : []);
   const [manualNumberInput, setManualNumberInput] = useState(shouldHydrateOfflineState ? ((drawTabSnapshot.manualNumberInput as string) || '') : '');
@@ -231,6 +232,7 @@ const DrawTab: React.FC = () => {
     setJustDrawn(false);
     setVencedoras([]);
     setGanhadoresPop([]);
+    setWinnerPopupEnabled(false);
     setManualNumberInput('');
     setCardsWithGrade([]);
     setIsQrCodeModalOpen(false);
@@ -248,6 +250,7 @@ const DrawTab: React.FC = () => {
       justDrawn: false,
       vencedoras: [],
       ganhadoresPop: [],
+      winnerPopupEnabled: false,
       manualNumberInput: '',
       cardsWithGrade: [],
       isQrCodeModalOpen: false,
@@ -544,6 +547,19 @@ const DrawTab: React.FC = () => {
 
   const handleStartDrawing = async (rodada: RodadaSorteio) => {
     try {
+      setVencedoras([]);
+      setGanhadoresPop([]);
+      setWinnerCardPulse(false);
+      ganhadoresPopShownRef.current.clear();
+      setSelectedCartelaModal(null);
+      setDrawnNumbers([]);
+      setCurrentNumber(null);
+      setIsDrawing(false);
+      setJustDrawn(false);
+      setCartelasSorteadasHistory([]);
+      setCardsWithGrade([]);
+      setAvailableNumbers([]);
+      setIsVerifying(false);
       setSelectedRodada(rodada);
       setShowDrawing(true);
       localStorage.removeItem('selectedRodadaId');
@@ -808,6 +824,7 @@ const DrawTab: React.FC = () => {
         setDrawnNumbers(newDrawnNumbers);
         setIsDrawing(false);
         setJustDrawn(true);
+        setWinnerPopupEnabled(true);
         
         // Reset justDrawn after animation completes
         setTimeout(() => setJustDrawn(false), 1000);
@@ -828,6 +845,7 @@ const DrawTab: React.FC = () => {
     setJustDrawn(false);
     setVencedoras([]);
     setGanhadoresPop([]);
+    setWinnerPopupEnabled(false);
     ganhadoresPopShownRef.current.clear();
     setCartelasSorteadasHistory([]);
   };
@@ -848,6 +866,7 @@ const DrawTab: React.FC = () => {
     setDrawnNumbers(newDrawnNumbers);
     setCurrentNumber(num);
     setManualNumberInput('');
+    setWinnerPopupEnabled(true);
     await saveDrawnNumber(num, newDrawnNumbers.length);
   };
 
@@ -905,6 +924,7 @@ const DrawTab: React.FC = () => {
     if (!sorteioAtivo || drawnNumbers.length === 0) return;
     setIsVerifying(true);
     try {
+      setWinnerPopupEnabled(true);
       const result = await callApi('verificarVencedor', {
         sorteio_id: sorteioAtivo.id,
         rodada_id: selectedRodada?.id,
@@ -1037,6 +1057,10 @@ const DrawTab: React.FC = () => {
       if (!showDrawing || !selectedRodada) return;
       setVencedoras(winnerEntries.map((c) => c.numero));
       setWinnerCardPulse(true);
+      if (!winnerPopupEnabled) {
+        setGanhadoresPop([]);
+        return;
+      }
       const newWinners = winnerEntries.filter((c) => !ganhadoresPopShownRef.current.has(c.numero));
       if (newWinners.length > 0) {
         newWinners.forEach((c) => ganhadoresPopShownRef.current.add(c.numero));
@@ -1049,13 +1073,15 @@ const DrawTab: React.FC = () => {
     } else if (!isVerifying) {
       setVencedoras([]);
       setWinnerCardPulse(false);
+      setWinnerPopupEnabled(false);
     }
-  }, [winnerEntries, cartelasValidadas, sorteioAtivo, isVerifying]);
+  }, [winnerEntries, cartelasValidadas, sorteioAtivo, isVerifying, winnerPopupEnabled, showDrawing, selectedRodada]);
 
   useEffect(() => {
     setVencedoras([]);
     setGanhadoresPop([]);
     setWinnerCardPulse(false);
+    setWinnerPopupEnabled(false);
     ganhadoresPopShownRef.current.clear();
   }, [sorteioAtivo?.id, selectedRodada?.id]);
 
