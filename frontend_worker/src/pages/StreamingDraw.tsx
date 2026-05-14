@@ -128,6 +128,7 @@ const StreamingDraw: React.FC = () => {
 
   useEffect(() => {
     if (!rodada) return;
+    if (rodada.id !== rodadaId) return;
 
     if (vencedoras.length === 0) return;
 

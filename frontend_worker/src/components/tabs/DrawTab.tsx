@@ -1034,6 +1034,7 @@ const DrawTab: React.FC = () => {
 
   useEffect(() => {
     if (winnerEntries.length > 0) {
+      if (!showDrawing || !selectedRodada) return;
       setVencedoras(winnerEntries.map((c) => c.numero));
       setWinnerCardPulse(true);
       const newWinners = winnerEntries.filter((c) => !ganhadoresPopShownRef.current.has(c.numero));
