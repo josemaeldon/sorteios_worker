@@ -199,7 +199,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       console.error('Backup import error:', error);
       toast({
         title: "Erro ao importar backup",
-        description: "Não foi possível importar o arquivo. Verifique o conteúdo e tente novamente.",
+        description: error instanceof Error ? error.message : "Não foi possível importar o arquivo. Verifique o conteúdo e tente novamente.",
         variant: "destructive"
       });
     } finally {

@@ -478,7 +478,7 @@ app.post('/mp-webhook', express.json(), async (req, res) => {
   }
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '100mb' }));
 
 // Load database configuration from environment variables
 const dbConfig = {
