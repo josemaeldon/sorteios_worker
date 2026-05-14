@@ -26,7 +26,8 @@ const Navigation: React.FC = () => {
       return;
     }
     setCurrentTab(tabId);
-    navigate(`/app/${tabId}`);
+    const nextPath = sorteioAtivo?.id ? `/app/${tabId}/${sorteioAtivo.id}` : `/app/${tabId}`;
+    navigate(nextPath);
   };
 
   return (

@@ -17,8 +17,8 @@ import BingoCardsBuilderTab from '@/components/tabs/BingoCardsBuilderTab';
 const validTabs: TabType[] = ['sorteios', 'dashboard', 'rodadas', 'vendedores', 'cartelas', 'atribuicoes', 'vendas', 'relatorios', 'sorteio', 'cartelas-bingo'];
 
 const MainContent = () => {
-  const { currentTab, setCurrentTab } = useBingo();
-  const { tab } = useParams<{ tab: string }>();
+  const { currentTab, setCurrentTab, sorteioAtivo, sorteios, setSorteioAtivo } = useBingo();
+  const { tab, sorteioId } = useParams<{ tab: string; sorteioId?: string }>();
 
   if (!tab || !validTabs.includes(tab as TabType)) {
     return <Navigate to="/app/sorteios" replace />;
@@ -30,6 +30,15 @@ const MainContent = () => {
       setCurrentTab(routeTab);
     }
   }, [currentTab, routeTab, setCurrentTab]);
+
+  React.useEffect(() => {
+    if (sorteioId) {
+      const selected = sorteios.find((s) => s.id === sorteioId) || null;
+      if (selected && sorteioAtivo?.id !== selected.id) {
+        setSorteioAtivo(selected);
+      }
+    }
+  }, [sorteioId, sorteios, sorteioAtivo, setSorteioAtivo]);
 
   const renderTab = () => {
     switch (routeTab) {

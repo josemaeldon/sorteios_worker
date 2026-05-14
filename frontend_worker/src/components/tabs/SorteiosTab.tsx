@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Dice5, Search, Filter, Eraser, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useBingo } from '@/contexts/BingoContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sorteio } from '@/types/bingo';
@@ -32,6 +33,7 @@ const SorteiosTab: React.FC = () => {
   } = useBingo();
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSorteioId, setEditingSorteioId] = useState<string | null>(null);
@@ -90,6 +92,7 @@ const SorteiosTab: React.FC = () => {
     if (sorteio) {
       setSorteioAtivo(sorteio);
       setCurrentTab('dashboard');
+      navigate(`/app/dashboard/${sorteio.id}`);
       toast({
         title: "Sorteio selecionado",
         description: `Sorteio "${sorteio.nome}" foi selecionado.`

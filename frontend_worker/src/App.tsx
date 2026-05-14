@@ -61,6 +61,14 @@ const AppRoutes = () => {
             }
           />
           <Route
+            path="/app/:tab/:sorteioId"
+            element={
+              <ProtectedRoute>
+                <Index />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin"
             element={
               <ProtectedRoute requireAdmin>
