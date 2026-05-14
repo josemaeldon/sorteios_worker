@@ -922,10 +922,12 @@ async function initSchema() {
             venda_id UUID NOT NULL REFERENCES public.vendas(id) ON DELETE CASCADE,
             valor NUMERIC,
             forma_pagamento TEXT,
+            observacao TEXT,
             data_pagamento TIMESTAMP WITH TIME ZONE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
           )
         `);
+        await client.query(`ALTER TABLE pagamentos ADD COLUMN IF NOT EXISTS observacao TEXT`);
         await client.query(`
           CREATE TABLE IF NOT EXISTS public.vendas_excluidas (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
