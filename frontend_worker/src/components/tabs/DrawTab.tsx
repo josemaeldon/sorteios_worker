@@ -1006,7 +1006,7 @@ const DrawTab: React.FC = () => {
         }
         return grids.some((grid) => {
           if (!Array.isArray(grid)) return false;
-          const allNums = [...new Set(grid.filter((n) => Number(n) !== 0))];
+          const allNums = [...new Set(grid.flatMap((row) => Array.isArray(row) ? row : []).filter((n) => Number(n) !== 0))];
           return allNums.length > 0 && allNums.every((n) => drawnSet.has(Number(n)));
         });
       })
@@ -1050,6 +1050,13 @@ const DrawTab: React.FC = () => {
       setWinnerCardPulse(false);
     }
   }, [winnerEntries, cartelasValidadas, sorteioAtivo, isVerifying]);
+
+  useEffect(() => {
+    setVencedoras([]);
+    setGanhadoresPop([]);
+    setWinnerCardPulse(false);
+    ganhadoresPopShownRef.current.clear();
+  }, [sorteioAtivo?.id, selectedRodada?.id]);
 
   useEffect(() => {
     if (!winnerCardPulse) return;
@@ -1560,7 +1567,7 @@ const DrawTab: React.FC = () => {
                       <button
                         key={num}
                         type="button"
-                        onClick={() => handleCartelaClick(num, getCartelaNome(num))}
+                        onClick={() => handleCartelaClick(num, rankingCardsWithGrade.find((card) => card.numero === num)?.comprador_nome)}
                         className="w-full text-left px-3 py-2 rounded-lg bg-success/10 border border-success text-success font-bold hover:bg-success/20 transition-colors"
                       >
                         Cartela {num.toString().padStart(3, '0')}

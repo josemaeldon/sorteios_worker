@@ -51,6 +51,7 @@ const StreamingDraw: React.FC = () => {
     try {
       const result = await callApi('getPublicRodadaSorteio', { rodada_id: rodadaId });
       const data = (result as { data?: { rodada?: PublicRodada; historico?: HistoricoItem[]; top10?: GroupedTopEntry[]; top10_cartelas?: TopCartelaEntry[]; vencedoras?: { numero: number; nome?: string }[] } }).data;
+      if (data?.rodada?.id && data.rodada.id !== rodadaId) return;
       setRodada(data?.rodada ?? null);
       setHistorico(data?.historico ?? []);
       setTop10(data?.top10_cartelas ?? []);
@@ -65,6 +66,13 @@ const StreamingDraw: React.FC = () => {
   };
 
   useEffect(() => {
+    setRodada(null);
+    setHistorico([]);
+    setTop10([]);
+    setTop10GroupedFromApi([]);
+    setVencedoras([]);
+    ganhadoresPopShownRef.current.clear();
+    lastCountRef.current = 0;
     loadData();
     const interval = window.setInterval(() => loadData(true), 2500);
     return () => window.clearInterval(interval);
