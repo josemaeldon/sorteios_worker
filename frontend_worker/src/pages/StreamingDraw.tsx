@@ -79,6 +79,7 @@ const StreamingDraw: React.FC = () => {
     ? sortedHistorico[sortedHistorico.length - 1].numero_sorteado
     : null;
   const isNewNumber = sortedHistorico.length !== lastCountRef.current;
+  const rodadaTitle = `${rodada?.nome ?? ''}${rodada?.tipo_vitoria ? ` - ${rodada.tipo_vitoria === 'quina' ? 'Quina' : 'Cartela cheia'}` : ''}`;
 
   const groupedTop10 = useMemo(() => {
     if (top10GroupedFromApi.length > 0) {
@@ -150,7 +151,7 @@ const StreamingDraw: React.FC = () => {
       <header className="px-4 md:px-8 py-4 md:py-5 border-b border-white/10 flex items-center justify-between gap-4 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <p className="text-white/60 text-xs md:text-sm uppercase tracking-wide truncate">{rodada.sorteio_nome}</p>
-          <h1 className="text-xl md:text-3xl font-bold truncate">{rodada.nome}</h1>
+          <h1 className="text-xl md:text-3xl font-bold truncate">{rodadaTitle}</h1>
         </div>
         <div className="text-right text-white/70 text-xs md:text-sm flex-shrink-0 space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] md:text-xs font-semibold text-white">

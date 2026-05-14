@@ -1028,6 +1028,10 @@ const DrawTab: React.FC = () => {
       .slice(0, 10);
   }, [topScoringCartelas]);
 
+  const selectedRodadaTitle = selectedRodada
+    ? `${selectedRodada.nome} - ${(selectedRodada.tipo_vitoria || 'bingo') === 'quina' ? 'Quina' : 'Cartela cheia'}`
+    : '';
+
   useEffect(() => {
     if (winnerEntries.length > 0) {
       setVencedoras(winnerEntries.map((c) => c.numero));
@@ -1108,7 +1112,7 @@ const DrawTab: React.FC = () => {
                 Voltar
               </Button>
             </div>
-            <h2 className="text-3xl font-bold text-foreground">{selectedRodada.nome}</h2>
+            <h2 className="text-3xl font-bold text-foreground">{selectedRodadaTitle}</h2>
             <p className="text-muted-foreground mt-1">
               Faixa: {selectedRodada.range_start} a {selectedRodada.range_end} | Cartelas validadas: {cartelasValidadas.length} | Sorteados: {drawnNumbers.length} | Restantes: {remainingNumbers.length}
             </p>
