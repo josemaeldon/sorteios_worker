@@ -4,6 +4,7 @@ import { ListTodo, Plus, Search, Filter, Eraser, Edit, Trash2, ChevronDown, Chev
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { formatarData, formatarNumeroCartela, getStatusLabel, formatarMoeda } from '@/lib/utils/formatters';
 import AtribuicaoModal from '@/components/modals/AtribuicaoModal';
@@ -46,13 +47,17 @@ const AtribuicoesTab: React.FC = () => {
   const [editingAtribuicao, setEditingAtribuicao] = useState<Atribuicao | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.editingAtribuicao as Atribuicao | null) || null) : null);
   const [expandedAtribuicao, setExpandedAtribuicao] = useState<string | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.expandedAtribuicao as string | null) || null) : null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(shouldHydrateOfflineState ? !!atribuicoesTabSnapshot.deleteDialogOpen : false);
-  const [deletingAtribuicao, setDeletingAtribuicao] = useState<{ id: string; vendedorId: string; cartela?: number } | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.deletingAtribuicao as { id: string; vendedorId: string; cartela?: number } | null) || null) : null);
-  const [actionType, setActionType] = useState<'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar'>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.actionType as 'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar') || 'excluir-atribuicao') : 'excluir-atribuicao');
+  const [deletingAtribuicao, setDeletingAtribuicao] = useState<{ id: string; vendedorId: string; cartela?: number; cartelas?: number[] } | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.deletingAtribuicao as { id: string; vendedorId: string; cartela?: number; cartelas?: number[] } | null) || null) : null);
+  const [actionType, setActionType] = useState<'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar' | 'reverter-extravio'>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.actionType as 'devolver' | 'excluir-cartela' | 'excluir-atribuicao' | 'extraviar' | 'reverter-extravio') || 'excluir-atribuicao') : 'excluir-atribuicao');
+  const [initialVendedorId, setInitialVendedorId] = useState<string | null>(null);
+  const [filtrosPorAtribuicao, setFiltrosPorAtribuicao] = useState<Record<string, { busca: string; status: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada' }>>({});
+  const [selecionadasPorAtribuicao, setSelecionadasPorAtribuicao] = useState<Record<string, number[]>>({});
   
   // Transfer modal state
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(shouldHydrateOfflineState ? !!atribuicoesTabSnapshot.isTransferModalOpen : false);
   const [transferAtribuicao, setTransferAtribuicao] = useState<Atribuicao | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferAtribuicao as Atribuicao | null) || null) : null);
   const [transferCartelaNumero, setTransferCartelaNumero] = useState<number | null>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferCartelaNumero as number | null) || null) : null);
+  const [transferCartelasSelecionadas, setTransferCartelasSelecionadas] = useState<number[]>(shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.transferCartelasSelecionadas as number[]) || []) : []);
 
   React.useEffect(() => {
     const currentBingo = (getOfflineAppState().bingo || {}) as Record<string, unknown>;
@@ -69,6 +74,7 @@ const AtribuicoesTab: React.FC = () => {
           isTransferModalOpen,
           transferAtribuicao,
           transferCartelaNumero,
+          transferCartelasSelecionadas,
           filtrosAtribuicoes,
         },
       },
@@ -83,6 +89,7 @@ const AtribuicoesTab: React.FC = () => {
     isTransferModalOpen,
     transferAtribuicao,
     transferCartelaNumero,
+    transferCartelasSelecionadas,
     filtrosAtribuicoes,
   ]);
 
@@ -131,6 +138,56 @@ const AtribuicoesTab: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
+  const handleReverterExtravio = (atribuicaoId: string, numeroCartela: number) => {
+    setDeletingAtribuicao({ id: atribuicaoId, vendedorId: '', cartela: numeroCartela });
+    setActionType('reverter-extravio');
+    setDeleteDialogOpen(true);
+  };
+
+  const toggleCartelaSelecionada = (atribuicaoId: string, numeroCartela: number, checked: boolean) => {
+    setSelecionadasPorAtribuicao(prev => {
+      const atual = prev[atribuicaoId] || [];
+      const proximo = checked ? Array.from(new Set([...atual, numeroCartela])) : atual.filter(n => n !== numeroCartela);
+      return { ...prev, [atribuicaoId]: proximo };
+    });
+  };
+
+  const selecionarTodasFiltradas = (atribuicaoId: string, numeros: number[]) => {
+    setSelecionadasPorAtribuicao(prev => ({ ...prev, [atribuicaoId]: numeros }));
+  };
+
+  const limparSelecao = (atribuicaoId: string) => {
+    setSelecionadasPorAtribuicao(prev => ({ ...prev, [atribuicaoId]: [] }));
+  };
+
+  const handleAcaoEmLote = (
+    atribuicao: Atribuicao,
+    action: 'devolver' | 'extraviar' | 'reverter-extravio' | 'transferir',
+    filtroStatus?: CartelaAtribuida['status'],
+  ) => {
+    const selecionadas = selecionadasPorAtribuicao[atribuicao.id] || [];
+    if (selecionadas.length === 0) {
+      toast({ title: 'Selecione cartelas', description: 'Marque uma ou mais cartelas para continuar.', variant: 'destructive' });
+      return;
+    }
+    const cartelasSelecionadas = atribuicao.cartelas.filter(c => selecionadas.includes(c.numero));
+    const numerosValidos = filtroStatus ? cartelasSelecionadas.filter(c => c.status === filtroStatus).map(c => c.numero) : cartelasSelecionadas.map(c => c.numero);
+    if (numerosValidos.length === 0) {
+      toast({ title: 'Ação não permitida', description: 'As cartelas selecionadas não estão no status esperado para esta ação.', variant: 'destructive' });
+      return;
+    }
+    if (action === 'transferir') {
+      setTransferAtribuicao(atribuicao);
+      setTransferCartelaNumero(null);
+      setTransferCartelasSelecionadas(numerosValidos);
+      setIsTransferModalOpen(true);
+      return;
+    }
+    setDeletingAtribuicao({ id: atribuicao.id, vendedorId: atribuicao.vendedor_id, cartelas: numerosValidos });
+    setActionType(action);
+    setDeleteDialogOpen(true);
+  };
+
   const handleExcluirAtribuicao = (id: string, vendedorId: string) => {
     const atribuicao = atribuicoes.find(a => a.id === id);
     const possuiCartelaVendida = atribuicao?.cartelas.some(c => c.status === 'vendida');
@@ -156,6 +213,7 @@ const AtribuicoesTab: React.FC = () => {
   const handleTransferirCartela = (atribuicao: Atribuicao, numeroCartela: number) => {
     setTransferAtribuicao(atribuicao);
     setTransferCartelaNumero(numeroCartela);
+    setTransferCartelasSelecionadas([numeroCartela]);
     setIsTransferModalOpen(true);
   };
 
@@ -172,12 +230,45 @@ const AtribuicoesTab: React.FC = () => {
         title: "Cartela devolvida",
         description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi devolvida e está disponível para novas atribuições.`
       });
+    } else if (actionType === 'devolver' && deletingAtribuicao.cartelas?.length) {
+      for (const numero of deletingAtribuicao.cartelas) {
+        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'devolvida');
+      }
+      toast({
+        title: "Cartelas devolvidas",
+        description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como devolvidas.`
+      });
+      limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'extraviar' && deletingAtribuicao.cartela) {
       await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela, 'extraviada');
       toast({
         title: "Cartela marcada como Extraviada",
         description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} foi marcada como extraviada.`
       });
+    } else if (actionType === 'extraviar' && deletingAtribuicao.cartelas?.length) {
+      for (const numero of deletingAtribuicao.cartelas) {
+        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'extraviada');
+      }
+      toast({
+        title: "Cartelas extraviadas",
+        description: `${deletingAtribuicao.cartelas.length} cartela(s) marcadas como extraviadas.`
+      });
+      limparSelecao(deletingAtribuicao.id);
+    } else if (actionType === 'reverter-extravio' && deletingAtribuicao.cartela) {
+      await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela, 'ativa');
+      toast({
+        title: "Extravio revertido",
+        description: `A cartela ${formatarNumeroCartela(deletingAtribuicao.cartela)} voltou para ativa.`
+      });
+    } else if (actionType === 'reverter-extravio' && deletingAtribuicao.cartelas?.length) {
+      for (const numero of deletingAtribuicao.cartelas) {
+        await updateCartelaStatusInAtribuicao(deletingAtribuicao.id, numero, 'ativa');
+      }
+      toast({
+        title: "Cartelas reativadas",
+        description: `${deletingAtribuicao.cartelas.length} cartela(s) voltaram para ativa.`
+      });
+      limparSelecao(deletingAtribuicao.id);
     } else if (actionType === 'excluir-cartela' && deletingAtribuicao.cartela) {
       await removeCartelaFromAtribuicao(deletingAtribuicao.id, deletingAtribuicao.cartela);
       toast({
@@ -220,7 +311,7 @@ const AtribuicoesTab: React.FC = () => {
           <ListTodo className="w-6 h-6" />
           Atribuições - {sorteioAtivo.nome}
         </h2>
-        <Button onClick={() => { setEditingAtribuicao(null); setIsModalOpen(true); }} className="gap-2">
+        <Button onClick={() => { setEditingAtribuicao(null); setInitialVendedorId(null); setIsModalOpen(true); }} className="gap-2">
           <Plus className="w-4 h-4" />
           Nova Atribuição
         </Button>
@@ -296,6 +387,17 @@ const AtribuicoesTab: React.FC = () => {
           const isExpanded = expandedAtribuicao === atribuicao.id;
           const possuiCartelaVendida = atribuicao.cartelas.some(c => c.status === 'vendida');
           
+          const cartelasFiltradasDaAtribuicao = atribuicao.cartelas.filter((cartela) => {
+            const filtro = filtrosPorAtribuicao[atribuicao.id];
+            const busca = (filtro?.busca || '').trim();
+            const status = filtro?.status || 'todos';
+            if (busca && !cartela.numero.toString().includes(busca)) return false;
+            if (status !== 'todos' && cartela.status !== status) return false;
+            return true;
+          });
+          const selecionadas = selecionadasPorAtribuicao[atribuicao.id] || [];
+          const todasFiltradasSelecionadas = cartelasFiltradasDaAtribuicao.length > 0 && cartelasFiltradasDaAtribuicao.every(c => selecionadas.includes(c.numero));
+
           return (
             <Collapsible key={atribuicao.id} open={isExpanded} onOpenChange={() => toggleExpand(atribuicao.id)}>
               <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -390,6 +492,7 @@ const AtribuicoesTab: React.FC = () => {
                             onClick={() => {
                               setTransferAtribuicao(atribuicao);
                               setTransferCartelaNumero(null); // null = multi-select mode
+                              setTransferCartelasSelecionadas([]);
                               setIsTransferModalOpen(true);
                             }}
                             className="gap-1"
@@ -401,7 +504,7 @@ const AtribuicoesTab: React.FC = () => {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => setIsModalOpen(true)}
+                          onClick={() => { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); }}
                           className="gap-1"
                         >
                           <Plus className="w-4 h-4" />
@@ -415,10 +518,88 @@ const AtribuicoesTab: React.FC = () => {
                         Nenhuma cartela atribuída a este vendedor
                       </p>
                     ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <Input
+                            placeholder="Filtrar por número..."
+                            value={filtrosPorAtribuicao[atribuicao.id]?.busca || ''}
+                            onChange={(e) => setFiltrosPorAtribuicao(prev => ({
+                              ...prev,
+                              [atribuicao.id]: {
+                                busca: e.target.value,
+                                status: prev[atribuicao.id]?.status || 'todos',
+                              },
+                            }))}
+                          />
+                          <Select
+                            value={filtrosPorAtribuicao[atribuicao.id]?.status || 'todos'}
+                            onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosPorAtribuicao(prev => ({
+                              ...prev,
+                              [atribuicao.id]: {
+                                busca: prev[atribuicao.id]?.busca || '',
+                                status: value,
+                              },
+                            }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Status da cartela" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todos">Todos os status</SelectItem>
+                              <SelectItem value="ativa">Ativa</SelectItem>
+                              <SelectItem value="vendida">Vendida</SelectItem>
+                              <SelectItem value="devolvida">Devolvida</SelectItem>
+                              <SelectItem value="extraviada">Extraviada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setFiltrosPorAtribuicao(prev => ({
+                              ...prev,
+                              [atribuicao.id]: { busca: '', status: 'todos' },
+                            }))}
+                          >
+                            Limpar filtros desta atribuição
+                          </Button>
+                        </div>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero))}>
+                            Selecionar filtradas
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => limparSelecao(atribuicao.id)}>
+                            Limpar seleção
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'extraviar', 'ativa')}>
+                            Extraviar selecionadas
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'devolver', 'ativa')}>
+                            Devolver selecionadas
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'reverter-extravio')}>
+                            Reverter selecionadas
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'transferir', 'ativa')}>
+                            Transferir selecionadas
+                          </Button>
+                        </div>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="bg-muted/50">
+                              <th className="p-3 text-center font-semibold text-foreground">
+                                <Checkbox
+                                  checked={todasFiltradasSelecionadas}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero));
+                                      return;
+                                    }
+                                    limparSelecao(atribuicao.id);
+                                  }}
+                                />
+                              </th>
                               <th className="p-3 text-left font-semibold text-foreground">Cartela</th>
                               <th className="p-3 text-left font-semibold text-foreground">Data Atribuição</th>
                               <th className="p-3 text-center font-semibold text-foreground">Status</th>
@@ -426,8 +607,14 @@ const AtribuicoesTab: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {atribuicao.cartelas.map((cartela) => (
+                            {cartelasFiltradasDaAtribuicao.map((cartela) => (
                               <tr key={cartela.numero} className="border-b border-border hover:bg-muted/30 transition-colors">
+                                <td className="p-3 text-center">
+                                  <Checkbox
+                                    checked={selecionadas.includes(cartela.numero)}
+                                    onCheckedChange={(checked) => toggleCartelaSelecionada(atribuicao.id, cartela.numero, !!checked)}
+                                  />
+                                </td>
                                 <td className="p-3">
                                   <span className="px-3 py-1 bg-primary/10 text-primary rounded-full font-bold">
                                     {formatarNumeroCartela(cartela.numero)}
@@ -475,6 +662,18 @@ const AtribuicoesTab: React.FC = () => {
                                         </Button>
                                       </>
                                     )}
+                                    {cartela.status === 'extraviada' && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)}
+                                        className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
+                                        title="Reverter extravio e voltar para ativa"
+                                      >
+                                        <RotateCcw className="w-4 h-4" />
+                                        Reverter
+                                      </Button>
+                                    )}
                                     {cartela.status !== 'vendida' && (
                                       <Button 
                                         size="sm" 
@@ -490,6 +689,8 @@ const AtribuicoesTab: React.FC = () => {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                      </div>
                       </div>
                     )}
                   </div>
@@ -524,8 +725,9 @@ const AtribuicoesTab: React.FC = () => {
 
       <AtribuicaoModal
         isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingAtribuicao(null); }}
+        onClose={() => { setIsModalOpen(false); setEditingAtribuicao(null); setInitialVendedorId(null); }}
         editingAtribuicao={editingAtribuicao}
+        initialVendedorId={initialVendedorId}
       />
 
       <TransferenciaModal
@@ -534,9 +736,11 @@ const AtribuicoesTab: React.FC = () => {
           setIsTransferModalOpen(false);
           setTransferAtribuicao(null);
           setTransferCartelaNumero(null);
+          setTransferCartelasSelecionadas([]);
         }}
         atribuicaoOrigem={transferAtribuicao}
         cartelaNumero={transferCartelaNumero}
+        initialSelectedCartelas={transferCartelasSelecionadas}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -545,12 +749,14 @@ const AtribuicoesTab: React.FC = () => {
             <AlertDialogTitle>
               {actionType === 'devolver' && 'Devolver Cartela'}
               {actionType === 'extraviar' && 'Marcar como Extraviada'}
+              {actionType === 'reverter-extravio' && 'Reverter Extravio'}
               {actionType === 'excluir-cartela' && 'Remover Cartela'}
               {actionType === 'excluir-atribuicao' && 'Excluir Atribuição'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {actionType === 'devolver' && 'Tem certeza que deseja devolver esta cartela? Ela será marcada como devolvida.'}
-              {actionType === 'extraviar' && 'Tem certeza que deseja marcar esta cartela como extraviada? Ela será registrada como perdida.'}
+              {actionType === 'devolver' && `Tem certeza que deseja devolver ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'}? Ela(s) será(ão) marcada(s) como devolvida(s).`}
+              {actionType === 'extraviar' && `Tem certeza que deseja marcar ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'esta cartela'} como extraviada?`}
+              {actionType === 'reverter-extravio' && `Tem certeza que deseja reverter ${deletingAtribuicao?.cartelas?.length ? `${deletingAtribuicao.cartelas.length} cartela(s)` : 'o extravio desta cartela'}?`}
               {actionType === 'excluir-cartela' && 'Tem certeza que deseja remover esta cartela da atribuição? Ela voltará a ficar disponível.'}
               {actionType === 'excluir-atribuicao' && 'Tem certeza que deseja excluir esta atribuição? Todas as cartelas voltarão a ficar disponíveis.'}
             </AlertDialogDescription>
@@ -563,6 +769,7 @@ const AtribuicoesTab: React.FC = () => {
             >
               {actionType === 'devolver' && 'Devolver'}
               {actionType === 'extraviar' && 'Marcar Extraviada'}
+              {actionType === 'reverter-extravio' && 'Reverter'}
               {actionType === 'excluir-cartela' && 'Remover'}
               {actionType === 'excluir-atribuicao' && 'Excluir'}
             </AlertDialogAction>

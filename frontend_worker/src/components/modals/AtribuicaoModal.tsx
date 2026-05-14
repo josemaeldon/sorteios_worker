@@ -27,11 +27,12 @@ interface AtribuicaoModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingAtribuicao?: Atribuicao | null;
+  initialVendedorId?: string | null;
 }
 
 type TipoSelecao = 'individual' | 'faixa' | 'aleatorio';
 
-const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, editingAtribuicao }) => {
+const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, editingAtribuicao, initialVendedorId }) => {
   const { 
     sorteioAtivo, 
     vendedores, 
@@ -64,14 +65,78 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
         setVendedorId(editingAtribuicao.vendedor_id);
         setCartelasSelecionadas(editingAtribuicao.cartelas.map(c => c.numero));
       } else {
-        setVendedorId('');
+        setVendedorId(initialVendedorId || '');
         setCartelasSelecionadas([]);
       }
       setTipoSelecao('individual');
       setFaixaInput('');
       setAleatorioInput('');
     }
-  }, [isOpen, editingAtribuicao]);
+  }, [isOpen, editingAtribuicao, initialVendedorId]);
+
+  const gerarComprovanteAtribuicao = (vendedorNome: string, numeros: number[]) => {
+    if (numeros.length === 0) return;
+    const numerosOrdenados = [...numeros].sort((a, b) => a - b);
+    const totalPrevisto = (sorteioAtivo?.valor_cartela || 0) * numerosOrdenados.length;
+    const conteudo = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Comprovante de Atribuição</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; font-size: 14px; color: #111; padding: 24px; }
+            .header { text-align: center; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; }
+            .header h1 { font-size: 22px; font-weight: bold; }
+            .header p { font-size: 13px; color: #555; margin-top: 4px; }
+            .section { margin-bottom: 16px; }
+            .section h2 { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 8px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            .row .label { color: #555; }
+            .row .value { font-weight: 600; text-align: right; }
+            .numeros { display: flex; flex-wrap: wrap; gap: 6px; }
+            .numero { background: #1d4ed8; color: white; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 13px; min-width: 40px; text-align: center; }
+            .assinaturas { display: flex; justify-content: space-between; gap: 32px; margin-top: 48px; }
+            .assinaturas > div { flex: 1; text-align: center; }
+            .linha { border-top: 1px solid #111; padding-top: 6px; margin-top: 48px; }
+            .linha p { font-size: 12px; color: #555; margin-top: 2px; }
+            .linha p.titulo { font-weight: bold; color: #111; }
+            .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>COMPROVANTE DE CARTELAS ENTREGUES</h1>
+            <p>${sorteioAtivo?.nome || ''}</p>
+          </div>
+          <div class="section">
+            <h2>Identificação</h2>
+            <div class="row"><span class="label">Data/Hora</span><span class="value">${new Date().toLocaleString('pt-BR')}</span></div>
+            <div class="row"><span class="label">Vendedor</span><span class="value">${vendedorNome}</span></div>
+            <div class="row"><span class="label">Quantidade</span><span class="value">${numerosOrdenados.length} cartela(s)</span></div>
+            <div class="row"><span class="label">Previsão de venda</span><span class="value">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrevisto)}</span></div>
+          </div>
+          <div class="section">
+            <h2>Cartelas Entregues</h2>
+            <div class="numeros">
+              ${numerosOrdenados.map(n => `<span class="numero">${formatarNumeroCartela(n)}</span>`).join('')}
+            </div>
+          </div>
+          <div class="assinaturas">
+            <div><div class="linha"><p>${vendedorNome}</p><p class="titulo">Recebedor</p></div></div>
+            <div><div class="linha"><p>Responsável</p><p class="titulo">Entregador</p></div></div>
+          </div>
+          <div class="footer">Documento gerado automaticamente pelo sistema.</div>
+        </body>
+      </html>
+    `;
+    const janela = window.open('', '_blank', 'width=700,height=900');
+    if (!janela) return;
+    janela.document.write(conteudo);
+    janela.document.close();
+    janela.focus();
+  };
 
   const parseRange = (input: string): number[] => {
     // Parse "1-10" or "1 a 10" format
@@ -201,6 +266,9 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           title: "Atribuição atualizada",
           description: `Atribuição atualizada com sucesso.`
         });
+        if (adicionadas.length > 0) {
+          gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', adicionadas);
+        }
       } else if (atribuicaoExistente) {
         // Add cartelas to existing attribution
         await addCartelasToAtribuicaoComProgresso(
@@ -213,6 +281,7 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           title: "Cartelas adicionadas",
           description: `${cartelasSelecionadas.length} cartela(s) adicionada(s) à atribuição existente.`
         });
+        gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
       } else {
         // Create new attribution
         await addAtribuicaoComProgresso(
@@ -225,6 +294,7 @@ const AtribuicaoModal: React.FC<AtribuicaoModalProps> = ({ isOpen, onClose, edit
           title: "Atribuição realizada",
           description: `${cartelasSelecionadas.length} cartela(s) atribuída(s) com sucesso.`
         });
+        gerarComprovanteAtribuicao(vendedor?.nome || 'Vendedor', cartelasSelecionadas);
       }
 
       onClose();

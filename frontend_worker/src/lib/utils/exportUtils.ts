@@ -544,20 +544,52 @@ export const exportRelatorioVendedorPDF = async (
     doc.text('Cartelas Atribuídas', 14, yPos);
     yPos += 4;
 
-    const cartelasData = atribuicao.cartelas.map(c => [
-      formatarNumeroCartela(c.numero),
-      getStatusLabel(c.status),
-      formatarDataHora(c.data_atribuicao),
-      c.data_devolucao ? formatarDataHora(c.data_devolucao) : '-',
-    ]);
+    const ordenadas = [...atribuicao.cartelas].sort((a, b) => a.numero - b.numero);
+    const grupos = new Map<string, number[]>();
+    for (const c of ordenadas) {
+      const key = c.status;
+      const list = grupos.get(key) || [];
+      list.push(c.numero);
+      grupos.set(key, list);
+    }
+    const compactar = (nums: number[]) => {
+      if (nums.length === 0) return '-';
+      const ranges: string[] = [];
+      let inicio = nums[0];
+      let fim = nums[0];
+      for (let i = 1; i < nums.length; i++) {
+        const n = nums[i];
+        if (n === fim + 1) {
+          fim = n;
+          continue;
+        }
+        ranges.push(inicio === fim ? formatarNumeroCartela(inicio) : `${formatarNumeroCartela(inicio)}-${formatarNumeroCartela(fim)}`);
+        inicio = n;
+        fim = n;
+      }
+      ranges.push(inicio === fim ? formatarNumeroCartela(inicio) : `${formatarNumeroCartela(inicio)}-${formatarNumeroCartela(fim)}`);
+      return ranges.join(', ');
+    };
+
+    const cartelasData = [
+      ['Ativas', String(ativas), compactar(grupos.get('ativa') || [])],
+      ['Vendidas', String(vendidas), compactar(grupos.get('vendida') || [])],
+      ['Devolvidas', String(devolvidas), compactar(grupos.get('devolvida') || [])],
+      ['Extraviadas', String(extraviadas), compactar(grupos.get('extraviada') || [])],
+    ];
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Cartela', 'Status', 'Data Atribuição', 'Data Devolução']],
+      head: [['Status', 'Quantidade', 'Cartelas (compactado em faixas)']],
       body: cartelasData,
-      styles: { fontSize: 9, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246], textColor: 255 },
       alternateRowStyles: { fillColor: [245, 247, 250] },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 125 },
+      },
     });
 
     yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
@@ -616,6 +648,44 @@ export const exportRelatorioVendedorExcel = async (
   const vendasVendedor = vendas.filter(v => v.vendedor_id === vendedor.id);
 
   const wb = XLSX.utils.book_new();
+  const ordenadas = [...(atribuicao?.cartelas ?? [])].sort((a, b) => a.numero - b.numero);
+  const porStatus: Record<'ativa' | 'vendida' | 'devolvida' | 'extraviada', number[]> = {
+    ativa: [],
+    vendida: [],
+    devolvida: [],
+    extraviada: [],
+  };
+  for (const c of ordenadas) {
+    porStatus[c.status].push(c.numero);
+  }
+  const compactar = (nums: number[]) => {
+    if (nums.length === 0) return '-';
+    const ranges: string[] = [];
+    let inicio = nums[0];
+    let fim = nums[0];
+    for (let i = 1; i < nums.length; i++) {
+      const n = nums[i];
+      if (n === fim + 1) {
+        fim = n;
+        continue;
+      }
+      ranges.push(inicio === fim ? formatarNumeroCartela(inicio) : `${formatarNumeroCartela(inicio)}-${formatarNumeroCartela(fim)}`);
+      inicio = n;
+      fim = n;
+    }
+    ranges.push(inicio === fim ? formatarNumeroCartela(inicio) : `${formatarNumeroCartela(inicio)}-${formatarNumeroCartela(fim)}`);
+    return ranges.join(', ');
+  };
+
+  const resumoData = [
+    { Status: 'Ativas', Quantidade: porStatus.ativa.length, Cartelas: compactar(porStatus.ativa) },
+    { Status: 'Vendidas', Quantidade: porStatus.vendida.length, Cartelas: compactar(porStatus.vendida) },
+    { Status: 'Devolvidas', Quantidade: porStatus.devolvida.length, Cartelas: compactar(porStatus.devolvida) },
+    { Status: 'Extraviadas', Quantidade: porStatus.extraviada.length, Cartelas: compactar(porStatus.extraviada) },
+  ];
+  const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+  wsResumo['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 90 }];
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Cartelas');
 
   // Sheet 1: Cartelas
   const cartelasData = (atribuicao?.cartelas ?? []).map(c => ({
@@ -627,7 +697,7 @@ export const exportRelatorioVendedorExcel = async (
 
   const wsCartelas = XLSX.utils.json_to_sheet(cartelasData);
   wsCartelas['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
-  XLSX.utils.book_append_sheet(wb, wsCartelas, 'Cartelas');
+  XLSX.utils.book_append_sheet(wb, wsCartelas, 'Cartelas Detalhadas');
 
   // Sheet 2: Vendas
   const vendasData = vendasVendedor.map(v => {

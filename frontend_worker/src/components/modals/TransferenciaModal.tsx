@@ -27,13 +27,15 @@ interface TransferenciaModalProps {
   onClose: () => void;
   atribuicaoOrigem: Atribuicao | null;
   cartelaNumero: number | null; // If null, show multi-select mode
+  initialSelectedCartelas?: number[];
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ 
   isOpen, 
   onClose, 
   atribuicaoOrigem, 
-  cartelaNumero 
+  cartelaNumero,
+  initialSelectedCartelas = [],
 }) => {
   const { vendedores, atribuicoes, transferirCartelas } = useBingo();
   const { toast } = useToast();
@@ -57,10 +59,10 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({
       if (cartelaNumero) {
         setSelectedCartelas([cartelaNumero]);
       } else {
-        setSelectedCartelas([]);
+        setSelectedCartelas(initialSelectedCartelas);
       }
     }
-  }, [isOpen, cartelaNumero]);
+  }, [isOpen, cartelaNumero, initialSelectedCartelas]);
 
   const toggleCartela = (numero: number) => {
     setSelectedCartelas(prev => 

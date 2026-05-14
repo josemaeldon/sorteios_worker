@@ -727,17 +727,30 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   ) => {
     if (!sorteioAtivo) return;
     const total = cartelasNums.length;
+    let queued = false;
     for (let i = 0; i < total; i += ATRIB_BATCH_SIZE) {
       const batch = cartelasNums.slice(i, i + ATRIB_BATCH_SIZE);
-      await callApi('addCartelasToAtribuicao', {
+      const result = await callApi('addCartelasToAtribuicao', {
         atribuicao_id: atribuicaoId,
         vendedor_id: vendedorId,
         sorteio_id: sorteioAtivo.id,
         cartelas: batch,
       });
+      if (isOfflineQueued(result)) {
+        queued = true;
+      }
       onProgress(Math.min(i + ATRIB_BATCH_SIZE, total), total);
     }
-    if (!isOfflineQueued(result)) {
+    if (queued) {
+      setAtribuicoes(prev => prev.map(a => a.id === atribuicaoId ? {
+        ...a,
+        cartelas: [
+          ...a.cartelas,
+          ...cartelasNums.map(numero => ({ numero, status: 'ativa' as const, data_atribuicao: new Date().toISOString() })),
+        ],
+      } : a));
+      setCartelas(prev => prev.map(c => cartelasNums.includes(c.numero) ? { ...c, status: 'ativa', vendedor_id: vendedorId } : c));
+    } else {
       await loadAtribuicoes();
       await loadCartelas();
     }
