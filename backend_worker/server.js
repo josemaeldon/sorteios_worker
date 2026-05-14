@@ -1952,12 +1952,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         .filter((row) => row.length > 0);
     };
 
-    const isWinningLine = (grade, drawnSet) => {
-      if (!Array.isArray(grade) || grade.length === 0) return false;
-      const rows = normalizeGrade(grade);
-      if (rows.length === 0) return false;
-      const maxCols = Math.max(...rows.map((row) => row.length), 0);
-      if (maxCols === 0) return false;
+        const isWinningLine = (grade, drawnSet) => {
+          if (!Array.isArray(grade) || grade.length === 0) return false;
+          const rows = normalizeGrade(grade).filter(Array.isArray);
+          if (rows.length === 0) return false;
+          const maxCols = Math.max(...rows.map((row) => row.length), 0);
+          if (maxCols === 0) return false;
 
       for (const row of rows) {
         const filled = row.filter((n) => Number(n) > 0);
