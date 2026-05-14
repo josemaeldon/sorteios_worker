@@ -236,9 +236,6 @@ const ReciboModal: React.FC<ReciboModalProps> = ({ isOpen, onClose, vendaId }) =
           {/* Rodapé */}
           <div className="recibo-footer text-center mt-6 pt-3 border-t text-xs text-muted-foreground">
             <p>Documento gerado em {new Date().toLocaleString('pt-BR')}</p>
-            {sorteioAtivo?.premio && (
-              <p className="mt-1">Prêmio: {sorteioAtivo.premio}</p>
-            )}
           </div>
         </div>
 
