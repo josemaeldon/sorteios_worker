@@ -117,6 +117,17 @@ interface BingoContextType {
 
 const BingoContext = createContext<BingoContextType | undefined>(undefined);
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : '');
+const CURRENT_TAB_STORAGE_KEY = 'sorteios_worker_current_tab';
+const VALID_TABS: TabType[] = ['sorteios', 'dashboard', 'rodadas', 'vendedores', 'cartelas', 'atribuicoes', 'vendas', 'relatorios', 'sorteio', 'cartelas-bingo'];
+
+const getInitialCurrentTab = (): TabType => {
+  if (typeof window === 'undefined') return 'sorteios';
+  const stored = window.localStorage.getItem(CURRENT_TAB_STORAGE_KEY);
+  if (stored && VALID_TABS.includes(stored as TabType)) {
+    return stored as TabType;
+  }
+  return 'sorteios';
+};
 
 export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
@@ -136,7 +147,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [cartelaLayouts, setCartelaLayouts] = useState<CartelaLayout[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelaLayouts as CartelaLayout[]) || []) : []);
   const [cartelasValidadas, setCartelasValidadas] = useState<CartelaValidada[]>(shouldHydrateOfflineState ? ((offlineSnapshot.cartelasValidadas as CartelaValidada[]) || []) : []);
   const [lojaCartelas, setLojaCartelas] = useState<LojaCartela[]>(shouldHydrateOfflineState ? ((offlineSnapshot.lojaCartelas as LojaCartela[]) || []) : []);
-  const [currentTab, setCurrentTab] = useState<TabType>('sorteios');
+  const [currentTab, setCurrentTabState] = useState<TabType>(getInitialCurrentTab);
   const [isLoading, setIsLoading] = useState(false);
   
   // Filtros
@@ -163,6 +174,13 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     vendedor: 'todos',
     periodo: 'todos'
   });
+
+  const setCurrentTab = useCallback((tab: TabType) => {
+    setCurrentTabState(tab);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(CURRENT_TAB_STORAGE_KEY, tab);
+    }
+  }, []);
 
   useEffect(() => {
     if (!shouldHydrateOfflineState && !hasInitialOnlineSyncRef.current) return;

@@ -3,6 +3,7 @@ import { Dice5, BarChart3, Users, Grid3X3, ListTodo, ShoppingCart, PieChart, Shu
 import { useBingo } from '@/contexts/BingoContext';
 import { TabType } from '@/types/bingo';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'sorteios', label: 'Sorteios', icon: Dice5 },
@@ -18,12 +19,14 @@ const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
 
 const Navigation: React.FC = () => {
   const { currentTab, setCurrentTab, sorteioAtivo } = useBingo();
+  const navigate = useNavigate();
 
   const handleTabClick = (tabId: TabType) => {
     if (tabId !== 'sorteios' && !sorteioAtivo) {
       return;
     }
     setCurrentTab(tabId);
+    navigate(`/app/${tabId}`);
   };
 
   return (

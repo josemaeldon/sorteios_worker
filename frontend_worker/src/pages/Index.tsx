@@ -1,4 +1,7 @@
 import { BingoProvider, useBingo } from '@/contexts/BingoContext';
+import { Navigate, useParams } from 'react-router-dom';
+import { TabType } from '@/types/bingo';
+import React from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import SorteiosTab from '@/components/tabs/SorteiosTab';
@@ -11,11 +14,25 @@ import VendasTab from '@/components/tabs/VendasTab';
 import RelatoriosTab from '@/components/tabs/RelatoriosTab';
 import BingoCardsBuilderTab from '@/components/tabs/BingoCardsBuilderTab';
 
+const validTabs: TabType[] = ['sorteios', 'dashboard', 'rodadas', 'vendedores', 'cartelas', 'atribuicoes', 'vendas', 'relatorios', 'sorteio', 'cartelas-bingo'];
+
 const MainContent = () => {
-  const { currentTab } = useBingo();
+  const { currentTab, setCurrentTab } = useBingo();
+  const { tab } = useParams<{ tab: string }>();
+
+  if (!tab || !validTabs.includes(tab as TabType)) {
+    return <Navigate to="/app/sorteios" replace />;
+  }
+
+  const routeTab = tab as TabType;
+  React.useEffect(() => {
+    if (currentTab !== routeTab) {
+      setCurrentTab(routeTab);
+    }
+  }, [currentTab, routeTab, setCurrentTab]);
 
   const renderTab = () => {
-    switch (currentTab) {
+    switch (routeTab) {
       case 'sorteios': return <SorteiosTab />;
       case 'dashboard': return <DashboardTab />;
       case 'sorteio': return <DrawTab />;
