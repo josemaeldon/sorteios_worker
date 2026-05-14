@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Loader2, Trophy } from 'lucide-react';
+import { CheckCircle, Loader2, Minus, Plus, RotateCcw, Trophy } from 'lucide-react';
 import { callApi } from '@/lib/apiClient';
 
 type PublicRodada = {
@@ -42,6 +42,7 @@ const StreamingDraw: React.FC = () => {
   const [vencedoras, setVencedoras] = useState<{ numero: number; nome?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [numberZoom, setNumberZoom] = useState(1);
   const lastCountRef = useRef(0);
   const ganhadoresPopShownRef = useRef<Set<number>>(new Set());
 
@@ -71,6 +72,7 @@ const StreamingDraw: React.FC = () => {
     setTop10([]);
     setTop10GroupedFromApi([]);
     setVencedoras([]);
+    setNumberZoom(1);
     ganhadoresPopShownRef.current.clear();
     lastCountRef.current = 0;
     loadData();
@@ -181,12 +183,41 @@ const StreamingDraw: React.FC = () => {
         {/* Left Section: Number + Historico */}
         <div className="flex-1 min-h-0 flex flex-col min-w-0">
           {/* Large Current Number */}
-          <p className="text-white/50 text-lg md:text-2xl mb-1 md:mb-2 text-center">Número Sorteado</p>
+          <div className="flex items-center justify-center gap-2 mb-1 md:mb-2">
+            <p className="text-white/50 text-lg md:text-2xl text-center">Número Sorteado</p>
+            <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 p-1">
+              <button
+                type="button"
+                onClick={() => setNumberZoom((prev) => Math.max(prev - 0.1, 0.6))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                aria-label="Diminuir zoom do número"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setNumberZoom(1)}
+                className="inline-flex h-8 min-w-12 items-center justify-center rounded-full bg-white/10 px-2 text-xs font-semibold hover:bg-white/20 transition-colors"
+                aria-label="Redefinir zoom do número"
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                {Math.round(numberZoom * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={() => setNumberZoom((prev) => Math.min(prev + 0.1, 2.2))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                aria-label="Aumentar zoom do número"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <div
             className={`font-black leading-none tabular-nums text-center flex-1 min-h-0 flex items-center justify-center mb-1 md:mb-2 ${
               isNewNumber ? 'animate-bingo-globe-emerge' : ''
             }`}
-            style={{ fontSize: "clamp(4rem, 18vw, 18rem)" }}
+            style={{ fontSize: `clamp(4rem, ${18 * numberZoom}vw, ${18 * numberZoom}rem)` }}
           >
             {currentNumber ?? '-'}
           </div>
