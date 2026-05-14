@@ -942,6 +942,11 @@ const DrawTab: React.FC = () => {
     setSelectedCartelaModal({ numero, nome, grade: cartela.numeros_grade });
   };
 
+  const getCartelaNome = (numero: number): string | undefined => {
+    return rankingCardsWithGrade.find((card) => card.numero === numero)?.comprador_nome
+      || cartelasValidadas.find((cv) => cv.numero === numero)?.comprador_nome;
+  };
+
   const goBackToList = () => {
     setShowDrawing(false);
     setSelectedRodada(null);
@@ -1368,9 +1373,14 @@ const DrawTab: React.FC = () => {
                   <p className="text-muted-foreground mb-6">Cartela(s) com todos os números sorteados</p>
                   <div className="space-y-2 mb-8">
                     {ganhadoresPop.map(({ numero, nome, lote }) => (
-                      <div key={numero} className="text-2xl font-bold text-primary">
+                      <button
+                        key={numero}
+                        type="button"
+                        onClick={() => handleCartelaClick(numero, nome)}
+                        className="block w-full text-2xl font-bold text-primary hover:underline"
+                      >
                         Cartela {numero.toString().padStart(3, '0')}{nome ? ` - ${nome}` : ''}{lote !== undefined ? ` · Lote ${lote}` : ''}
-                      </div>
+                      </button>
                     ))}
                   </div>
                   <Button onClick={() => setGanhadoresPop([])} size="lg" className="gap-2">
