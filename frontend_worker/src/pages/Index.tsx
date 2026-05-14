@@ -41,6 +41,10 @@ const MainContent = () => {
     return <Navigate to="/app/sorteios" replace />;
   }
 
+  if (routeTab !== 'sorteios' && !sorteioId && sorteioAtivo?.id) {
+    return <Navigate to={`/app/${routeTab}/${sorteioAtivo.id}`} replace />;
+  }
+
   const renderTab = () => {
     switch (routeTab) {
       case 'sorteios': return <SorteiosTab />;

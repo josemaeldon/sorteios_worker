@@ -256,16 +256,6 @@ const CartelasTab: React.FC = () => {
     return result;
   }, [cartelasValidadas, tamanhoLote]);
 
-  if (!sorteioAtivo) {
-    return (
-      <div className="text-center py-12">
-        <Grid3X3 className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-bold text-foreground mb-2">Cartelas</h2>
-        <p className="text-muted-foreground">Selecione um sorteio para visualizar as cartelas</p>
-      </div>
-    );
-  }
-
   const loadCartelasPagina = useCallback(async () => {
     if (!sorteioAtivo || subTab !== 'lista') return;
     setIsLoadingLista(true);
@@ -299,6 +289,16 @@ const CartelasTab: React.FC = () => {
   React.useEffect(() => {
     loadCartelasPagina();
   }, [loadCartelasPagina]);
+
+  if (!sorteioAtivo) {
+    return (
+      <div className="text-center py-12">
+        <Grid3X3 className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-bold text-foreground mb-2">Cartelas</h2>
+        <p className="text-muted-foreground">Selecione um sorteio para visualizar as cartelas</p>
+      </div>
+    );
+  }
 
   const limparFiltros = () => setFiltrosCartelas({ busca: '', status: 'todos', vendedor: 'todos' });
 
