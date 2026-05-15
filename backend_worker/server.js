@@ -1414,14 +1414,54 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
   const cartelasVendidas = cartelas.filter((c) => c.status === 'vendida').length;
   const paymentSummary = buildPaymentSummary(vendas);
 
-  doc.fontSize(24).fillColor('#1E40AF').text('Relatorio Completo', { align: 'center' });
+  const pageLeft = 40;
+  const pageRight = doc.page.width - 40;
+  const contentWidth = pageRight - pageLeft;
+
+  const drawDivider = () => {
+    const y = doc.y;
+    doc
+      .strokeColor('#E5E7EB')
+      .lineWidth(1)
+      .moveTo(pageLeft, y)
+      .lineTo(pageRight, y)
+      .stroke();
+    doc.moveDown(0.5);
+  };
+
+  const truncate = (value, size) => {
+    const str = String(value ?? '-');
+    if (str.length <= size) return str;
+    return `${str.slice(0, Math.max(0, size - 1))}…`;
+  };
+
+  const drawTableHeader = (columns, topY) => {
+    doc.fontSize(9).fillColor('#1F2937').font('Helvetica-Bold');
+    columns.forEach((c) => {
+      doc.text(c.label, c.x, topY, { width: c.w, align: c.align || 'left' });
+    });
+    const lineY = topY + 14;
+    doc.strokeColor('#D1D5DB').lineWidth(1).moveTo(pageLeft, lineY).lineTo(pageRight, lineY).stroke();
+    doc.font('Helvetica').fillColor('#374151');
+    return lineY + 6;
+  };
+
+  const ensureSpace = (heightNeeded = 20) => {
+    if (doc.y + heightNeeded > doc.page.height - 50) {
+      doc.addPage();
+      return true;
+    }
+    return false;
+  };
+
+  doc.fontSize(24).fillColor('#1E40AF').font('Helvetica-Bold').text('Relatorio Completo', { align: 'center' });
   doc.moveDown(0.5);
-  doc.fontSize(17).fillColor('#111827').text(String(sorteio.nome || 'Sorteio'), { align: 'center' });
+  doc.fontSize(17).fillColor('#111827').font('Helvetica-Bold').text(String(sorteio.nome || 'Sorteio'), { align: 'center' });
   doc.moveDown(0.5);
-  doc.fontSize(10).fillColor('#6B7280').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+  doc.fontSize(10).fillColor('#6B7280').font('Helvetica').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
   doc.moveDown(2);
 
-  doc.fontSize(13).fillColor('#111827').text('Resumo Geral');
+  doc.fontSize(13).fillColor('#111827').font('Helvetica-Bold').text('Resumo Geral');
   doc.moveDown(0.6);
   addTextLine(doc, `Premio: ${sorteio.premio || '-'}`);
   addTextLine(doc, `Valor por cartela: ${formatBRL(sorteio.valor_cartela)}`);
@@ -1432,9 +1472,9 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
   addTextLine(doc, `Receita total: ${formatBRL(totalVendas)}`);
   addTextLine(doc, `Valor recebido: ${formatBRL(totalPago)}`);
   addTextLine(doc, `Valor pendente: ${formatBRL(totalVendas - totalPago)}`);
+  drawDivider();
 
-  doc.moveDown(0.6);
-  doc.fontSize(13).fillColor('#111827').text('Vendas por Forma de Pagamento');
+  doc.fontSize(13).fillColor('#111827').font('Helvetica-Bold').text('Vendas por Forma de Pagamento');
   doc.moveDown(0.6);
   addTextLine(doc, `Dinheiro: ${formatBRL(paymentSummary.dinheiro)}`);
   addTextLine(doc, `PIX: ${formatBRL(paymentSummary.pix)}`);
@@ -1442,45 +1482,72 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
   addTextLine(doc, `Transferencia: ${formatBRL(paymentSummary.transferencia)}`);
 
   doc.addPage();
-  doc.fontSize(16).fillColor('#1E40AF').text('Vendas');
+  doc.fontSize(16).fillColor('#1E40AF').font('Helvetica-Bold').text('Vendas');
   doc.moveDown(0.8);
-  doc.fontSize(9).fillColor('#374151');
-  addTextLine(doc, 'Cliente | Vendedor | Cartelas | Valor Total | Valor Pago | Status | Data');
-  addTextLine(doc, '-'.repeat(145));
+  const vendaCols = [
+    { label: 'Cliente', x: pageLeft, w: 98 },
+    { label: 'Vendedor', x: pageLeft + 102, w: 76 },
+    { label: 'Qtd', x: pageLeft + 182, w: 24, align: 'right' },
+    { label: 'Valor Total', x: pageLeft + 210, w: 78, align: 'right' },
+    { label: 'Pago', x: pageLeft + 292, w: 70, align: 'right' },
+    { label: 'Status', x: pageLeft + 366, w: 52 },
+    { label: 'Data', x: pageLeft + 422, w: 130 },
+  ];
+  let vendaY = drawTableHeader(vendaCols, doc.y);
   for (const venda of vendas) {
+    if (vendaY + 14 > doc.page.height - 50) {
+      doc.addPage();
+      vendaY = drawTableHeader(vendaCols, 48);
+    }
     const cartelasCount = parseCartelas(venda.numeros_cartelas).length;
-    const line = [
-      String(venda.cliente_nome || '-').slice(0, 22),
-      String(venda.vendedor_nome || '-').slice(0, 18),
+    const values = [
+      truncate(venda.cliente_nome || '-', 22),
+      truncate(venda.vendedor_nome || '-', 16),
       String(cartelasCount),
       formatBRL(venda.valor_total),
       formatBRL(venda.valor_pago),
-      String(venda.status || '-').slice(0, 10),
-      formatDateTimeBR(venda.created_at || venda.data_venda),
-    ].join(' | ');
-    addTextLine(doc, line);
+      truncate(venda.status || '-', 10),
+      truncate(formatDateTimeBR(venda.created_at || venda.data_venda), 19),
+    ];
+    doc.fontSize(8).fillColor('#374151').font('Helvetica');
+    vendaCols.forEach((c, idx) => {
+      doc.text(values[idx], c.x, vendaY, { width: c.w, align: c.align || 'left' });
+    });
+    vendaY += 12;
   }
 
   doc.addPage();
-  doc.fontSize(16).fillColor('#1E40AF').text('Vendedores');
+  doc.fontSize(16).fillColor('#1E40AF').font('Helvetica-Bold').text('Vendedores');
   doc.moveDown(0.8);
-  doc.fontSize(9).fillColor('#374151');
-  addTextLine(doc, 'Nome | Cartelas Atribuidas | Vendas | Total em Vendas | Status');
-  addTextLine(doc, '-'.repeat(120));
+  const vendedorCols = [
+    { label: 'Nome', x: pageLeft, w: 210 },
+    { label: 'Cartelas', x: pageLeft + 214, w: 56, align: 'right' },
+    { label: 'Vendas', x: pageLeft + 274, w: 44, align: 'right' },
+    { label: 'Total em Vendas', x: pageLeft + 322, w: 110, align: 'right' },
+    { label: 'Status', x: pageLeft + 436, w: 70 },
+  ];
+  let vendedorY = drawTableHeader(vendedorCols, doc.y);
   for (const vendedor of vendedores) {
+    if (vendedorY + 14 > doc.page.height - 50) {
+      doc.addPage();
+      vendedorY = drawTableHeader(vendedorCols, 48);
+    }
     const atribuicao = atribuicoes.find((a) => a.vendedor_id === vendedor.id);
     const vendasVendedor = vendas.filter((v) => v.vendedor_id === vendedor.id);
     const totalVendedor = vendasVendedor.reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
     const qtdCartelas = Array.isArray(atribuicao?.cartelas) ? atribuicao.cartelas.length : 0;
-
-    const line = [
-      String(vendedor.nome || '-').slice(0, 28),
+    const values = [
+      truncate(vendedor.nome || '-', 42),
       String(qtdCartelas),
       String(vendasVendedor.length),
       formatBRL(totalVendedor),
       vendedor.ativo ? 'Ativo' : 'Inativo',
-    ].join(' | ');
-    addTextLine(doc, line);
+    ];
+    doc.fontSize(8).fillColor('#374151').font('Helvetica');
+    vendedorCols.forEach((c, idx) => {
+      doc.text(values[idx], c.x, vendedorY, { width: c.w, align: c.align || 'left' });
+    });
+    vendedorY += 12;
   }
 
   doc.end();
