@@ -668,7 +668,7 @@ const AtribuicoesTab: React.FC = () => {
                     </div>
 
                     <Dialog open={detalhesAtribuicaoId === atribuicao.id} onOpenChange={(open) => setDetalhesAtribuicaoId(open ? atribuicao.id : null)}>
-                      <DialogContent className="sm:max-w-[1100px] max-h-[90vh] overflow-y-auto">
+                      <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
                         <DialogHeader>
                           <DialogTitle>Detalhes da atribuição - {atribuicao.vendedor_nome}</DialogTitle>
                         </DialogHeader>
@@ -736,18 +736,6 @@ const AtribuicoesTab: React.FC = () => {
                                 ))}
                               </tbody>
                             </table>
-                          </div>
-                          <div className="sticky bottom-0 left-0 right-0 -mx-1 pt-2 pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t">
-                            <div className="px-1">
-                              <Button
-                                type="button"
-                                variant="default"
-                                className="w-full sm:w-auto sm:min-w-[180px] font-semibold"
-                                onClick={() => setDetalhesAtribuicaoId(null)}
-                              >
-                                Fechar
-                              </Button>
-                            </div>
                           </div>
                         </div>
                       </DialogContent>
