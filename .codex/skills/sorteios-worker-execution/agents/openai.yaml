@@ -1,0 +1,4 @@
+version: 1
+display_name: Execução Sorteios Worker
+short_description: Aplica o plano em docs-ai para executar mudanças seguras e incrementais no projeto.
+default_prompt: Aplique o plano de docs-ai, mapeie a solicitação para uma fase, preserve comportamento e execute com migrações/testes quando necessário.
