@@ -255,7 +255,7 @@ const StreamingDraw: React.FC = () => {
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {group.cartelas.map((entry) => (
-                      <span key={entry.numero} className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.nome ? `${entry.numero} - ${entry.nome}` : entry.numero.toString()}>
+                      <span key={entry.numero} className="inline-flex px-2 py-1 rounded text-xs font-mono bg-white/10 border border-white/15 text-white/90 truncate" title={entry.numero.toString()}>
                         {entry.numero.toString().padStart(3, '0')}
                       </span>
                     ))}

@@ -64,7 +64,8 @@ const RodadasTab: React.FC = () => {
   };
 
   useEffect(() => {
-    const rodadasOfflineSnapshot = ((getOfflineAppState().bingo?.drawTab?.rodadas as RodadaSorteio[]) || [])
+    const offlineState = getOfflineAppState() as { bingo?: { drawTab?: { rodadas?: RodadaSorteio[] } } };
+    const rodadasOfflineSnapshot = (offlineState.bingo?.drawTab?.rodadas || [])
       .filter((rodada) => !sorteioAtivo || rodada.sorteio_id === sorteioAtivo.id);
     if (shouldHydrateOfflineState && rodadasOfflineSnapshot.length > 0) {
       setRodadas(rodadasOfflineSnapshot);
@@ -105,7 +106,8 @@ const RodadasTab: React.FC = () => {
       persistRodadasOffline(rodadasWithCount);
     } catch (error: unknown) {
       console.error('Error loading rodadas:', error);
-      const rodadasOfflineSnapshot = ((getOfflineAppState().bingo?.drawTab?.rodadas as RodadaSorteio[]) || [])
+      const offlineState = getOfflineAppState() as { bingo?: { drawTab?: { rodadas?: RodadaSorteio[] } } };
+      const rodadasOfflineSnapshot = (offlineState.bingo?.drawTab?.rodadas || [])
         .filter((rodada) => !sorteioAtivo || rodada.sorteio_id === sorteioAtivo.id);
       if (shouldHydrateOfflineState && rodadasOfflineSnapshot.length > 0) {
         setRodadas(rodadasOfflineSnapshot);
@@ -471,7 +473,7 @@ const RodadasTab: React.FC = () => {
               <Label htmlFor="status">Status *</Label>
               <Select 
                 value={formData.status} 
-                onValueChange={(value: string) => setFormData({ ...formData, status: value })}
+                onValueChange={(value: 'ativo' | 'concluido' | 'cancelado') => setFormData({ ...formData, status: value })}
               >
                 <SelectTrigger>
                   <SelectValue />

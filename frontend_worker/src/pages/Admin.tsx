@@ -20,8 +20,8 @@ import { applyFavicon } from '@/hooks/useFavicon';
 import { useToast } from '@/hooks/use-toast';
 
 interface SorteioAdmin extends Sorteio {
-  owner_nome: string;
-  owner_email: string;
+  owner_nome?: string;
+  owner_email?: string;
 }
 
 const userSchema = z.object({

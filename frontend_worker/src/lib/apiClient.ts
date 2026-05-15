@@ -413,38 +413,41 @@ const requestOfflineQueueSync = (): void => {
 };
 
 // API call function
-export const callApi = async (action: string, data: Record<string, unknown> = {}): Promise<any> => {
-  console.log(`API Call: ${action}`, data);
+export const callApi = async (action: string, data: unknown = {}): Promise<any> => {
+  const payload: Record<string, unknown> = (data && typeof data === 'object')
+    ? (data as Record<string, unknown>)
+    : {};
+  console.log(`API Call: ${action}`, payload);
 
   const offlineEnabled = isOfflineModeEnabled();
   if (offlineEnabled) {
     if (isLikelyReadAction(action)) {
       if (!navigator.onLine) {
-        const fallback = getOfflineResponse(action, data);
+        const fallback = getOfflineResponse(action, payload);
         if (fallback !== null) return fallback;
-        const cached = readCachedResponse(action, data);
+        const cached = readCachedResponse(action, payload);
         if (cached !== null) return cached;
         return { data: [], success: true, offline: true };
       }
     } else if (!navigator.onLine) {
-      enqueueOfflineRequest({ action, data });
+      enqueueOfflineRequest({ action, data: payload });
       requestOfflineQueueSync();
       return { success: true, offlineQueued: true };
     }
   }
 
   try {
-    return await callApiNetwork(action, data);
+    return await callApiNetwork(action, payload);
   } catch (error) {
     if (offlineEnabled && !navigator.onLine) {
       if (isLikelyReadAction(action)) {
-        const fallback = getOfflineResponse(action, data);
+        const fallback = getOfflineResponse(action, payload);
         if (fallback !== null) return fallback;
-        const cached = readCachedResponse(action, data);
+        const cached = readCachedResponse(action, payload);
         if (cached !== null) return cached;
         return { data: [], success: true, offline: true };
       }
-      enqueueOfflineRequest({ action, data });
+      enqueueOfflineRequest({ action, data: payload });
       requestOfflineQueueSync();
       return { success: true, offlineQueued: true };
     }

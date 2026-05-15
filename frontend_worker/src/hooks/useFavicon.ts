@@ -68,6 +68,6 @@ export function applyFavicon(url: string | null) {
   const maskIcon = document.createElement('link');
   maskIcon.rel = 'mask-icon';
   maskIcon.href = href;
-  maskIcon.color = '#1d4ed8';
+  maskIcon.setAttribute('color', '#1d4ed8');
   document.head.appendChild(maskIcon);
 }

@@ -71,7 +71,7 @@ const PagamentoModal: React.FC<PagamentoModalProps> = ({ isOpen, onClose, vendaI
           </div>
           <div className="space-y-2">
             <Label>Forma de Pagamento</Label>
-            <Select value={formaPagamento} onValueChange={(v: string) => setFormaPagamento(v)}>
+            <Select value={formaPagamento} onValueChange={(v: 'dinheiro' | 'pix' | 'cartao' | 'transferencia') => setFormaPagamento(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="dinheiro">Dinheiro</SelectItem>

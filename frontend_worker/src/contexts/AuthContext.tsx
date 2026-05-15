@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User, AuthState, LoginCredentials, CreateUserData, Plan } from '@/types/auth';
+import { Sorteio } from '@/types/bingo';
 import { callApi, getStoredToken, setStoredToken, clearStoredToken, isSelfhostedMode } from '@/lib/apiClient';
 import { OFFLINE_EVENT_NAMES, getOfflineAppState, isOfflineModeEnabled, patchOfflineAppState } from '@/lib/offlineMode';
 import { safeLocalStorageRemoveItem, safeLocalStorageSetItem } from '@/lib/storageUtils';
@@ -711,7 +712,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [toast]);
 
-  const getLojaCompradores = useCallback(async (): Promise<Sorteio[]> => {
+  const getLojaCompradores = useCallback(async (): Promise<Record<string, string | number>[]> => {
     try {
       const result = await callApi('getLojaCompradores');
       if (Array.isArray(result.data)) {

@@ -237,7 +237,7 @@ const Profile: React.FC = () => {
   const loadLojaCompradores = async () => {
     setIsLoadingCompradores(true);
     const data = await getLojaCompradores();
-    setLojaCompradores(data);
+    setLojaCompradores(data as unknown as LojaComprador[]);
     setIsLoadingCompradores(false);
   };
 
@@ -246,7 +246,7 @@ const Profile: React.FC = () => {
     setCompradorCartelas([]);
     setIsLoadingCartelasComprador(true);
     const data = await getCartelasComprador(email);
-    setCompradorCartelas(data as LojaCartela[]);
+    setCompradorCartelas(data as unknown as LojaCartela[]);
     setIsLoadingCartelasComprador(false);
   };
 
@@ -419,7 +419,7 @@ const Profile: React.FC = () => {
     
     setIsSubmitting(true);
     
-    const updateData: Record<string, unknown> = {
+    const updateData: { nome: string; email: string; titulo_sistema: string; avatar_url?: string; senha_atual?: string; nova_senha?: string } = {
       nome: formData.nome,
       email: formData.email,
       titulo_sistema: formData.titulo_sistema,

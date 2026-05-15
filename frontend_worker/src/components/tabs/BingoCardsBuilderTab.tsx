@@ -882,8 +882,8 @@ const BingoCardsBuilderTab: React.FC = () => {
   // ─── Export PDF ────────────────────────────────────────────────────────────
   const handleExportPDF = async () => {
     // In rifaOnly mode cards are just numbers — generate them on-the-fly if needed
-    const exportCards = (rifaOnly && cards.length === 0)
-      ? Array.from<BingoCardGrid>({ length: totalCards }, (_, i) => ({ cartelaNumero: i + 1, grids: [] }))
+    const exportCards: BingoCardGrid[] = (rifaOnly && cards.length === 0)
+      ? Array.from({ length: totalCards }).map((_, i) => ({ cartelaNumero: i + 1, grids: [] }))
       : cards;
 
     if (exportCards.length === 0) {
@@ -915,8 +915,8 @@ const BingoCardsBuilderTab: React.FC = () => {
   const isA4MultiAvailable = (paperW !== A4_W_MM || paperH !== A4_H_MM) && paperW <= A4_W_MM && paperH <= A4_H_MM;
 
   const handleExportA4MultiPDF = async () => {
-    const exportCards = (rifaOnly && cards.length === 0)
-      ? Array.from<BingoCardGrid>({ length: totalCards }, (_, i) => ({ cartelaNumero: i + 1, grids: [] }))
+    const exportCards: BingoCardGrid[] = (rifaOnly && cards.length === 0)
+      ? Array.from({ length: totalCards }).map((_, i) => ({ cartelaNumero: i + 1, grids: [] }))
       : cards;
 
     if (exportCards.length === 0) {

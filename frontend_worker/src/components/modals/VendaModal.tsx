@@ -183,6 +183,7 @@ const VendaModal: React.FC<VendaModalProps> = ({ isOpen, onClose, editingId }) =
       const totalPago = pagamentosValidos.reduce((sum, p) => sum + p.valor, 0);
 
       const vendaData = {
+        sorteio_id: sorteioAtivo?.id || '',
         vendedor_id: vendedorId,
         vendedor_nome: vendedor?.nome,
         cliente_nome: clienteNome,

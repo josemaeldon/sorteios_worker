@@ -769,7 +769,7 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (isOfflineQueued(result)) {
         setAtribuicoes(prev => prev.map(a => a.id === atribuicaoId ? {
           ...a,
-          cartelas: [...a.cartelas, ...cartelasNums.map(numero => ({ numero, status: 'ativa', data_atribuicao: new Date().toISOString() }))]
+          cartelas: [...a.cartelas, ...cartelasNums.map(numero => ({ numero, status: 'ativa' as const, data_atribuicao: new Date().toISOString() }))]
         } : a));
         setCartelas(prev => prev.map(c => cartelasNums.includes(c.numero) ? { ...c, status: 'ativa', vendedor_id: vendedorId } : c));
       }
@@ -1013,14 +1013,14 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const nextVendas = [...vendas, localVenda];
         setVendas(nextVendas);
         const numeros = parseCartelaList(venda.numeros_cartelas);
-        const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c);
+        const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' as const } : c);
         setCartelas(nextCartelas);
         const nextAtribuicoes = atribuicoes.map(a => ({
           ...a,
-          cartelas: a.cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' } : c)
+          cartelas: a.cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'vendida' as const } : c)
         }));
         setAtribuicoes(nextAtribuicoes);
-        const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'vendida' } : c);
+        const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'vendida' as const } : c);
         setLojaCartelas(nextLojaCartelas);
         persistOfflineBingoState({
           vendas: nextVendas,
@@ -1079,8 +1079,8 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const venda = vendas.find(v => v.id === id);
         if (venda) {
           const numeros = parseCartelaList(venda.numeros_cartelas);
-          const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'disponivel' } : c);
-          const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'disponivel', comprador_nome: undefined, comprador_email: undefined, comprador_endereco: undefined, comprador_cidade: undefined, comprador_telefone: undefined } : c);
+          const nextCartelas = cartelas.map(c => numeros.includes(c.numero) ? { ...c, status: 'disponivel' as const } : c);
+          const nextLojaCartelas = lojaCartelas.map(c => numeros.includes(c.numero_cartela) ? { ...c, status: 'disponivel' as const, comprador_nome: undefined, comprador_email: undefined, comprador_endereco: undefined, comprador_cidade: undefined, comprador_telefone: undefined } : c);
           const nextVendas = vendas.filter(v => v.id !== id);
           setCartelas(nextCartelas);
           setLojaCartelas(nextLojaCartelas);

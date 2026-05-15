@@ -473,7 +473,7 @@ const AtribuicoesTab: React.FC = () => {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground flex items-center gap-1"><Filter className="w-4 h-4" />Status Cartelas</label>
-            <Select value={filtrosAtribuicoes.status} onValueChange={(value: string) => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, status: value })}>
+            <Select value={filtrosAtribuicoes.status} onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosAtribuicoes({ ...filtrosAtribuicoes, status: value })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>

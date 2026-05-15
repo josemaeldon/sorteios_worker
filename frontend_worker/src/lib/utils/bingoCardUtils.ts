@@ -1,5 +1,5 @@
 type JsPdfCtor = (typeof import('jspdf'))['default'];
-type JsBarcodeFn = (typeof import('jsbarcode'))['default'];
+type JsBarcodeFn = typeof import('jsbarcode');
 type JsPdfInstance = InstanceType<JsPdfCtor>;
 
 let jsPdfCtorPromise: Promise<JsPdfCtor> | null = null;
@@ -14,7 +14,7 @@ const loadJsPdfCtor = async (): Promise<JsPdfCtor> => {
 
 const loadJsBarcodeFn = async (): Promise<JsBarcodeFn> => {
   if (!jsBarcodeFnPromise) {
-    jsBarcodeFnPromise = import('jsbarcode').then((module) => module.default);
+    jsBarcodeFnPromise = import('jsbarcode').then((module) => (module.default ?? module) as unknown as JsBarcodeFn);
   }
   return jsBarcodeFnPromise;
 };
