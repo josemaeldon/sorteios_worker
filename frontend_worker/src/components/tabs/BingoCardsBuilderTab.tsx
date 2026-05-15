@@ -1476,6 +1476,9 @@ const BingoCardsBuilderTab: React.FC = () => {
           {/* Background */}
           <div className="bg-card border border-border rounded-xl p-3 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Plano de Fundo</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Tamanho da imagem: {paperW}mm × {paperH}mm
+            </p>
             <PropRow label="Cor de fundo">
               <input
                 type="color"
