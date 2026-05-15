@@ -1150,7 +1150,7 @@ const DrawTab: React.FC = () => {
                 Voltar
               </Button>
             </div>
-            <h2 className="text-3xl font-bold text-foreground">{selectedRodadaTitle}</h2>
+            <h2 className="block w-full text-3xl font-bold text-foreground">{selectedRodadaTitle}</h2>
             <div className="text-muted-foreground mt-1 text-sm flex flex-col sm:flex-row sm:flex-nowrap sm:items-center gap-1 sm:gap-2">
               <span>Faixa: {selectedRodada.range_start} a {selectedRodada.range_end}</span>
               <span className="hidden sm:inline">|</span>
