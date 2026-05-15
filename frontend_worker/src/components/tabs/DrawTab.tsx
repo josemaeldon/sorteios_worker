@@ -1151,13 +1151,13 @@ const DrawTab: React.FC = () => {
               </Button>
             </div>
             <h2 className="block w-full text-3xl font-bold text-foreground">{selectedRodadaTitle}</h2>
-            <div className="text-muted-foreground mt-1 text-sm flex flex-col sm:flex-row sm:flex-nowrap sm:items-center gap-1 sm:gap-2">
+            <div className="text-muted-foreground mt-1 text-xs sm:text-sm flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap">
               <span>Faixa: {selectedRodada.range_start} a {selectedRodada.range_end}</span>
-              <span className="hidden sm:inline">|</span>
+              <span>|</span>
               <span>Cartelas validadas: {cartelasValidadas.length}</span>
-              <span className="hidden sm:inline">|</span>
+              <span>|</span>
               <span>Sorteados: {drawnNumbers.length}</span>
-              <span className="hidden sm:inline">|</span>
+              <span>|</span>
               <span>Restantes: {remainingNumbers.length}</span>
             </div>
           </div>
