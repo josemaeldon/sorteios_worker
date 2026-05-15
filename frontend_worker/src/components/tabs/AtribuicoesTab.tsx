@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatarData, formatarNumeroCartela, getStatusLabel, formatarMoeda } from '@/lib/utils/formatters';
 import AtribuicaoModal from '@/components/modals/AtribuicaoModal';
@@ -64,6 +65,7 @@ const AtribuicoesTab: React.FC = () => {
 
   const [comprovanteOpen, setComprovanteOpen] = useState(false);
   const [comprovanteData, setComprovanteData] = useState<ComprovanteAtribuicaoData | null>(null);
+  const [detalhesAtribuicaoId, setDetalhesAtribuicaoId] = useState<string | null>(null);
   const [historicoPorVendedor, setHistoricoPorVendedor] = useState<Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>>(
     shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.historicoPorVendedor as Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>) || {}) : {}
   );
@@ -305,6 +307,25 @@ const AtribuicoesTab: React.FC = () => {
     devolvidas: cartelas.filter(c => c.status === 'devolvida').length,
     extraviadas: cartelas.filter(c => c.status === 'extraviada').length,
   });
+  const compactarNumeros = (nums: number[]) => {
+    if (nums.length === 0) return 'Nenhuma';
+    const ordenados = [...nums].sort((a, b) => a - b);
+    const partes: string[] = [];
+    let ini = ordenados[0];
+    let fim = ordenados[0];
+    for (let i = 1; i < ordenados.length; i++) {
+      const n = ordenados[i];
+      if (n === fim + 1) {
+        fim = n;
+        continue;
+      }
+      partes.push(ini === fim ? formatarNumeroCartela(ini) : `${formatarNumeroCartela(ini)}-${formatarNumeroCartela(fim)}`);
+      ini = n;
+      fim = n;
+    }
+    partes.push(ini === fim ? formatarNumeroCartela(ini) : `${formatarNumeroCartela(ini)}-${formatarNumeroCartela(fim)}`);
+    return partes.join(', ');
+  };
 
   return (
     <div className="animate-fade-in">
@@ -440,40 +461,23 @@ const AtribuicoesTab: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <Input placeholder="Filtrar por número..." value={filtrosPorAtribuicao[atribuicao.id]?.busca || ''} onChange={(e) => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: e.target.value, status: prev[atribuicao.id]?.status || 'todos' } }))} />
-                      <Select value={filtrosPorAtribuicao[atribuicao.id]?.status || 'todos'} onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: prev[atribuicao.id]?.busca || '', status: value } }))}>
-                        <SelectTrigger><SelectValue placeholder="Status da cartela" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos os status</SelectItem>
-                          <SelectItem value="ativa">Ativa</SelectItem>
-                          <SelectItem value="vendida">Vendida</SelectItem>
-                          <SelectItem value="devolvida">Devolvida</SelectItem>
-                          <SelectItem value="extraviada">Extraviada</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button type="button" variant="outline" onClick={() => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: '', status: 'todos' } }))}>Limpar filtros desta atribuição</Button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Input placeholder="Faixa para ação (ex: 10-100)" value={faixaAcaoPorAtribuicao[atribuicao.id] || ''} onChange={(e) => setFaixaAcaoPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: e.target.value }))} className="w-56" />
-                      <Button type="button" size="sm" variant="outline" onClick={() => selecionarPorFaixa(atribuicao)}>Selecionar Faixa</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero))}>Selecionar filtradas</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => limparSelecao(atribuicao.id)}>Limpar seleção</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'extraviar', 'ativa')}>Extraviar selecionadas</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'devolver', 'ativa')}>Devolver selecionadas</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'reverter-extravio')}>Reverter selecionadas</Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'transferir', 'ativa')}>Transferir selecionadas</Button>
-                      <Button type="button" size="sm" variant="destructive" onClick={() => handleAcaoEmLote(atribuicao, 'excluir-cartela')}>Excluir selecionadas</Button>
+                    <div className="rounded-md border bg-background p-3">
+                      <p className="text-sm font-medium">Resumo de cartelas</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {atribuicao.cartelas.length} cartela(s) • {compactarNumeros(atribuicao.cartelas.map(c => c.numero))}
+                      </p>
+                      <Button size="sm" variant="outline" className="mt-2" onClick={() => setDetalhesAtribuicaoId(atribuicao.id)}>
+                        Ver detalhes e ações
+                      </Button>
                     </div>
 
                     <div className="border rounded-lg p-3 bg-background/70">
                       <p className="text-sm font-semibold text-foreground mb-2">Atribuições Registradas</p>
-                      {(historicoPorVendedor[atribuicao.vendedor_id] || []).length === 0 ? (
+                      {(historicoPorVendedor[atribuicao.vendedor_id] || []).filter(h => h.acao.toLowerCase().includes('atribuição')).length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhuma atribuição registrada ainda para este vendedor.</p>
                       ) : (
                         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                          {(historicoPorVendedor[atribuicao.vendedor_id] || []).map((h) => (
+                          {(historicoPorVendedor[atribuicao.vendedor_id] || []).filter(h => h.acao.toLowerCase().includes('atribuição')).map((h) => (
                             <div key={h.id} className="rounded-md border bg-card p-3">
                               <div className="flex items-center justify-between gap-2">
                                 <div>
@@ -508,49 +512,79 @@ const AtribuicoesTab: React.FC = () => {
                       )}
                     </div>
 
-                    {atribuicao.cartelas.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-4">Nenhuma cartela atribuída a este vendedor</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="bg-muted/50">
-                              <th className="p-3 text-center font-semibold text-foreground">
-                                <Checkbox checked={todasFiltradasSelecionadas} onCheckedChange={(checked) => checked ? selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero)) : limparSelecao(atribuicao.id)} />
-                              </th>
-                              <th className="p-3 text-left font-semibold text-foreground">Cartela</th>
-                              <th className="p-3 text-left font-semibold text-foreground">Data Atribuição</th>
-                              <th className="p-3 text-center font-semibold text-foreground">Status</th>
-                              <th className="p-3 text-center font-semibold text-foreground">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {cartelasFiltradasDaAtribuicao.map((cartela) => (
-                              <tr key={cartela.numero} className="border-b border-border hover:bg-muted/30 transition-colors">
-                                <td className="p-3 text-center"><Checkbox checked={selecionadas.includes(cartela.numero)} onCheckedChange={(checked) => toggleCartelaSelecionada(atribuicao.id, cartela.numero, !!checked)} /></td>
-                                <td className="p-3"><span className="px-3 py-1 bg-primary/10 text-primary rounded-full font-bold">{formatarNumeroCartela(cartela.numero)}</span></td>
-                                <td className="p-3 text-muted-foreground">{formatarData(cartela.data_atribuicao)}</td>
-                                <td className="p-3 text-center"><span className={cn('status-badge', `status-${cartela.status}`)}>{getStatusLabel(cartela.status)}</span></td>
-                                <td className="p-3">
-                                  <div className="flex justify-center gap-2">
-                                    {cartela.status === 'ativa' && (
-                                      <>
-                                        <Button size="sm" variant="outline" onClick={() => handleExtraviada(atribuicao.id, cartela.numero)} className="gap-1 border-orange-400 text-orange-600 hover:border-orange-600 hover:bg-orange-600 hover:text-white" title="Marcar como extraviada"><AlertTriangle className="w-4 h-4" /></Button>
-                                        <Button size="sm" variant="outline" onClick={() => handleTransferirCartela(atribuicao, cartela.numero)} className="gap-1" title="Transferir para outro vendedor"><ArrowRightLeft className="w-4 h-4" />Transferir</Button>
-                                        <Button size="sm" variant="outline" onClick={() => handleDevolverCartela(atribuicao.id, cartela.numero)} className="gap-1"><RotateCcw className="w-4 h-4" />Devolver</Button>
-                                      </>
-                                    )}
-                                    {cartela.status === 'extraviada' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter</Button>}
-                                    {cartela.status === 'devolvida' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter Devolução</Button>}
-                                    {cartela.status !== 'vendida' && <Button size="sm" variant="destructive" onClick={() => handleExcluirCartela(atribuicao.id, cartela.numero)}><Trash2 className="w-4 h-4" /></Button>}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                    <Dialog open={detalhesAtribuicaoId === atribuicao.id} onOpenChange={(open) => setDetalhesAtribuicaoId(open ? atribuicao.id : null)}>
+                      <DialogContent className="sm:max-w-[1100px] max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Detalhes da atribuição - {atribuicao.vendedor_nome}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <Input placeholder="Filtrar por número..." value={filtrosPorAtribuicao[atribuicao.id]?.busca || ''} onChange={(e) => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: e.target.value, status: prev[atribuicao.id]?.status || 'todos' } }))} />
+                            <Select value={filtrosPorAtribuicao[atribuicao.id]?.status || 'todos'} onValueChange={(value: 'todos' | 'ativa' | 'vendida' | 'devolvida' | 'extraviada') => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: prev[atribuicao.id]?.busca || '', status: value } }))}>
+                              <SelectTrigger><SelectValue placeholder="Status da cartela" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="todos">Todos os status</SelectItem>
+                                <SelectItem value="ativa">Ativa</SelectItem>
+                                <SelectItem value="vendida">Vendida</SelectItem>
+                                <SelectItem value="devolvida">Devolvida</SelectItem>
+                                <SelectItem value="extraviada">Extraviada</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button type="button" variant="outline" onClick={() => setFiltrosPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: { busca: '', status: 'todos' } }))}>Limpar filtros desta atribuição</Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Input placeholder="Faixa para ação (ex: 10-100)" value={faixaAcaoPorAtribuicao[atribuicao.id] || ''} onChange={(e) => setFaixaAcaoPorAtribuicao(prev => ({ ...prev, [atribuicao.id]: e.target.value }))} className="w-56" />
+                            <Button type="button" size="sm" variant="outline" onClick={() => selecionarPorFaixa(atribuicao)}>Selecionar Faixa</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero))}>Selecionar filtradas</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => limparSelecao(atribuicao.id)}>Limpar seleção</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'extraviar', 'ativa')}>Extraviar selecionadas</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'devolver', 'ativa')}>Devolver selecionadas</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'reverter-extravio')}>Reverter selecionadas</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleAcaoEmLote(atribuicao, 'transferir', 'ativa')}>Transferir selecionadas</Button>
+                            <Button type="button" size="sm" variant="destructive" onClick={() => handleAcaoEmLote(atribuicao, 'excluir-cartela')}>Excluir selecionadas</Button>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="bg-muted/50">
+                                  <th className="p-3 text-center font-semibold text-foreground">
+                                    <Checkbox checked={todasFiltradasSelecionadas} onCheckedChange={(checked) => checked ? selecionarTodasFiltradas(atribuicao.id, cartelasFiltradasDaAtribuicao.map(c => c.numero)) : limparSelecao(atribuicao.id)} />
+                                  </th>
+                                  <th className="p-3 text-left font-semibold text-foreground">Cartela</th>
+                                  <th className="p-3 text-left font-semibold text-foreground">Data Atribuição</th>
+                                  <th className="p-3 text-center font-semibold text-foreground">Status</th>
+                                  <th className="p-3 text-center font-semibold text-foreground">Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cartelasFiltradasDaAtribuicao.map((cartela) => (
+                                  <tr key={cartela.numero} className="border-b border-border hover:bg-muted/30 transition-colors">
+                                    <td className="p-3 text-center"><Checkbox checked={selecionadas.includes(cartela.numero)} onCheckedChange={(checked) => toggleCartelaSelecionada(atribuicao.id, cartela.numero, !!checked)} /></td>
+                                    <td className="p-3"><span className="px-3 py-1 bg-primary/10 text-primary rounded-full font-bold">{formatarNumeroCartela(cartela.numero)}</span></td>
+                                    <td className="p-3 text-muted-foreground">{formatarData(cartela.data_atribuicao)}</td>
+                                    <td className="p-3 text-center"><span className={cn('status-badge', `status-${cartela.status}`)}>{getStatusLabel(cartela.status)}</span></td>
+                                    <td className="p-3">
+                                      <div className="flex justify-center gap-2">
+                                        {cartela.status === 'ativa' && (
+                                          <>
+                                            <Button size="sm" variant="outline" onClick={() => handleExtraviada(atribuicao.id, cartela.numero)} className="gap-1 border-orange-400 text-orange-600 hover:border-orange-600 hover:bg-orange-600 hover:text-white" title="Marcar como extraviada"><AlertTriangle className="w-4 h-4" /></Button>
+                                            <Button size="sm" variant="outline" onClick={() => handleTransferirCartela(atribuicao, cartela.numero)} className="gap-1" title="Transferir para outro vendedor"><ArrowRightLeft className="w-4 h-4" />Transferir</Button>
+                                            <Button size="sm" variant="outline" onClick={() => handleDevolverCartela(atribuicao.id, cartela.numero)} className="gap-1"><RotateCcw className="w-4 h-4" />Devolver</Button>
+                                          </>
+                                        )}
+                                        {cartela.status === 'extraviada' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter</Button>}
+                                        {cartela.status === 'devolvida' && <Button size="sm" variant="outline" onClick={() => handleReverterExtravio(atribuicao.id, cartela.numero)} className="gap-1 border-blue-400 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"><RotateCcw className="w-4 h-4" />Reverter Devolução</Button>}
+                                        {cartela.status !== 'vendida' && <Button size="sm" variant="destructive" onClick={() => handleExcluirCartela(atribuicao.id, cartela.numero)}><Trash2 className="w-4 h-4" /></Button>}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </CollapsibleContent>
               </div>

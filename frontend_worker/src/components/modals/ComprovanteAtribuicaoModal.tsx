@@ -23,11 +23,9 @@ const ComprovanteAtribuicaoModal: React.FC<Props> = ({ isOpen, onClose, data }) 
   const numerosOrdenados = useMemo(() => [...(data?.numeros || [])].sort((a, b) => a - b), [data?.numeros]);
   const totalPrevisto = (data?.valorCartela || 0) * numerosOrdenados.length;
 
-  const handlePrint = () => {
-    if (!printRef.current || !data) return;
-    const janela = window.open('', '_blank', 'width=700,height=900');
-    if (!janela) return;
-    janela.document.write(`
+  const getPrintableHtml = () => {
+    if (!printRef.current) return '';
+    return `
       <!DOCTYPE html>
       <html lang="pt-BR">
         <head>
@@ -55,35 +53,33 @@ const ComprovanteAtribuicaoModal: React.FC<Props> = ({ isOpen, onClose, data }) 
         </head>
         <body>${printRef.current.innerHTML}</body>
       </html>
-    `);
+    `;
+  };
+
+  const openPrintableWindow = () => {
+    const html = getPrintableHtml();
+    if (!html) return null;
+    const janela = window.open('', '_blank', 'width=700,height=900');
+    if (!janela) return null;
+    janela.document.write(html);
     janela.document.close();
     janela.focus();
+    return janela;
+  };
+
+  const handlePrint = () => {
+    if (!printRef.current || !data) return;
+    const janela = openPrintableWindow();
+    if (!janela) return;
     janela.print();
     janela.close();
   };
 
   const handleSavePdf = async () => {
-    if (!data) return;
-    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Comprovante de Cartelas Entregues', 14, 20);
-    doc.setFontSize(11);
-    doc.text(`Sorteio: ${data.sorteioNome}`, 14, 30);
-    doc.text(`Vendedor: ${data.vendedorNome}`, 14, 37);
-    doc.text(`Data/Hora: ${data.dataHora}`, 14, 44);
-    doc.text(`Quantidade: ${numerosOrdenados.length}`, 14, 51);
-    doc.text(`Previsao de venda: ${formatarMoeda(totalPrevisto)}`, 14, 58);
-    const rows = numerosOrdenados.map((n) => [formatarNumeroCartela(n)]);
-    autoTable(doc, {
-      startY: 66,
-      head: [['Cartelas Entregues']],
-      body: rows,
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [29, 78, 216] },
-      theme: 'striped',
-    });
-    doc.save(`comprovante-atribuicao-${data.vendedorNome.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+    const janela = openPrintableWindow();
+    if (!janela) return;
+    janela.print();
+    janela.close();
   };
 
   if (!data) return null;
