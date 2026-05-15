@@ -101,33 +101,34 @@ const AtribuicoesTab: React.FC = () => {
     });
   }, [isModalOpen, editingAtribuicao, expandedAtribuicao, deleteDialogOpen, deletingAtribuicao, actionType, isTransferModalOpen, transferAtribuicao, transferCartelaNumero, transferCartelasSelecionadas, historicoPorVendedor, filtrosAtribuicoes]);
 
-  React.useEffect(() => {
-    const loadHistorico = async () => {
-      if (!sorteioAtivo?.id) return;
-      try {
-        const result = await callApi('getAtribuicoesHistorico', { sorteio_id: sorteioAtivo.id }) as { data?: Array<{ id: string; vendedor_id: string; acao: string; numeros_cartelas: string; data_hora: string }> };
-        const byVendedor: Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>> = {};
-        for (const row of result.data || []) {
-          const numeros = String(row.numeros_cartelas || '')
-            .split(',')
-            .map((n) => Number(n.trim()))
-            .filter((n) => Number.isFinite(n));
-          const item = {
-            id: row.id,
-            dataHora: new Date(row.data_hora).toLocaleString('pt-BR'),
-            acao: row.acao,
-            numeros,
-          };
-          if (!byVendedor[row.vendedor_id]) byVendedor[row.vendedor_id] = [];
-          byVendedor[row.vendedor_id].push(item);
-        }
-        setHistoricoPorVendedor(byVendedor);
-      } catch {
-        // keep current UI state if backend load fails
+  const loadHistorico = React.useCallback(async () => {
+    if (!sorteioAtivo?.id) return;
+    try {
+      const result = await callApi('getAtribuicoesHistorico', { sorteio_id: sorteioAtivo.id }) as { data?: Array<{ id: string; vendedor_id: string; acao: string; numeros_cartelas: string; data_hora: string }> };
+      const byVendedor: Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>> = {};
+      for (const row of result.data || []) {
+        const numeros = String(row.numeros_cartelas || '')
+          .split(',')
+          .map((n) => Number(n.trim()))
+          .filter((n) => Number.isFinite(n));
+        const item = {
+          id: row.id,
+          dataHora: new Date(row.data_hora).toLocaleString('pt-BR'),
+          acao: row.acao,
+          numeros,
+        };
+        if (!byVendedor[row.vendedor_id]) byVendedor[row.vendedor_id] = [];
+        byVendedor[row.vendedor_id].push(item);
       }
-    };
-    void loadHistorico();
+      setHistoricoPorVendedor(byVendedor);
+    } catch {
+      // keep current UI state if backend load fails
+    }
   }, [sorteioAtivo?.id, callApi]);
+
+  React.useEffect(() => {
+    void loadHistorico();
+  }, [loadHistorico]);
 
   if (!sorteioAtivo) {
     return (
@@ -149,14 +150,18 @@ const AtribuicoesTab: React.FC = () => {
     return [ini, fim];
   };
 
+  const isUuid = (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
   const registrarHistorico = (payload: { vendedorId: string; acao: string; numeros: number[] }) => {
     if (payload.numeros.length === 0) return;
     const nowIso = new Date().toISOString();
+    const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setHistoricoPorVendedor(prev => ({
       ...prev,
       [payload.vendedorId]: [
         {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          id: tempId,
           dataHora: new Date(nowIso).toLocaleString('pt-BR'),
           acao: payload.acao,
           numeros: [...payload.numeros].sort((a, b) => a - b),
@@ -165,13 +170,29 @@ const AtribuicoesTab: React.FC = () => {
       ],
     }));
     if (sorteioAtivo?.id) {
-      void callApi('createAtribuicaoHistorico', {
-        sorteio_id: sorteioAtivo.id,
-        vendedor_id: payload.vendedorId,
-        acao: payload.acao,
-        numeros_cartelas: payload.numeros,
-        data_hora: nowIso,
-      });
+      void (async () => {
+        try {
+          const result = await callApi('createAtribuicaoHistorico', {
+            sorteio_id: sorteioAtivo.id,
+            vendedor_id: payload.vendedorId,
+            acao: payload.acao,
+            numeros_cartelas: payload.numeros,
+            data_hora: nowIso,
+          }) as { data?: Array<{ id?: string }> };
+          const realId = result?.data?.[0]?.id;
+          if (realId && isUuid(realId)) {
+            setHistoricoPorVendedor((prev) => ({
+              ...prev,
+              [payload.vendedorId]: (prev[payload.vendedorId] || []).map((h) =>
+                h.id === tempId ? { ...h, id: realId } : h,
+              ),
+            }));
+          }
+          await loadHistorico();
+        } catch {
+          // Keep temporary entry locally if API fails; sync can happen later.
+        }
+      })();
     }
   };
 
@@ -180,6 +201,15 @@ const AtribuicoesTab: React.FC = () => {
     const ok = window.confirm('Excluir este lançamento? Todas as cartelas desse lançamento serão removidas da atribuição.');
     if (!ok) return;
     try {
+      if (!isUuid(historicoId)) {
+        setHistoricoPorVendedor((prev) => ({
+          ...prev,
+          [atribuicao.vendedor_id]: (prev[atribuicao.vendedor_id] || []).filter((h) => h.id !== historicoId),
+        }));
+        await loadHistorico();
+        toast({ title: 'Lançamento removido da lista', description: 'Este lançamento ainda não tinha sido persistido no banco.' });
+        return;
+      }
       await callApi('deleteAtribuicaoHistorico', {
         historico_id: historicoId,
         sorteio_id: sorteioAtivo.id,
@@ -189,6 +219,7 @@ const AtribuicoesTab: React.FC = () => {
         ...prev,
         [atribuicao.vendedor_id]: (prev[atribuicao.vendedor_id] || []).filter((h) => h.id !== historicoId),
       }));
+      await loadHistorico();
       await loadAtribuicoes();
       await loadCartelas();
       toast({ title: 'Lançamento excluído', description: 'As cartelas do lançamento foram removidas da atribuição.' });
@@ -232,6 +263,18 @@ const AtribuicoesTab: React.FC = () => {
       return;
     }
     try {
+      if (!isUuid(editLancamentoId)) {
+        setHistoricoPorVendedor((prev) => ({
+          ...prev,
+          [editLancamentoAtribuicao.vendedor_id]: (prev[editLancamentoAtribuicao.vendedor_id] || []).map((h) =>
+            h.id === editLancamentoId ? { ...h, numeros } : h,
+          ),
+        }));
+        await loadHistorico();
+        toast({ title: 'Lançamento atualizado localmente', description: 'Esse lançamento ainda não foi persistido no banco.' });
+        setEditLancamentoOpen(false);
+        return;
+      }
       await callApi('updateAtribuicaoHistorico', {
         historico_id: editLancamentoId,
         sorteio_id: sorteioAtivo.id,
@@ -244,6 +287,7 @@ const AtribuicoesTab: React.FC = () => {
           h.id === editLancamentoId ? { ...h, numeros } : h,
         ),
       }));
+      await loadHistorico();
       await loadAtribuicoes();
       await loadCartelas();
       toast({ title: 'Lançamento atualizado', description: 'Os números do lançamento foram atualizados.' });
