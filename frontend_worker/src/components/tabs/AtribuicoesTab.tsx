@@ -668,7 +668,7 @@ const AtribuicoesTab: React.FC = () => {
                     </div>
 
                     <Dialog open={detalhesAtribuicaoId === atribuicao.id} onOpenChange={(open) => setDetalhesAtribuicaoId(open ? atribuicao.id : null)}>
-                      <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                      <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[90vh] overflow-y-auto p-4 sm:p-6 [&>button]:absolute [&>button]:right-3 [&>button]:top-3 [&>button]:z-50 [&>button]:h-9 [&>button]:w-9 [&>button]:rounded-md [&>button]:border [&>button]:border-border [&>button]:bg-background [&>button]:text-foreground [&>button]:shadow-sm [&>button]:opacity-100 [&>button]:ring-offset-background [&>button]:transition-colors [&>button:hover]:bg-primary [&>button:hover]:text-primary-foreground [&>button:focus-visible]:outline-none [&>button:focus-visible]:ring-2 [&>button:focus-visible]:ring-ring [&>button:focus-visible]:ring-offset-2">
                         <DialogHeader>
                           <DialogTitle>Detalhes da atribuição - {atribuicao.vendedor_nome}</DialogTitle>
                         </DialogHeader>
