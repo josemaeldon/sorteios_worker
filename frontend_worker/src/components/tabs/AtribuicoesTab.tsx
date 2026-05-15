@@ -42,6 +42,8 @@ const AtribuicoesTab: React.FC = () => {
     deleteAtribuicao,
     removeCartelaFromAtribuicao,
     updateCartelaStatusInAtribuicao,
+    loadAtribuicoes,
+    loadCartelas,
   } = useBingo();
   const { toast } = useToast();
   const { callApi } = useApi();
@@ -68,6 +70,10 @@ const AtribuicoesTab: React.FC = () => {
   const [comprovanteOpen, setComprovanteOpen] = useState(false);
   const [comprovanteData, setComprovanteData] = useState<ComprovanteAtribuicaoData | null>(null);
   const [detalhesAtribuicaoId, setDetalhesAtribuicaoId] = useState<string | null>(null);
+  const [editLancamentoOpen, setEditLancamentoOpen] = useState(false);
+  const [editLancamentoAtribuicao, setEditLancamentoAtribuicao] = useState<Atribuicao | null>(null);
+  const [editLancamentoId, setEditLancamentoId] = useState<string | null>(null);
+  const [editLancamentoNumeros, setEditLancamentoNumeros] = useState('');
   const [historicoPorVendedor, setHistoricoPorVendedor] = useState<Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>>(
     shouldHydrateOfflineState ? ((atribuicoesTabSnapshot.historicoPorVendedor as Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>>) || {}) : {}
   );
@@ -166,6 +172,85 @@ const AtribuicoesTab: React.FC = () => {
         numeros_cartelas: payload.numeros,
         data_hora: nowIso,
       });
+    }
+  };
+
+  const excluirLancamentoRegistrado = async (atribuicao: Atribuicao, historicoId: string) => {
+    if (!sorteioAtivo?.id) return;
+    const ok = window.confirm('Excluir este lançamento? Todas as cartelas desse lançamento serão removidas da atribuição.');
+    if (!ok) return;
+    try {
+      await callApi('deleteAtribuicaoHistorico', {
+        historico_id: historicoId,
+        sorteio_id: sorteioAtivo.id,
+        vendedor_id: atribuicao.vendedor_id,
+      });
+      setHistoricoPorVendedor((prev) => ({
+        ...prev,
+        [atribuicao.vendedor_id]: (prev[atribuicao.vendedor_id] || []).filter((h) => h.id !== historicoId),
+      }));
+      await loadAtribuicoes();
+      await loadCartelas();
+      toast({ title: 'Lançamento excluído', description: 'As cartelas do lançamento foram removidas da atribuição.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível excluir o lançamento.';
+      toast({ title: 'Erro ao excluir lançamento', description: message, variant: 'destructive' });
+    }
+  };
+
+  const abrirEditarLancamento = (atribuicao: Atribuicao, h: { id: string; numeros: number[] }) => {
+    setEditLancamentoAtribuicao(atribuicao);
+    setEditLancamentoId(h.id);
+    setEditLancamentoNumeros(h.numeros.join(','));
+    setEditLancamentoOpen(true);
+  };
+
+  const parseNumerosEntrada = (raw: string): number[] => {
+    const partes = raw.split(',').map((v) => v.trim()).filter(Boolean);
+    const nums: number[] = [];
+    for (const p of partes) {
+      const m = p.match(/^(\d+)\s*[-aA]\s*(\d+)$/);
+      if (m) {
+        const ini = Number(m[1]);
+        const fim = Number(m[2]);
+        if (Number.isFinite(ini) && Number.isFinite(fim) && fim >= ini) {
+          for (let n = ini; n <= fim; n++) nums.push(n);
+        }
+      } else {
+        const n = Number(p);
+        if (Number.isFinite(n)) nums.push(n);
+      }
+    }
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+  };
+
+  const salvarEdicaoLancamento = async () => {
+    if (!sorteioAtivo?.id || !editLancamentoAtribuicao || !editLancamentoId) return;
+    const numeros = parseNumerosEntrada(editLancamentoNumeros);
+    if (numeros.length === 0) {
+      toast({ title: 'Números inválidos', description: 'Informe cartelas válidas. Ex: 1,2,3 ou 10-20', variant: 'destructive' });
+      return;
+    }
+    try {
+      await callApi('updateAtribuicaoHistorico', {
+        historico_id: editLancamentoId,
+        sorteio_id: sorteioAtivo.id,
+        vendedor_id: editLancamentoAtribuicao.vendedor_id,
+        numeros_cartelas: numeros,
+      });
+      setHistoricoPorVendedor((prev) => ({
+        ...prev,
+        [editLancamentoAtribuicao.vendedor_id]: (prev[editLancamentoAtribuicao.vendedor_id] || []).map((h) =>
+          h.id === editLancamentoId ? { ...h, numeros } : h,
+        ),
+      }));
+      await loadAtribuicoes();
+      await loadCartelas();
+      toast({ title: 'Lançamento atualizado', description: 'Os números do lançamento foram atualizados.' });
+      setEditLancamentoOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível editar o lançamento.';
+      toast({ title: 'Erro ao editar lançamento', description: message, variant: 'destructive' });
     }
   };
 
@@ -433,9 +518,21 @@ const AtribuicoesTab: React.FC = () => {
 
           return (
             <Collapsible key={atribuicao.id} open={isExpanded} onOpenChange={() => toggleExpand(atribuicao.id)}>
-              <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <div
+                className={cn(
+                  'bg-card border rounded-xl overflow-hidden transition-all duration-200',
+                  isExpanded
+                    ? 'border-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.35),0_10px_30px_-15px_hsl(var(--primary)/0.65)]'
+                    : 'border-border'
+                )}
+              >
                 <CollapsibleTrigger asChild>
-                  <div className="p-4 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div
+                    className={cn(
+                      'p-4 cursor-pointer transition-colors',
+                      isExpanded ? 'bg-primary/5' : 'hover:bg-muted/30'
+                    )}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -524,24 +621,42 @@ const AtribuicoesTab: React.FC = () => {
                                   <p className="text-sm font-medium">{h.acao}</p>
                                   <p className="text-xs text-muted-foreground">{h.dataHora}</p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1"
-                                  onClick={() => {
-                                    setComprovanteData({
-                                      sorteioNome: sorteioAtivo.nome,
-                                      vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
-                                      numeros: h.numeros,
-                                      valorCartela: sorteioAtivo.valor_cartela || 0,
-                                      dataHora: h.dataHora,
-                                    });
-                                    setComprovanteOpen(true);
-                                  }}
-                                >
-                                  <Printer className="w-3 h-3" />
-                                  Comprovante
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => abrirEditarLancamento(atribuicao, h)}
+                                    title="Editar cartelas deste lançamento"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    onClick={() => {
+                                      setComprovanteData({
+                                        sorteioNome: sorteioAtivo.nome,
+                                        vendedorNome: atribuicao.vendedor_nome || 'Vendedor',
+                                        numeros: h.numeros,
+                                        valorCartela: sorteioAtivo.valor_cartela || 0,
+                                        dataHora: h.dataHora,
+                                      });
+                                      setComprovanteOpen(true);
+                                    }}
+                                  >
+                                    <Printer className="w-3 h-3" />
+                                    Comprovante
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => { void excluirLancamentoRegistrado(atribuicao, h.id); }}
+                                    title="Excluir lançamento e remover cartelas atribuídas neste lançamento"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
                                 {h.numeros.length} cartela(s): {h.numeros.slice(0, 20).map(n => formatarNumeroCartela(n)).join(', ')}{h.numeros.length > 20 ? ` ... (+${h.numeros.length - 20})` : ''}
@@ -711,6 +826,32 @@ const AtribuicoesTab: React.FC = () => {
       </AlertDialog>
 
       <ComprovanteAtribuicaoModal isOpen={comprovanteOpen} onClose={() => setComprovanteOpen(false)} data={comprovanteData} />
+
+      <Dialog open={editLancamentoOpen} onOpenChange={setEditLancamentoOpen}>
+        <DialogContent className="sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle>Editar Atribuição Registrada</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Informe os números (aceita vírgula e faixa: `1,2,3,10-20`).
+            </p>
+            <Input
+              value={editLancamentoNumeros}
+              onChange={(e) => setEditLancamentoNumeros(e.target.value)}
+              placeholder="Ex: 1,2,3,10-20"
+            />
+            <div className="flex gap-2 pt-1">
+              <Button className="flex-1" onClick={() => void salvarEdicaoLancamento()}>
+                Salvar
+              </Button>
+              <Button className="flex-1" variant="outline" onClick={() => setEditLancamentoOpen(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

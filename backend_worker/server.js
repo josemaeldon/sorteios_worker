@@ -3881,6 +3881,197 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         return res.json({ data: result.rows });
       }
 
+      case 'deleteAtribuicaoHistorico': {
+        await ensureAtribuicoesHistoricoSchema(client);
+        if (!data.historico_id || !data.sorteio_id || !data.vendedor_id) {
+          return res.status(400).json({ error: 'Dados obrigatórios ausentes para excluir lançamento.' });
+        }
+
+        await client.query('BEGIN');
+        try {
+          const hist = await client.query(
+            `SELECT id, numeros_cartelas
+             FROM atribuicoes_historico
+             WHERE id = $1 AND sorteio_id = $2 AND vendedor_id = $3`,
+            [data.historico_id, data.sorteio_id, data.vendedor_id]
+          );
+          if (hist.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Lançamento não encontrado.' });
+          }
+
+          const numeros = String(hist.rows[0].numeros_cartelas || '')
+            .split(',')
+            .map((n) => Number(String(n).trim()))
+            .filter((n) => Number.isFinite(n));
+
+          const atribuicaoResult = await client.query(
+            'SELECT id FROM atribuicoes WHERE sorteio_id = $1 AND vendedor_id = $2 LIMIT 1',
+            [data.sorteio_id, data.vendedor_id]
+          );
+          const atribuicaoId = atribuicaoResult.rows[0]?.id;
+
+          if (atribuicaoId && numeros.length > 0) {
+            const vendidas = await client.query(
+              `SELECT numero_cartela
+               FROM atribuicao_cartelas
+               WHERE atribuicao_id = $1
+                 AND numero_cartela = ANY($2)
+                 AND status = 'vendida'`,
+              [atribuicaoId, numeros]
+            );
+            if (vendidas.rows.length > 0) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: 'Não é possível excluir lançamento com cartelas vendidas.' });
+            }
+
+            await client.query(
+              `DELETE FROM atribuicao_cartelas
+               WHERE atribuicao_id = $1
+                 AND numero_cartela = ANY($2)`,
+              [atribuicaoId, numeros]
+            );
+            await client.query(
+              `UPDATE cartelas
+               SET status = 'disponivel', vendedor_id = NULL, updated_at = NOW()
+               WHERE sorteio_id = $1
+                 AND numero = ANY($2)`,
+              [data.sorteio_id, numeros]
+            );
+          }
+
+          await client.query(
+            'DELETE FROM atribuicoes_historico WHERE id = $1 AND sorteio_id = $2 AND vendedor_id = $3',
+            [data.historico_id, data.sorteio_id, data.vendedor_id]
+          );
+
+          await client.query('COMMIT');
+          return res.json({ data: [{ success: true, removidas: numeros.length }] });
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+      }
+
+      case 'updateAtribuicaoHistorico': {
+        await ensureAtribuicoesHistoricoSchema(client);
+        if (!data.historico_id || !data.sorteio_id || !data.vendedor_id) {
+          return res.status(400).json({ error: 'Dados obrigatórios ausentes para editar lançamento.' });
+        }
+        const novosNumeros = Array.isArray(data.numeros_cartelas)
+          ? data.numeros_cartelas.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+          : String(data.numeros_cartelas || '')
+              .split(',')
+              .map((n) => Number(String(n).trim()))
+              .filter((n) => Number.isFinite(n));
+        if (novosNumeros.length === 0) {
+          return res.status(400).json({ error: 'Informe ao menos uma cartela para o lançamento.' });
+        }
+
+        await client.query('BEGIN');
+        try {
+          const hist = await client.query(
+            `SELECT id, numeros_cartelas
+             FROM atribuicoes_historico
+             WHERE id = $1 AND sorteio_id = $2 AND vendedor_id = $3`,
+            [data.historico_id, data.sorteio_id, data.vendedor_id]
+          );
+          if (hist.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Lançamento não encontrado.' });
+          }
+          const antigosNumeros = String(hist.rows[0].numeros_cartelas || '')
+            .split(',')
+            .map((n) => Number(String(n).trim()))
+            .filter((n) => Number.isFinite(n));
+
+          const atribuicaoResult = await client.query(
+            'SELECT id FROM atribuicoes WHERE sorteio_id = $1 AND vendedor_id = $2 LIMIT 1',
+            [data.sorteio_id, data.vendedor_id]
+          );
+          const atribuicaoId = atribuicaoResult.rows[0]?.id;
+          if (!atribuicaoId) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Atribuição do vendedor não encontrada.' });
+          }
+
+          const vendidas = await client.query(
+            `SELECT numero_cartela
+             FROM atribuicao_cartelas
+             WHERE atribuicao_id = $1
+               AND numero_cartela = ANY($2)
+               AND status = 'vendida'`,
+            [atribuicaoId, antigosNumeros]
+          );
+          if (vendidas.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Não é possível editar lançamento que possui cartelas vendidas.' });
+          }
+
+          const toRemove = antigosNumeros.filter((n) => !novosNumeros.includes(n));
+          const toAdd = novosNumeros.filter((n) => !antigosNumeros.includes(n));
+
+          if (toRemove.length > 0) {
+            await client.query(
+              `DELETE FROM atribuicao_cartelas
+               WHERE atribuicao_id = $1
+                 AND numero_cartela = ANY($2)`,
+              [atribuicaoId, toRemove]
+            );
+            await client.query(
+              `UPDATE cartelas
+               SET status = 'disponivel', vendedor_id = NULL, updated_at = NOW()
+               WHERE sorteio_id = $1
+                 AND numero = ANY($2)`,
+              [data.sorteio_id, toRemove]
+            );
+          }
+
+          if (toAdd.length > 0) {
+            const conflito = await client.query(
+              `SELECT numero
+               FROM cartelas
+               WHERE sorteio_id = $1
+                 AND numero = ANY($2)
+                 AND status = 'vendida'`,
+              [data.sorteio_id, toAdd]
+            );
+            if (conflito.rows.length > 0) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: 'Uma ou mais cartelas novas já estão vendidas.' });
+            }
+            for (const numero of toAdd) {
+              await client.query(
+                `INSERT INTO atribuicao_cartelas (atribuicao_id, numero_cartela, status, data_atribuicao)
+                 VALUES ($1, $2, 'ativa', NOW())`,
+                [atribuicaoId, numero]
+              );
+              await client.query(
+                `UPDATE cartelas
+                 SET status = 'ativa', vendedor_id = $1, updated_at = NOW()
+                 WHERE sorteio_id = $2 AND numero = $3`,
+                [data.vendedor_id, data.sorteio_id, numero]
+              );
+            }
+          }
+
+          await client.query(
+            `UPDATE atribuicoes_historico
+             SET numeros_cartelas = $4,
+                 acao = COALESCE($5, acao),
+                 data_hora = COALESCE($6, data_hora)
+             WHERE id = $1 AND sorteio_id = $2 AND vendedor_id = $3`,
+            [data.historico_id, data.sorteio_id, data.vendedor_id, novosNumeros.join(','), data.acao || null, data.data_hora || null]
+          );
+
+          await client.query('COMMIT');
+          return res.json({ data: [{ success: true }] });
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+      }
+
       case 'createAtribuicao': {
         const atribResult = await client.query(`
           INSERT INTO atribuicoes (sorteio_id, vendedor_id)
