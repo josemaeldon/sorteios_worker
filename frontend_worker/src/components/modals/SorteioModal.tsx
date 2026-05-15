@@ -41,10 +41,11 @@ const PAPER_PRESETS = [
 ];
 
 const RIFA_PAPER_PRESET = PAPER_PRESETS.find(p => p.value === 'Rifa') ?? { label: 'Rifa (210 × 70 mm)', value: 'Rifa', w: 210, h: 70 };
+const BINGO_PAPER_PRESET = PAPER_PRESETS.find(p => p.value === 'A4') ?? { label: 'A4 (210 × 297 mm)', value: 'A4', w: 210, h: 297 };
 
 const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId }) => {
   const { sorteios, addSorteio, updateSorteio, importSorteioBackup } = useBingo();
-  const { user, getAllUsers } = useAuth();
+  const { user, getAllUsers, getConfiguracoes } = useAuth();
   const { toast } = useToast();
   
   const isAdmin = user?.role === 'admin';
@@ -73,6 +74,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [importedNome, setImportedNome] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [bloquearGrade5x5, setBloquearGrade5x5] = useState(false);
 
   // Load active users list for admin and reset targetUserId on close
   useEffect(() => {
@@ -87,6 +89,29 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       setIsImporting(false);
     }
   }, [isOpen, isAdmin, getAllUsers]);
+
+  useEffect(() => {
+    const loadGradeConfig = async () => {
+      if (!isOpen) return;
+      try {
+        const config = await getConfiguracoes();
+        setBloquearGrade5x5(config['bloquear_grade_5x5'] === 'true');
+      } catch {
+        setBloquearGrade5x5(false);
+      }
+    };
+    void loadGradeConfig();
+  }, [isOpen, getConfiguracoes]);
+
+  useEffect(() => {
+    if (!isOpen || !bloquearGrade5x5 || formData.tipo !== 'bingo') return;
+    setFormData(prev => ({
+      ...prev,
+      grade_colunas: '5',
+      grade_linhas: '5',
+      apenas_numero_rifa: false,
+    }));
+  }, [isOpen, bloquearGrade5x5, formData.tipo]);
 
   useEffect(() => {
     if (editingId) {
@@ -317,8 +342,15 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
 
     const papelLargura = parseFloat(formData.papel_largura) || 210;
     const papelAltura = parseFloat(formData.papel_altura) || 297;
-    const gradeColunas = Math.max(1, parseInt(formData.grade_colunas) || 5);
-    const gradeLinhas = Math.max(1, parseInt(formData.grade_linhas) || 5);
+    const gradeColunas = bloquearGrade5x5 && formData.tipo === 'bingo'
+      ? 5
+      : Math.max(1, parseInt(formData.grade_colunas) || 5);
+    const gradeLinhas = bloquearGrade5x5 && formData.tipo === 'bingo'
+      ? 5
+      : Math.max(1, parseInt(formData.grade_linhas) || 5);
+    const apenasNumeroRifa = bloquearGrade5x5 && formData.tipo === 'bingo'
+      ? false
+      : formData.apenas_numero_rifa;
 
     const sorteioData: Sorteio = {
       id: editingId || gerarId(),
@@ -334,7 +366,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       papel_altura: papelAltura,
       grade_colunas: gradeColunas,
       grade_linhas: gradeLinhas,
-      apenas_numero_rifa: formData.apenas_numero_rifa,
+      apenas_numero_rifa: apenasNumeroRifa,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       vendas: {
@@ -534,6 +566,9 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                 Rifa
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tamanho da imagem: {formData.tipo === 'bingo' ? `Bingo (${BINGO_PAPER_PRESET.w}mm × ${BINGO_PAPER_PRESET.h}mm)` : `Rifa (${RIFA_PAPER_PRESET.w}mm × ${RIFA_PAPER_PRESET.h}mm)`}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -719,6 +754,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                   <Checkbox
                     id="apenas_numero_rifa"
                     checked={formData.apenas_numero_rifa}
+                    disabled={bloquearGrade5x5}
                     onCheckedChange={(checked) =>
                       setFormData({ ...formData, apenas_numero_rifa: checked === true })
                     }
@@ -737,6 +773,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                         min="1"
                         max="20"
                         value={formData.grade_colunas}
+                        disabled={bloquearGrade5x5}
                         onChange={(e) => setFormData({ ...formData, grade_colunas: e.target.value })}
                         placeholder="5"
                       />
@@ -749,11 +786,17 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                         min="1"
                         max="20"
                         value={formData.grade_linhas}
+                        disabled={bloquearGrade5x5}
                         onChange={(e) => setFormData({ ...formData, grade_linhas: e.target.value })}
                         placeholder="5"
                       />
                     </div>
                   </div>
+                )}
+                {bloquearGrade5x5 && (
+                  <p className="text-xs text-muted-foreground">
+                    Bloqueio ativo no /admin: grade fixa de 5 × 5 = 25 números por cartela.
+                  </p>
                 )}
                 {!formData.apenas_numero_rifa && (() => {
                   const cols = parseInt(formData.grade_colunas) || 5;

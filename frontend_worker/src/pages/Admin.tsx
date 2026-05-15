@@ -131,6 +131,7 @@ const Admin: React.FC = () => {
   const [tplResetSubject, setTplResetSubject] = useState('Redefinição de senha');
   const [tplResetBody, setTplResetBody] = useState('Olá {{nome}},\n\nVocê solicitou a redefinição de sua senha. Clique no link abaixo:\n\n{{link}}\n\nSe não foi você quem solicitou, ignore este email.\n\nAtenciosamente,\n{{titulo_sistema}}');
   const [isSavingTemplates, setIsSavingTemplates] = useState(false);
+  const [bloquearGrade5x5, setBloquearGrade5x5] = useState(false);
 
   // Pending approval state
   const [isApprovingId, setIsApprovingId] = useState<string | null>(null);
@@ -200,6 +201,7 @@ const Admin: React.FC = () => {
     if (config['email_confirmacao_corpo'])            setTplApprovalBody(config['email_confirmacao_corpo']);
     if (config['email_redefinicao_assunto'])          setTplResetSubject(config['email_redefinicao_assunto']);
     if (config['email_redefinicao_corpo'])            setTplResetBody(config['email_redefinicao_corpo']);
+    setBloquearGrade5x5(config['bloquear_grade_5x5'] === 'true');
     setIsLoadingConfig(false);
   }, [getConfiguracoes]);
 
@@ -240,6 +242,7 @@ const Admin: React.FC = () => {
       mp_sandbox_mode: mpSandboxMode ? 'true' : 'false',
       mp_webhook_secret: mpWebhookSecret,
       favicon_url: faviconUrl,
+      bloquear_grade_5x5: bloquearGrade5x5 ? 'true' : 'false',
     });
     applyFavicon(faviconUrl || null);
     setIsSavingConfig(false);
@@ -1029,6 +1032,43 @@ const Admin: React.FC = () => {
           <TabsContent value="configuracoes">
             <div className="space-y-6">
             {/* Favicon Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Regras do Construtor de Cartelas
+                </CardTitle>
+                <CardDescription>Defina bloqueios globais para o construtor de cartelas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingConfig ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-w-lg">
+                    <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                      <div>
+                        <p className="font-semibold text-sm">Bloquear grade em 5 × 5</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Quando ativado, todas as cartelas de Bingo ficam com grade fixa de 25 números (5 × 5).
+                        </p>
+                      </div>
+                      <Switch
+                        checked={bloquearGrade5x5}
+                        onCheckedChange={setBloquearGrade5x5}
+                        disabled={isSavingConfig}
+                      />
+                    </div>
+                    <Button onClick={handleSaveConfig} disabled={isSavingConfig}>
+                      {isSavingConfig && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      Salvar Regra
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
