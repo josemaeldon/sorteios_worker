@@ -465,19 +465,19 @@ const AtribuicoesTab: React.FC = () => {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t border-border p-4 bg-muted/20 space-y-3">
-                    <div className="mb-2 flex justify-between items-center">
+                    <div className="mb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                       <h4 className="font-semibold text-foreground">Cartelas Atribuídas</h4>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-1 sm:flex gap-2 w-full sm:w-auto">
                         {atribuicao.cartelas.filter(c => c.status === 'ativa').length > 1 && (
-                          <Button size="sm" variant="outline" onClick={() => { setTransferAtribuicao(atribuicao); setTransferCartelaNumero(null); setTransferCartelasSelecionadas([]); setIsTransferModalOpen(true); }} className="gap-1">
+                          <Button size="sm" variant="outline" onClick={() => { setTransferAtribuicao(atribuicao); setTransferCartelaNumero(null); setTransferCartelasSelecionadas([]); setIsTransferModalOpen(true); }} className="gap-1 w-full sm:w-auto">
                             <ArrowRightLeft className="w-4 h-4" />Transferir Várias
                           </Button>
                         )}
-                        <Button size="sm" variant="outline" onClick={() => { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); }} className="gap-1"><Plus className="w-4 h-4" />Adicionar Cartelas</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setInitialVendedorId(atribuicao.vendedor_id); setIsModalOpen(true); }} className="gap-1 w-full sm:w-auto"><Plus className="w-4 h-4" />Adicionar Cartelas</Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1"
+                          className="gap-1 w-full sm:w-auto"
                           onClick={() => {
                             const nums = atribuicao.cartelas.map(c => c.numero);
                             if (nums.length === 0) {
