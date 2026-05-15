@@ -214,7 +214,7 @@ const StreamingDraw: React.FC = () => {
             </div>
           </div>
           <div
-            className={`font-black leading-none tabular-nums text-center flex-1 min-h-0 flex items-center justify-center mb-1 md:mb-2 ${
+            className={`font-black leading-none tabular-nums text-center flex-1 min-h-[32vh] md:min-h-0 flex items-center justify-center my-2 md:my-1 py-2 md:py-0 ${
               isNewNumber ? 'animate-bingo-globe-emerge' : ''
             }`}
             style={{ fontSize: `clamp(4rem, ${18 * numberZoom}vw, ${18 * numberZoom}rem)` }}

@@ -1375,7 +1375,7 @@ const DrawTab: React.FC = () => {
                     </div>
 
                     {/* Top 10 Sidebar in fullscreen */}
-                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50">
+                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
                           <Trophy className="w-6 h-6 text-yellow-500" />
@@ -1390,7 +1390,7 @@ const DrawTab: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
+                        <div className="divide-y divide-border max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
                           {groupedTop.map((group, idx) => (
                             <div key={group.score} className="py-3 first:pt-0 last:pb-0">
                               <div className="flex items-center justify-between gap-2 mb-2">
@@ -1594,7 +1594,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col">
+          <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto pr-1">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className={cn("border-2 border-success bg-success/5", winnerCardPulse && "animate-pulse shadow-lg shadow-success/20")}>
@@ -1625,7 +1625,7 @@ const DrawTab: React.FC = () => {
             )}
             
             {/* Top 10 always visible */}
-            <Card className="flex-1 flex flex-col border-2 border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-transparent dark:from-yellow-950/20">
+            <Card className="flex flex-col border-2 border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-transparent dark:from-yellow-950/20 xl:min-h-[20rem] xl:max-h-[calc(100vh-20rem)] overflow-hidden">
               <CardHeader className="pb-3 flex-shrink-0">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Trophy className="w-5 h-5 text-yellow-500" />
@@ -1642,7 +1642,7 @@ const DrawTab: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border overflow-y-auto">
+                  <div className="divide-y divide-border overflow-y-auto pr-1">
                     {groupedTop.map((group, idx) => (
                       <div key={group.score} className="py-2.5 first:pt-0 last:pb-0">
                         <div className="flex items-center justify-between gap-2 mb-2">
