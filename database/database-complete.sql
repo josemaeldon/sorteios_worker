@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS public.atribuicao_cartelas (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
 
+-- Histórico de lançamentos de atribuições
+CREATE TABLE IF NOT EXISTS public.atribuicoes_historico (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sorteio_id UUID NOT NULL REFERENCES public.sorteios(id) ON DELETE CASCADE,
+    vendedor_id UUID NOT NULL REFERENCES public.vendedores(id) ON DELETE CASCADE,
+    acao VARCHAR(120) NOT NULL,
+    numeros_cartelas TEXT NOT NULL,
+    data_hora TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+);
+
 -- Tabela de vendas
 CREATE TABLE IF NOT EXISTS public.vendas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -308,6 +319,7 @@ COMMENT ON TABLE public.vendedores IS 'Vendedores associados aos sorteios';
 COMMENT ON TABLE public.cartelas IS 'Cartelas dos sorteios';
 COMMENT ON TABLE public.atribuicoes IS 'Atribuições de cartelas para vendedores';
 COMMENT ON TABLE public.atribuicao_cartelas IS 'Detalhes das cartelas atribuídas';
+COMMENT ON TABLE public.atribuicoes_historico IS 'Lançamentos de atribuições por vendedor para reimpressão de comprovante';
 COMMENT ON TABLE public.vendas IS 'Vendas realizadas';
 COMMENT ON TABLE public.pagamentos IS 'Pagamentos das vendas';
 COMMENT ON TABLE public.rodadas_sorteio IS 'Rodadas de sorteio que podem ser gerenciadas independentemente';

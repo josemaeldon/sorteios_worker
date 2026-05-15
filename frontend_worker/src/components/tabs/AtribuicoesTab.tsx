@@ -13,6 +13,7 @@ import { AtribuicaoHistoricoPayload } from '@/components/modals/AtribuicaoModal'
 import TransferenciaModal from '@/components/modals/TransferenciaModal';
 import ComprovanteAtribuicaoModal, { ComprovanteAtribuicaoData } from '@/components/modals/ComprovanteAtribuicaoModal';
 import { useToast } from '@/hooks/use-toast';
+import { useApi } from '@/hooks/useApi';
 import { CartelaAtribuida, Atribuicao } from '@/types/bingo';
 import {
   AlertDialog,
@@ -43,6 +44,7 @@ const AtribuicoesTab: React.FC = () => {
     updateCartelaStatusInAtribuicao,
   } = useBingo();
   const { toast } = useToast();
+  const { callApi } = useApi();
   const atribuicoesTabSnapshot = (getOfflineAppState().bingo?.atribuicoesTab || {}) as Record<string, unknown>;
   const shouldHydrateOfflineState = isOfflineModeEnabled() || getOfflineQueue().length > 0;
 
@@ -93,6 +95,34 @@ const AtribuicoesTab: React.FC = () => {
     });
   }, [isModalOpen, editingAtribuicao, expandedAtribuicao, deleteDialogOpen, deletingAtribuicao, actionType, isTransferModalOpen, transferAtribuicao, transferCartelaNumero, transferCartelasSelecionadas, historicoPorVendedor, filtrosAtribuicoes]);
 
+  React.useEffect(() => {
+    const loadHistorico = async () => {
+      if (!sorteioAtivo?.id) return;
+      try {
+        const result = await callApi('getAtribuicoesHistorico', { sorteio_id: sorteioAtivo.id }) as { data?: Array<{ id: string; vendedor_id: string; acao: string; numeros_cartelas: string; data_hora: string }> };
+        const byVendedor: Record<string, Array<{ id: string; dataHora: string; acao: string; numeros: number[] }>> = {};
+        for (const row of result.data || []) {
+          const numeros = String(row.numeros_cartelas || '')
+            .split(',')
+            .map((n) => Number(n.trim()))
+            .filter((n) => Number.isFinite(n));
+          const item = {
+            id: row.id,
+            dataHora: new Date(row.data_hora).toLocaleString('pt-BR'),
+            acao: row.acao,
+            numeros,
+          };
+          if (!byVendedor[row.vendedor_id]) byVendedor[row.vendedor_id] = [];
+          byVendedor[row.vendedor_id].push(item);
+        }
+        setHistoricoPorVendedor(byVendedor);
+      } catch {
+        // keep current UI state if backend load fails
+      }
+    };
+    void loadHistorico();
+  }, [sorteioAtivo?.id, callApi]);
+
   if (!sorteioAtivo) {
     return (
       <div className="text-center py-12">
@@ -115,18 +145,28 @@ const AtribuicoesTab: React.FC = () => {
 
   const registrarHistorico = (payload: { vendedorId: string; acao: string; numeros: number[] }) => {
     if (payload.numeros.length === 0) return;
+    const nowIso = new Date().toISOString();
     setHistoricoPorVendedor(prev => ({
       ...prev,
       [payload.vendedorId]: [
         {
           id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          dataHora: new Date().toLocaleString('pt-BR'),
+          dataHora: new Date(nowIso).toLocaleString('pt-BR'),
           acao: payload.acao,
           numeros: [...payload.numeros].sort((a, b) => a - b),
         },
         ...(prev[payload.vendedorId] || []),
       ],
     }));
+    if (sorteioAtivo?.id) {
+      void callApi('createAtribuicaoHistorico', {
+        sorteio_id: sorteioAtivo.id,
+        vendedor_id: payload.vendedorId,
+        acao: payload.acao,
+        numeros_cartelas: payload.numeros,
+        data_hora: nowIso,
+      });
+    }
   };
 
   const atribuicoesFiltradas = atribuicoes.filter(a => {
@@ -375,7 +415,7 @@ const AtribuicoesTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {atribuicoesFiltradas.map((atribuicao) => {
           const counts = getStatusCounts(atribuicao.cartelas);
           const isExpanded = expandedAtribuicao === atribuicao.id;
@@ -593,7 +633,7 @@ const AtribuicoesTab: React.FC = () => {
         })}
 
         {atribuicoesFiltradas.length === 0 && (
-          <div className="text-center py-12 bg-card border border-border rounded-xl">
+          <div className="text-center py-12 bg-card border border-border rounded-xl xl:col-span-2">
             {atribuicoes.length === 0 ? (
               <div>
                 <ListTodo className="w-12 h-12 mx-auto mb-4 opacity-50 text-muted-foreground" />

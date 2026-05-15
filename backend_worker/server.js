@@ -500,6 +500,7 @@ async function initSchema() {
   try {
     const client = await dbAdapter.getConnection();
     try {
+      await ensureAtribuicoesHistoricoSchema(client);
       if (dbConfig.type === 'mysql') {
         await client.query(`
           CREATE TABLE IF NOT EXISTS sorteio_compartilhado (
@@ -1322,6 +1323,43 @@ function normalizePagamentos(value) {
     }
   }
   return [];
+}
+
+async function ensureAtribuicoesHistoricoSchema(client) {
+  if (dbConfig.type === 'mysql') {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS atribuicoes_historico (
+        id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+        sorteio_id CHAR(36) NOT NULL,
+        vendedor_id CHAR(36) NOT NULL,
+        acao VARCHAR(120) NOT NULL,
+        numeros_cartelas TEXT NOT NULL,
+        data_hora TIMESTAMP DEFAULT NOW() NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    try {
+      await client.query('CREATE INDEX idx_atr_hist_sorteio_vendedor_data ON atribuicoes_historico (sorteio_id, vendedor_id, data_hora)');
+    } catch (e) {
+      if (!e.message || (!e.message.includes('Duplicate key name') && !e.message.includes('already exists'))) {
+        console.warn('atribuicoes_historico index migration warning:', e.message);
+      }
+    }
+    return;
+  }
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS public.atribuicoes_historico (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      sorteio_id UUID NOT NULL REFERENCES public.sorteios(id) ON DELETE CASCADE,
+      vendedor_id UUID NOT NULL REFERENCES public.vendedores(id) ON DELETE CASCADE,
+      acao VARCHAR(120) NOT NULL,
+      numeros_cartelas TEXT NOT NULL,
+      data_hora TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+    )
+  `);
+  await client.query('CREATE INDEX IF NOT EXISTS idx_atr_hist_sorteio_vendedor_data ON public.atribuicoes_historico (sorteio_id, vendedor_id, data_hora)');
 }
 
 function addTextLine(doc, text, options = {}) {
@@ -3815,6 +3853,33 @@ app.post('/api', checkBasicAuth, async (req, res) => {
           ORDER BY v.nome
         `, [data.sorteio_id]);
         return res.json({ data: result.rows });
+
+      case 'getAtribuicoesHistorico':
+        await ensureAtribuicoesHistoricoSchema(client);
+        result = await client.query(`
+          SELECT h.*, v.nome as vendedor_nome
+          FROM atribuicoes_historico h
+          LEFT JOIN vendedores v ON h.vendedor_id = v.id
+          WHERE h.sorteio_id = $1
+          ORDER BY h.data_hora DESC, h.created_at DESC
+        `, [data.sorteio_id]);
+        return res.json({ data: result.rows });
+
+      case 'createAtribuicaoHistorico': {
+        await ensureAtribuicoesHistoricoSchema(client);
+        const numeros = Array.isArray(data.numeros_cartelas)
+          ? data.numeros_cartelas.join(',')
+          : String(data.numeros_cartelas || '');
+        if (!data.sorteio_id || !data.vendedor_id || !data.acao || !numeros) {
+          return res.status(400).json({ error: 'Dados obrigatórios ausentes para histórico de atribuição.' });
+        }
+        result = await client.query(`
+          INSERT INTO atribuicoes_historico (sorteio_id, vendedor_id, acao, numeros_cartelas, data_hora)
+          VALUES ($1, $2, $3, $4, COALESCE($5, NOW()))
+          RETURNING *
+        `, [data.sorteio_id, data.vendedor_id, data.acao, numeros, data.data_hora || null]);
+        return res.json({ data: result.rows });
+      }
 
       case 'createAtribuicao': {
         const atribResult = await client.query(`
