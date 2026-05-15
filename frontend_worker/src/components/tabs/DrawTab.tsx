@@ -1594,7 +1594,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-full xl:w-96 2xl:w-[28rem] flex-shrink-0 space-y-4 flex flex-col xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto pr-1">
+          <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto pr-1">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className={cn("border-2 border-success bg-success/5", winnerCardPulse && "animate-pulse shadow-lg shadow-success/20")}>
