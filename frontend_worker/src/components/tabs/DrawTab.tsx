@@ -1375,7 +1375,7 @@ const DrawTab: React.FC = () => {
                     </div>
 
                     {/* Top 10 Sidebar in fullscreen */}
-                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] overflow-hidden">
+                    <div className="w-full xl:w-96 flex-shrink-0 bg-card rounded-lg p-4 md:p-6 border-2 border-yellow-400/50">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
                           <Trophy className="w-6 h-6 text-yellow-500" />
@@ -1390,7 +1390,7 @@ const DrawTab: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="divide-y divide-border max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
+                        <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
                           {groupedTop.map((group, idx) => (
                             <div key={group.score} className="py-3 first:pt-0 last:pb-0">
                               <div className="flex items-center justify-between gap-2 mb-2">
