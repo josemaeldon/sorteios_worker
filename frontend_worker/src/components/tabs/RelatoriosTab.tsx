@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
-import { PieChart, FileText, FileSpreadsheet, Download, Users, ShoppingCart, CreditCard, Package } from 'lucide-react';
+import { PieChart, FileText, FileSpreadsheet, Download, Users, ShoppingCart, CreditCard, Package, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/useApi';
 import { formatarMoeda } from '@/lib/utils/formatters';
@@ -43,6 +44,14 @@ const RelatoriosTab: React.FC = () => {
   const cartelasVendidas = cartelas.filter(c => c.status === 'vendida').length;
   const cartelasDisponiveis = cartelas.filter(c => c.status === 'disponivel').length;
   const cartelasAtribuidas = cartelas.filter(c => c.status === 'ativa').length;
+  const cartelasDevolvidas = cartelas.filter(c => c.status === 'devolvida').length;
+  const totalPendente = Math.max(0, totalVendas - totalPago);
+  const tipoSorteio = sorteioAtivo.tipo === 'rifa' ? 'Rifa' : 'Bingo';
+  const papelW = sorteioAtivo.papel_largura ?? 210;
+  const papelH = sorteioAtivo.papel_altura ?? 297;
+  const gradeCols = sorteioAtivo.grade_colunas ?? 5;
+  const gradeRows = sorteioAtivo.grade_linhas ?? 5;
+  const semGrade = sorteioAtivo.apenas_numero_rifa === true;
 
   const handleExport = async (type: string, format: 'pdf' | 'excel') => {
     try {
@@ -152,264 +161,190 @@ const RelatoriosTab: React.FC = () => {
     }
   };
 
+  const exportCards = [
+    { id: 'vendas', titulo: 'Vendas', descricao: 'Clientes, valores, pagamentos e status', icon: ShoppingCart, colorClass: 'text-primary', disabled: vendas.length === 0 },
+    { id: 'cartelas', titulo: 'Cartelas', descricao: 'Status geral e responsável por cartela', icon: Package, colorClass: 'text-emerald-600', disabled: cartelas.length === 0 },
+    { id: 'atribuicoes', titulo: 'Atribuições', descricao: 'Distribuição de cartelas por vendedor', icon: CreditCard, colorClass: 'text-amber-600', disabled: atribuicoes.length === 0 },
+    { id: 'vendedores', titulo: 'Vendedores', descricao: 'Performance e faturamento por vendedor', icon: Users, colorClass: 'text-sky-600', disabled: vendedores.length === 0 },
+  ] as const;
+
   return (
     <div className="animate-fade-in space-y-6">
-      <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-        <PieChart className="w-6 h-6" />
-        Relatórios - {sorteioAtivo.nome}
-      </h2>
-
-      {/* Resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-lg">
-                <CreditCard className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Receita Total</p>
-                <p className="text-lg font-bold text-foreground">{formatarMoeda(totalVendas)}</p>
-              </div>
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-primary/5">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-xl md:text-2xl font-bold text-foreground flex items-center gap-2">
+                <PieChart className="w-6 h-6" />
+                Relatórios
+              </h2>
+              <p className="text-sm text-muted-foreground">{sorteioAtivo.nome}</p>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-success/10 to-success/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-success/20 rounded-lg">
-                <Package className="w-5 h-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Cartelas Vendidas</p>
-                <p className="text-lg font-bold text-foreground">{cartelasVendidas} / {cartelas.length}</p>
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{tipoSorteio}</Badge>
+              <Badge variant="outline">{papelW}mm × {papelH}mm</Badge>
+              <Badge variant={semGrade ? 'secondary' : 'outline'}>
+                {semGrade ? 'Sem grade' : `Grade ${gradeCols} × ${gradeRows} (${gradeCols * gradeRows})`}
+              </Badge>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-warning/10 to-warning/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-warning/20 rounded-lg">
-                <ShoppingCart className="w-5 h-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Vendas</p>
-                <p className="text-lg font-bold text-foreground">{vendas.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-info/10 to-info/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-info/20 rounded-lg">
-                <Users className="w-5 h-5 text-info" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Vendedores Ativos</p>
-                <p className="text-lg font-bold text-foreground">{vendedores.filter(v => v.ativo).length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Relatórios disponíveis */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Relatório de Vendas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-primary" />
-              Relatório de Vendas
-            </CardTitle>
-            <CardDescription>
-              Exportar todas as vendas com detalhes de clientes, vendedores e valores
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button 
-              onClick={() => handleExport('vendas', 'pdf')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-            <Button 
-              onClick={() => handleExport('vendas', 'excel')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Relatório de Cartelas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-success" />
-              Relatório de Cartelas
-            </CardTitle>
-            <CardDescription>
-              Lista completa de cartelas com status e vendedor responsável
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button 
-              onClick={() => handleExport('cartelas', 'pdf')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-            <Button 
-              onClick={() => handleExport('cartelas', 'excel')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Relatório de Atribuições */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-warning" />
-              Relatório de Atribuições
-            </CardTitle>
-            <CardDescription>
-              Cartelas atribuídas por vendedor com status de cada uma
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button 
-              onClick={() => handleExport('atribuicoes', 'pdf')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-            <Button 
-              onClick={() => handleExport('atribuicoes', 'excel')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Relatório de Vendedores */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-info" />
-              Relatório de Vendedores
-            </CardTitle>
-            <CardDescription>
-              Performance dos vendedores com cartelas e vendas realizadas
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button 
-              onClick={() => handleExport('vendedores', 'pdf')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-            <Button 
-              onClick={() => handleExport('vendedores', 'excel')}
-              className="flex-1"
-              variant="outline"
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Relatório por Vendedor */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
-            Relatório por Vendedor
-          </CardTitle>
-          <CardDescription>
-            Relatório individual com cartelas atribuídas e vendas realizadas por vendedor
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Select value={selectedVendedorId} onValueChange={setSelectedVendedorId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um vendedor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Selecione um vendedor...</SelectItem>
-              {vendedores.map(v => (
-                <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-3">
-            <Button
-              onClick={() => handleExport('vendedor', 'pdf')}
-              className="flex-1"
-              variant="outline"
-              disabled={selectedVendedorId === 'todos'}
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-            <Button
-              onClick={() => handleExport('vendedor', 'excel')}
-              className="flex-1"
-              variant="outline"
-              disabled={selectedVendedorId === 'todos'}
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Relatório Completo */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Receita</p>
+            <p className="text-base font-bold text-foreground">{formatarMoeda(totalVendas)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-success/10 to-success/5">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Recebido</p>
+            <p className="text-base font-bold text-foreground">{formatarMoeda(totalPago)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-warning/10 to-warning/5">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Pendente</p>
+            <p className="text-base font-bold text-foreground">{formatarMoeda(totalPendente)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-info/10 to-info/5">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Vendas</p>
+            <p className="text-base font-bold text-foreground">{vendas.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-muted/80 to-muted/40">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Vendedores ativos</p>
+            <p className="text-base font-bold text-foreground">{vendedores.filter(v => v.ativo).length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {exportCards.map((report) => {
+          const Icon = report.icon;
+          return (
+            <Card key={report.id} className="overflow-hidden">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Icon className={`w-4 h-4 ${report.colorClass}`} />
+                      {report.titulo}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{report.descricao}</p>
+                  </div>
+                  <Badge variant={report.disabled ? 'secondary' : 'outline'}>
+                    {report.disabled ? 'Sem dados' : 'Pronto'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={() => handleExport(report.id, 'pdf')}
+                    variant="outline"
+                    size="sm"
+                    disabled={report.disabled}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    PDF
+                  </Button>
+                  <Button
+                    onClick={() => handleExport(report.id, 'excel')}
+                    variant="outline"
+                    size="sm"
+                    disabled={report.disabled}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Excel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="w-4 h-4 text-primary" />
+              Relatório por vendedor
+            </CardTitle>
+            <CardDescription>Escolha um vendedor para exportação individual</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Select value={selectedVendedorId} onValueChange={setSelectedVendedorId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Selecione um vendedor...</SelectItem>
+                {vendedores.map(v => (
+                  <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={() => handleExport('vendedor', 'pdf')}
+                variant="outline"
+                size="sm"
+                disabled={selectedVendedorId === 'todos'}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                PDF
+              </Button>
+              <Button
+                onClick={() => handleExport('vendedor', 'excel')}
+                variant="outline"
+                size="sm"
+                disabled={selectedVendedorId === 'todos'}
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Excel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LayoutGrid className="w-4 h-4 text-primary" />
+              Mapa de cartelas
+            </CardTitle>
+            <CardDescription>Status atual para leitura rápida</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Disponíveis</span><span className="font-semibold">{cartelasDisponiveis}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Atribuídas</span><span className="font-semibold">{cartelasAtribuidas}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Vendidas</span><span className="font-semibold">{cartelasVendidas}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Devolvidas</span><span className="font-semibold">{cartelasDevolvidas}</span></div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Download className="w-5 h-5 text-primary" />
             Relatório Completo
           </CardTitle>
-          <CardDescription>
-            Documento PDF com resumo geral, vendas, vendedores e estatísticas do sorteio
-          </CardDescription>
+          <CardDescription>Documento único em PDF com consolidado de vendas, vendedores e indicadores</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button 
+          <Button
             onClick={() => handleExport('completo', 'pdf')}
             className="w-full"
             disabled={isGeneratingCompletePdf}
           >
             <FileText className="w-4 h-4 mr-2" />
-            {isGeneratingCompletePdf ? 'Gerando PDF no servidor...' : 'Gerar Relatório Completo em PDF'}
+            {isGeneratingCompletePdf ? 'Gerando PDF no servidor...' : 'Gerar PDF completo'}
           </Button>
         </CardContent>
       </Card>

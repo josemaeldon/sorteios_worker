@@ -33,6 +33,28 @@ const parseCartelas = (numeros_cartelas: string): number[] => {
   return numeros_cartelas.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 };
 
+const formatCartelaRanges = (numeros: number[]): string => {
+  if (!numeros || numeros.length === 0) return '-';
+  const sorted = [...numeros].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0];
+  let end = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const n = sorted[i];
+    if (n === end + 1) {
+      end = n;
+      continue;
+    }
+    ranges.push(start === end ? formatarNumeroCartela(start) : `${formatarNumeroCartela(start)}-${formatarNumeroCartela(end)}`);
+    start = n;
+    end = n;
+  }
+
+  ranges.push(start === end ? formatarNumeroCartela(start) : `${formatarNumeroCartela(start)}-${formatarNumeroCartela(end)}`);
+  return ranges.join(', ');
+};
+
 // Helper to format premio (handles string or number)
 const formatPremio = (premio: string | number): string => {
   if (typeof premio === 'number') return formatarMoeda(premio);
@@ -177,23 +199,34 @@ export const exportAtribuicoesPDF = async (atribuicoes: Atribuicao[], sorteio: S
     const ativas = atrib.cartelas.filter(c => c.status === 'ativa').length;
     const vendidas = atrib.cartelas.filter(c => c.status === 'vendida').length;
     const devolvidas = atrib.cartelas.filter(c => c.status === 'devolvida').length;
+    const faixas = formatCartelaRanges(atrib.cartelas.map(c => c.numero));
     return [
       vendedor?.nome || 'N/A',
       atrib.cartelas.length.toString(),
       ativas.toString(),
       vendidas.toString(),
       devolvidas.toString(),
+      faixas,
       formatarDataHora(atrib.created_at)
     ];
   });
   
   autoTable(doc, {
     startY: 60,
-    head: [['Vendedor', 'Total Cartelas', 'Ativas', 'Vendidas', 'Devolvidas', 'Data Criação']],
+    head: [['Vendedor', 'Total Cartelas', 'Ativas', 'Vendidas', 'Devolvidas', 'Faixas atribuídas', 'Data Criação']],
     body: tableData,
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [59, 130, 246], textColor: 255 },
     alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { cellWidth: 36 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 15 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 20 },
+      5: { cellWidth: 58 },
+      6: { cellWidth: 30 },
+    },
   });
   
   doc.save(`atribuicoes-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -302,8 +335,10 @@ export const exportAtribuicoesExcel = async (atribuicoes: Atribuicao[], sorteio:
   const safeNome = sanitizeFilename(sorteio.nome);
   const data = atribuicoes.flatMap(atrib => {
     const vendedor = vendedores.find(v => v.id === atrib.vendedor_id);
+    const faixas = formatCartelaRanges(atrib.cartelas.map(c => c.numero));
     return atrib.cartelas.map(cartela => ({
       'Vendedor': vendedor?.nome || 'N/A',
+      'Faixas Atribuídas': faixas,
       'Número Cartela': formatarNumeroCartela(cartela.numero),
       'Status': getStatusLabel(cartela.status),
       'Data Atribuição': formatarDataHora(cartela.data_atribuicao),
@@ -315,7 +350,7 @@ export const exportAtribuicoesExcel = async (atribuicoes: Atribuicao[], sorteio:
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Atribuições');
   
-  const colWidths = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
+  const colWidths = [{ wch: 25 }, { wch: 45 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
   ws['!cols'] = colWidths;
   
   XLSX.writeFile(wb, `atribuicoes-${safeNome}-${new Date().toISOString().split('T')[0]}.xlsx`);
