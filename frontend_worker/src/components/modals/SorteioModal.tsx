@@ -3,6 +3,7 @@ import { useBingo } from '@/contexts/BingoContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { User } from '@/types/auth';
 import { Sorteio } from '@/types/bingo';
+import { callApi } from '@/lib/apiClient';
 import { gerarId } from '@/lib/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -45,7 +46,7 @@ const BINGO_PAPER_PRESET = PAPER_PRESETS.find(p => p.value === 'A4') ?? { label:
 
 const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId }) => {
   const { sorteios, addSorteio, updateSorteio, importSorteioBackup } = useBingo();
-  const { user, getAllUsers, getConfiguracoes } = useAuth();
+  const { user, getAllUsers } = useAuth();
   const { toast } = useToast();
   
   const isAdmin = user?.role === 'admin';
@@ -75,6 +76,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
   const [importedNome, setImportedNome] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [bloquearGrade5x5, setBloquearGrade5x5] = useState(false);
+  const [isLoadingGradeLock, setIsLoadingGradeLock] = useState(false);
 
   // Load active users list for admin and reset targetUserId on close
   useEffect(() => {
@@ -93,15 +95,19 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
   useEffect(() => {
     const loadGradeConfig = async () => {
       if (!isOpen) return;
+      setIsLoadingGradeLock(true);
       try {
-        const config = await getConfiguracoes();
+        const result = await callApi('getConfiguracoes');
+        const config = (result?.data ?? {}) as Record<string, string>;
         setBloquearGrade5x5(config['bloquear_grade_5x5'] === 'true');
       } catch {
         setBloquearGrade5x5(false);
+      } finally {
+        setIsLoadingGradeLock(false);
       }
     };
     void loadGradeConfig();
-  }, [isOpen, getConfiguracoes]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !bloquearGrade5x5 || formData.tipo !== 'bingo') return;
@@ -754,7 +760,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                   <Checkbox
                     id="apenas_numero_rifa"
                     checked={formData.apenas_numero_rifa}
-                    disabled={bloquearGrade5x5}
+                    disabled={bloquearGrade5x5 || isLoadingGradeLock}
                     onCheckedChange={(checked) =>
                       setFormData({ ...formData, apenas_numero_rifa: checked === true })
                     }
@@ -773,7 +779,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                         min="1"
                         max="20"
                         value={formData.grade_colunas}
-                        disabled={bloquearGrade5x5}
+                        disabled={bloquearGrade5x5 || isLoadingGradeLock}
                         onChange={(e) => setFormData({ ...formData, grade_colunas: e.target.value })}
                         placeholder="5"
                       />
@@ -786,7 +792,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
                         min="1"
                         max="20"
                         value={formData.grade_linhas}
-                        disabled={bloquearGrade5x5}
+                        disabled={bloquearGrade5x5 || isLoadingGradeLock}
                         onChange={(e) => setFormData({ ...formData, grade_linhas: e.target.value })}
                         placeholder="5"
                       />
