@@ -1594,7 +1594,7 @@ const DrawTab: React.FC = () => {
           </div>
 
           {/* RIGHT SIDEBAR - Top 10 always visible */}
-          <div className="w-full xl:w-80 flex-shrink-0 space-y-4 flex flex-col xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto pr-1">
+          <div className="w-full xl:w-96 2xl:w-[28rem] flex-shrink-0 space-y-4 flex flex-col xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto pr-1">
             {/* Winner results - alert style */}
             {vencedoras.length > 0 && (
               <Card className={cn("border-2 border-success bg-success/5", winnerCardPulse && "animate-pulse shadow-lg shadow-success/20")}>
@@ -1625,7 +1625,7 @@ const DrawTab: React.FC = () => {
             )}
             
             {/* Top 10 always visible */}
-            <Card className="flex flex-col border-2 border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-transparent dark:from-yellow-950/20 xl:min-h-[20rem] xl:max-h-[calc(100vh-20rem)] overflow-hidden">
+            <Card className="flex flex-col border-2 border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-transparent dark:from-yellow-950/20 max-h-[55vh] xl:min-h-[24rem] xl:max-h-[calc(100vh-18rem)] overflow-hidden">
               <CardHeader className="pb-3 flex-shrink-0">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Trophy className="w-5 h-5 text-yellow-500" />
@@ -1642,7 +1642,7 @@ const DrawTab: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border overflow-y-auto pr-1">
+                  <div className="divide-y divide-border overflow-y-auto pr-1 max-h-[44vh] xl:max-h-none">
                     {groupedTop.map((group, idx) => (
                       <div key={group.score} className="py-2.5 first:pt-0 last:pb-0">
                         <div className="flex items-center justify-between gap-2 mb-2">

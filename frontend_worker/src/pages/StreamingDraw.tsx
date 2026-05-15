@@ -157,9 +157,9 @@ const StreamingDraw: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-900 to-black text-white flex flex-col overflow-hidden">
+    <div className="min-h-screen md:h-screen bg-gradient-to-br from-slate-900 to-black text-white flex flex-col overflow-x-hidden overflow-y-auto md:overflow-hidden">
       {/* Header */}
-      <header className="px-4 md:px-8 py-4 md:py-5 border-b border-white/10 flex items-center justify-between gap-4 flex-shrink-0">
+      <header className="px-4 md:px-8 py-4 md:py-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <p className="text-white/60 text-xs md:text-sm uppercase tracking-wide truncate">{rodada.sorteio_nome}</p>
           <h1 className="text-xl md:text-3xl font-bold truncate">{rodadaTitle}</h1>
@@ -179,9 +179,9 @@ const StreamingDraw: React.FC = () => {
       </header>
 
       {/* Main Content - Responsive Layout */}
-      <main className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 md:gap-5 p-3 md:p-6 overflow-hidden">
+      <main className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 md:gap-5 p-3 md:p-6 overflow-visible md:overflow-hidden">
         {/* Left Section: Number + Historico */}
-        <div className="flex-1 min-h-0 flex flex-col min-w-0">
+        <div className="flex-1 min-h-0 flex flex-col min-w-0 shrink-0">
           {/* Large Current Number */}
           <div className="flex items-center justify-center gap-2 mb-1 md:mb-2">
             <p className="text-white/50 text-lg md:text-2xl text-center">Número Sorteado</p>
@@ -214,16 +214,16 @@ const StreamingDraw: React.FC = () => {
             </div>
           </div>
           <div
-            className={`font-black leading-none tabular-nums text-center flex-1 min-h-[32vh] md:min-h-0 flex items-center justify-center my-2 md:my-1 py-2 md:py-0 ${
+            className={`font-black leading-none tabular-nums text-center flex-1 min-h-[26vh] md:min-h-0 flex items-center justify-center my-2 md:my-1 py-2 md:py-0 ${
               isNewNumber ? 'animate-bingo-globe-emerge' : ''
             }`}
-            style={{ fontSize: `clamp(4rem, ${18 * numberZoom}vw, ${18 * numberZoom}rem)` }}
+            style={{ fontSize: `clamp(3.2rem, ${16 * numberZoom}vw, ${18 * numberZoom}rem)` }}
           >
             {currentNumber ?? '-'}
           </div>
 
           {/* Historico Footer */}
-          <div className="w-full flex-shrink-0 max-h-[28vh] md:max-h-[32vh] overflow-y-auto pr-1">
+          <div className="w-full flex-shrink-0 max-h-[22vh] md:max-h-[32vh] overflow-y-auto pr-1">
             <p className="text-white/50 text-xs md:text-sm mb-1.5">Números Sorteados</p>
             <div className="flex flex-wrap gap-1.5 pb-2">
               {sortedHistorico.map((item) => (
@@ -240,7 +240,7 @@ const StreamingDraw: React.FC = () => {
 
         {/* Right Section: Top 10 - Sidebar on Desktop, Below on Mobile */}
         {groupedTop10.length > 0 && (
-          <div className="w-full md:w-[22rem] md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 flex flex-col min-h-[220px] max-h-[42vh] md:max-h-full md:h-full overflow-hidden">
+          <div className="w-full md:w-[22rem] md:flex-shrink-0 bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 flex flex-col min-h-[220px] max-h-[38vh] md:max-h-full md:h-full overflow-hidden">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 flex-shrink-0" />
               <h2 className="text-lg md:text-xl font-bold">Top 10 Cartelas</h2>
