@@ -1137,7 +1137,7 @@ const DrawTab: React.FC = () => {
 
     return (
       <div className="space-y-6 w-full">
-        <div className="flex items-center justify-between flex-wrap gap-4 w-full">
+        <div className="flex flex-col gap-3 w-full">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <Button
@@ -1161,17 +1161,17 @@ const DrawTab: React.FC = () => {
               <span>Restantes: {remainingNumbers.length}</span>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="w-full flex flex-wrap gap-2">
             <Button
               onClick={copyStreamingUrl}
               size="lg"
               variant="outline"
-              className="gap-2"
+              className="gap-2 flex-1 min-w-[150px] sm:flex-none"
             >
               <Copy className="w-5 h-5" />
               Copiar link OBS
             </Button>
-            <Button onClick={() => setIsQrCodeModalOpen(true)} size="lg" variant="outline" className="gap-2">
+            <Button onClick={() => setIsQrCodeModalOpen(true)} size="lg" variant="outline" className="gap-2 flex-1 min-w-[150px] sm:flex-none">
               <ExternalLink className="w-5 h-5" />
               QrCode
             </Button>
@@ -1179,7 +1179,7 @@ const DrawTab: React.FC = () => {
               onClick={drawNumber}
               disabled={isDrawing || remainingNumbers.length === 0}
               size="lg"
-              className="gap-2"
+              className="gap-2 flex-1 min-w-[150px] sm:flex-none"
             >
               <Shuffle className="w-5 h-5" />
               Sortear
@@ -1189,7 +1189,7 @@ const DrawTab: React.FC = () => {
               disabled={isDrawing || drawnNumbers.length === 0 || isVerifying}
               size="lg"
               variant="outline"
-              className="gap-2"
+              className="gap-2 flex-1 min-w-[150px] sm:flex-none"
             >
               {isVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
               Verificar Vencedor
@@ -1199,7 +1199,7 @@ const DrawTab: React.FC = () => {
               disabled={cartelasValidadas.length === 0}
               size="lg"
               variant="outline"
-              className="gap-2"
+              className="gap-2 flex-1 min-w-[150px] sm:flex-none"
             >
               <Ticket className="w-5 h-5" />
               Sortear Cartela
@@ -1209,19 +1209,19 @@ const DrawTab: React.FC = () => {
               disabled={isDrawing || drawnNumbers.length === 0}
               variant="outline"
               size="lg"
-              className="gap-2"
+              className="gap-2 flex-1 min-w-[150px] sm:flex-none"
             >
               <RotateCcw className="w-5 h-5" />
               Reiniciar
             </Button>
-            <div className="flex gap-2 items-center">
+            <div className="w-full sm:w-auto flex flex-wrap sm:flex-nowrap gap-2 items-center">
               <Input
                 type="number"
                 value={manualNumberInput}
                 onChange={(e) => setManualNumberInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') addManualNumber(); }}
                 placeholder="Nº manual"
-                className="w-28 h-11"
+                className="h-11 flex-1 min-w-[120px] sm:w-28"
                 min={selectedRodada.range_start}
                 max={selectedRodada.range_end}
                 disabled={isDrawing}
@@ -1231,7 +1231,7 @@ const DrawTab: React.FC = () => {
                 disabled={isDrawing || !manualNumberInput}
                 size="lg"
                 variant="outline"
-                className="gap-2"
+                className="gap-2 flex-1 min-w-[150px] sm:flex-none"
                 title="Adicionar número manualmente"
               >
                 <Plus className="w-5 h-5" />
