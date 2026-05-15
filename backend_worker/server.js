@@ -600,6 +600,13 @@ async function initSchema() {
             updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW() NOT NULL
           )
         `);
+        try {
+          await client.query(`ALTER TABLE planos ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1`);
+        } catch (e) {
+          if (!e.message || !e.message.includes('Duplicate column')) {
+            console.warn('Could not add ativo to planos (MySQL):', e.message);
+          }
+        }
         // Create configuracoes table (MySQL)
         await client.query(`
           CREATE TABLE IF NOT EXISTS configuracoes (
@@ -1072,6 +1079,7 @@ async function initSchema() {
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(255)`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS tipo_plano VARCHAR(30) NOT NULL DEFAULT 'mensal'`);
         await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS ciclo_dias_renovacao INT NOT NULL DEFAULT 30`);
+        await client.query(`ALTER TABLE planos ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT true`);
         // Create loja_compradores table (PostgreSQL)
         await client.query(`
           CREATE TABLE IF NOT EXISTS public.loja_compradores (
@@ -4562,9 +4570,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       case 'createPlano': {
         const tipoPlano = normalizePlanType(data.tipo_plano);
         const cicloDias = Math.max(1, Number(data.ciclo_dias_renovacao || defaultCycleDaysByType(tipoPlano)));
+        const ativoPlano = data.ativo !== false;
         result = await client.query(
-          `INSERT INTO planos (nome, valor, descricao, stripe_price_id, tipo_plano, ciclo_dias_renovacao) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-          [data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias]
+          `INSERT INTO planos (nome, valor, descricao, stripe_price_id, tipo_plano, ciclo_dias_renovacao, ativo) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias, ativoPlano]
         );
         let plano = result.rows[0];
         const createdStripePriceId = await ensureStripePriceForPlan(client, plano);
@@ -4578,9 +4587,10 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       case 'updatePlano': {
         const tipoPlano = normalizePlanType(data.tipo_plano);
         const cicloDias = Math.max(1, Number(data.ciclo_dias_renovacao || defaultCycleDaysByType(tipoPlano)));
+        const ativoPlano = data.ativo !== false;
         result = await client.query(
-          `UPDATE planos SET nome = $2, valor = $3, descricao = $4, stripe_price_id = $5, tipo_plano = $6, ciclo_dias_renovacao = $7, updated_at = NOW() WHERE id = $1 RETURNING *`,
-          [data.id, data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias]
+          `UPDATE planos SET nome = $2, valor = $3, descricao = $4, stripe_price_id = $5, tipo_plano = $6, ciclo_dias_renovacao = $7, ativo = $8, updated_at = NOW() WHERE id = $1 RETURNING *`,
+          [data.id, data.nome, data.valor || 0, data.descricao || null, data.stripe_price_id || null, tipoPlano, cicloDias, ativoPlano]
         );
         let plano = result.rows[0];
         if (!plano) return res.status(404).json({ error: 'Plano não encontrado.' });

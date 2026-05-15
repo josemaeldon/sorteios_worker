@@ -41,6 +41,7 @@ const planSchema = z.object({
   stripe_price_id: z.string().max(255).optional().or(z.literal('')),
   tipo_plano: z.enum(['teste_gratis', 'mensal', 'anual']),
   ciclo_dias_renovacao: z.coerce.number().int().min(1, 'Informe ao menos 1 dia'),
+  ativo: z.boolean(),
 });
 
 const Admin: React.FC = () => {
@@ -75,7 +76,7 @@ const Admin: React.FC = () => {
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
   const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
-  const [planFormData, setPlanFormData] = useState({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal' as 'teste_gratis' | 'mensal' | 'anual', ciclo_dias_renovacao: '30' });
+  const [planFormData, setPlanFormData] = useState({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal' as 'teste_gratis' | 'mensal' | 'anual', ciclo_dias_renovacao: '30', ativo: true });
 
   // User plan assignment state
   const [isUserPlanModalOpen, setIsUserPlanModalOpen] = useState(false);
@@ -346,10 +347,11 @@ const Admin: React.FC = () => {
         stripe_price_id: plan.stripe_price_id || '',
         tipo_plano: plan.tipo_plano || 'mensal',
         ciclo_dias_renovacao: String(plan.ciclo_dias_renovacao || 30),
+        ativo: plan.ativo !== false,
       });
     } else {
       setEditingPlan(null);
-      setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30' });
+      setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30', ativo: true });
     }
     setPlanErrors({});
     setIsPlanModalOpen(true);
@@ -358,7 +360,7 @@ const Admin: React.FC = () => {
   const handleClosePlanModal = () => {
     setIsPlanModalOpen(false);
     setEditingPlan(null);
-    setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30' });
+    setPlanFormData({ nome: '', valor: '', descricao: '', stripe_price_id: '', tipo_plano: 'mensal', ciclo_dias_renovacao: '30', ativo: true });
     setPlanErrors({});
   };
 
@@ -385,6 +387,7 @@ const Admin: React.FC = () => {
       stripe_price_id: planFormData.stripe_price_id || undefined,
       tipo_plano: planFormData.tipo_plano,
       ciclo_dias_renovacao: Number(planFormData.ciclo_dias_renovacao),
+      ativo: planFormData.ativo,
     };
     const result = editingPlan
       ? await updatePlano(editingPlan.id, payload)
@@ -959,6 +962,7 @@ const Admin: React.FC = () => {
                           <TableHead>Valor</TableHead>
                           <TableHead>Tipo</TableHead>
                           <TableHead>Ciclo</TableHead>
+                          <TableHead>Status</TableHead>
                           <TableHead>Descrição</TableHead>
                           <TableHead>Criado em</TableHead>
                           <TableHead className="w-[100px]">Ações</TableHead>
@@ -976,12 +980,35 @@ const Admin: React.FC = () => {
                             </TableCell>
                             <TableCell>{p.tipo_plano === 'teste_gratis' ? 'Teste grátis' : p.tipo_plano === 'anual' ? 'Anual' : 'Mensal'}</TableCell>
                             <TableCell>{p.ciclo_dias_renovacao || '—'} dias</TableCell>
+                            <TableCell>
+                              {p.ativo ? <Badge variant="default">Ativo</Badge> : <Badge variant="secondary">Desativado</Badge>}
+                            </TableCell>
                             <TableCell className="text-muted-foreground text-sm">{p.descricao || '—'}</TableCell>
                             <TableCell>{new Date(p.created_at).toLocaleDateString('pt-BR')}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 <Button variant="ghost" size="icon" onClick={() => handleOpenPlanModal(p)}>
                                   <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    setIsSubmittingPlan(true);
+                                    const result = await updatePlano(p.id, {
+                                      nome: p.nome,
+                                      valor: Number(p.valor),
+                                      descricao: p.descricao || undefined,
+                                      stripe_price_id: p.stripe_price_id || undefined,
+                                      tipo_plano: p.tipo_plano || 'mensal',
+                                      ciclo_dias_renovacao: p.ciclo_dias_renovacao || 30,
+                                      ativo: !p.ativo,
+                                    });
+                                    setIsSubmittingPlan(false);
+                                    if (result.success) loadPlanos();
+                                  }}
+                                >
+                                  {p.ativo ? 'Desativar' : 'Ativar'}
                                 </Button>
                                 <Button variant="ghost" size="icon" onClick={() => handleDeletePlanClick(p)}>
                                   <Trash2 className="h-4 w-4 text-destructive" />
@@ -1887,6 +1914,17 @@ const Admin: React.FC = () => {
               />
               <p className="text-xs text-muted-foreground">ID do preço configurado no Stripe. Se informado, será usado no checkout.</p>
               {planErrors.stripe_price_id && <p className="text-destructive text-sm">{planErrors.stripe_price_id}</p>}
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="text-sm font-medium">Plano ativo</p>
+                <p className="text-xs text-muted-foreground">Se desativado, não aparecerá para usuários.</p>
+              </div>
+              <Switch
+                checked={planFormData.ativo}
+                onCheckedChange={(checked) => setPlanFormData({ ...planFormData, ativo: checked })}
+                disabled={isSubmittingPlan}
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleClosePlanModal} disabled={isSubmittingPlan}>

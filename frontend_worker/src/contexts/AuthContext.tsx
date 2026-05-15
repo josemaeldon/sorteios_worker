@@ -29,8 +29,8 @@ interface AuthContextType extends AuthState {
   changeSorteioOwner: (sorteioId: string, newOwnerId: string) => Promise<{ success: boolean; error?: string }>;
   getPublicPlanos: () => Promise<Plan[]>;
   getPlanos: () => Promise<Plan[]>;
-  createPlano: (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => Promise<{ success: boolean; error?: string }>;
-  updatePlano: (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => Promise<{ success: boolean; error?: string }>;
+  createPlano: (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number; ativo?: boolean }) => Promise<{ success: boolean; error?: string }>;
+  updatePlano: (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number; ativo?: boolean }) => Promise<{ success: boolean; error?: string }>;
   deletePlano: (id: string) => Promise<{ success: boolean; error?: string }>;
   assignUserPlan: (userId: string, planoId: string | null, extensionDays?: number) => Promise<{ success: boolean; error?: string }>;
   grantLifetimeAccess: (userId: string, grant: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -518,7 +518,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
-  const createPlano = useCallback(async (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => {
+  const createPlano = useCallback(async (data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number; ativo?: boolean }) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
     try {
       const result = await callApi('createPlano', data);
@@ -551,7 +551,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, toast]);
 
-  const updatePlano = useCallback(async (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number }) => {
+  const updatePlano = useCallback(async (id: string, data: { nome: string; valor: number; descricao?: string; stripe_price_id?: string; tipo_plano?: 'teste_gratis' | 'mensal' | 'anual'; ciclo_dias_renovacao?: number; ativo?: boolean }) => {
     if (user?.role !== 'admin') return { success: false, error: 'Apenas administradores' };
     try {
       const result = await callApi('updatePlano', { id, ...data });
