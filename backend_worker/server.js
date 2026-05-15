@@ -4771,9 +4771,12 @@ app.post('/api', checkBasicAuth, async (req, res) => {
 
       // ================== CONFIGURACOES ==================
       case 'getPublicConfiguracoes': {
-        result = await client.query("SELECT valor FROM configuracoes WHERE chave = 'favicon_url'");
-        const faviconUrl = result.rows.length > 0 ? result.rows[0].valor : null;
-        return res.json({ data: { favicon_url: faviconUrl } });
+        result = await client.query("SELECT chave, valor FROM configuracoes WHERE chave IN ('favicon_url', 'bloquear_grade_5x5')");
+        const config = { favicon_url: null, bloquear_grade_5x5: 'false' };
+        result.rows.forEach((row) => {
+          config[row.chave] = row.valor;
+        });
+        return res.json({ data: config });
       }
 
       case 'getConfiguracoes': {

@@ -97,7 +97,7 @@ const SorteioModal: React.FC<SorteioModalProps> = ({ isOpen, onClose, editingId 
       if (!isOpen) return;
       setIsLoadingGradeLock(true);
       try {
-        const result = await callApi('getConfiguracoes');
+        const result = await callApi('getPublicConfiguracoes');
         const config = (result?.data ?? {}) as Record<string, string>;
         setBloquearGrade5x5(config['bloquear_grade_5x5'] === 'true');
       } catch {
