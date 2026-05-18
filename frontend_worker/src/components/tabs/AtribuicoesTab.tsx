@@ -788,7 +788,7 @@ const AtribuicoesTab: React.FC = () => {
                       </DialogContent>
                       {detalhesAtribuicaoId === atribuicao.id && (
                         <DialogClose
-                          className="fixed right-3 top-3 sm:right-5 sm:top-5 z-[80] flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-gradient-to-br from-white/90 to-white/70 text-slate-700 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)] backdrop-blur-md ring-offset-background transition-all duration-200 hover:scale-105 hover:from-primary hover:to-primary hover:text-primary-foreground hover:shadow-[0_14px_34px_-12px_rgba(0,0,0,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-white/20 dark:from-zinc-900/85 dark:to-zinc-800/75 dark:text-zinc-100"
+                          className="fixed right-3 top-3 sm:right-5 sm:top-5 z-[80] flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-gradient-to-br from-white/90 to-white/70 text-slate-700 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)] backdrop-blur-md ring-offset-background transition-all duration-200 hover:scale-105 hover:border-blue-400 hover:bg-blue-600 hover:bg-none hover:text-white hover:shadow-[0_0_0_4px_rgba(59,130,246,0.22),0_14px_34px_-12px_rgba(37,99,235,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-white/20 dark:from-zinc-900/85 dark:to-zinc-800/75 dark:text-zinc-100 dark:hover:border-blue-300 dark:hover:bg-blue-500"
                           aria-label="Fechar detalhes da atribuição"
                         >
                           <X className="h-4 w-4" />
