@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useBingo } from '@/contexts/BingoContext';
-import { ListTodo, Plus, Search, Filter, Eraser, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, ArrowRightLeft, DollarSign, AlertTriangle, Printer } from 'lucide-react';
+import { ListTodo, Plus, Search, Filter, Eraser, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, ArrowRightLeft, DollarSign, AlertTriangle, Printer, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatarData, formatarNumeroCartela, getStatusLabel, formatarMoeda } from '@/lib/utils/formatters';
 import AtribuicaoModal from '@/components/modals/AtribuicaoModal';
@@ -712,7 +712,10 @@ const AtribuicoesTab: React.FC = () => {
                     </div>
 
                     <Dialog open={detalhesAtribuicaoId === atribuicao.id} onOpenChange={(open) => setDetalhesAtribuicaoId(open ? atribuicao.id : null)}>
-                      <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[90vh] overflow-y-auto p-4 sm:p-6 [&>button]:fixed [&>button]:right-3 [&>button]:top-3 sm:[&>button]:right-5 sm:[&>button]:top-5 [&>button]:z-[70] [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:border [&>button]:border-border/70 [&>button]:bg-background/95 [&>button]:text-foreground [&>button]:shadow-lg [&>button]:backdrop-blur-sm [&>button]:opacity-100 [&>button]:ring-offset-background [&>button]:transition-all [&>button:hover]:scale-105 [&>button:hover]:bg-primary [&>button:hover]:text-primary-foreground [&>button:focus-visible]:outline-none [&>button:focus-visible]:ring-2 [&>button:focus-visible]:ring-ring [&>button:focus-visible]:ring-offset-2 [&>button>svg]:h-4 [&>button>svg]:w-4">
+                      <DialogContent
+                        hideCloseButton
+                        className="w-[95vw] sm:max-w-[1100px] max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+                      >
                         <DialogHeader>
                           <DialogTitle>Detalhes da atribuição - {atribuicao.vendedor_nome}</DialogTitle>
                         </DialogHeader>
@@ -783,6 +786,12 @@ const AtribuicoesTab: React.FC = () => {
                           </div>
                         </div>
                       </DialogContent>
+                      <DialogClose
+                        className="fixed right-3 top-3 sm:right-5 sm:top-5 z-[80] flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-lg backdrop-blur-sm ring-offset-background transition-all hover:scale-105 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label="Fechar detalhes da atribuição"
+                      >
+                        <X className="h-4 w-4" />
+                      </DialogClose>
                     </Dialog>
                   </div>
                 </CollapsibleContent>
