@@ -79,7 +79,7 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
                   </button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="max-w-xs border-danger/40 bg-danger/10 text-danger">
+              <TooltipContent className="z-[2147483647] max-w-xs border-2 border-danger bg-danger text-danger-foreground shadow-[0_18px_45px_-12px_rgba(0,0,0,0.65)]">
                 {deleteBlockedMessage}
               </TooltipContent>
             </Tooltip>
