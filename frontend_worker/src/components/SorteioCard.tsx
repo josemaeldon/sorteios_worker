@@ -3,6 +3,7 @@ import { Sorteio } from '@/types/bingo';
 import { formatarData, formatarMoeda, getStatusLabel } from '@/lib/utils/formatters';
 import { Edit, Trash2, User, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface SorteioCardProps {
   sorteio: Sorteio;
@@ -24,6 +25,11 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
   const cartelasVendidas = sorteio.vendas?.cartelas_vendidas || 0;
   const totalCartelas = sorteio.quantidade_cartelas || 1;
   const percentualVendido = ((cartelasVendidas / totalCartelas) * 100).toFixed(1);
+  const bloqueioAtribuicoes = Number(sorteio.bloqueio_atribuicoes || 0);
+  const bloqueioVendas = Number(sorteio.bloqueio_vendas || 0);
+  const bloqueioValidacoes = Number(sorteio.bloqueio_validacoes || 0);
+  const deleteBlocked = bloqueioAtribuicoes > 0 || bloqueioVendas > 0 || bloqueioValidacoes > 0;
+  const deleteBlockedMessage = `Não pode excluir: Atribuições (${bloqueioAtribuicoes}), Vendas (${bloqueioVendas}) ou Validações (${bloqueioValidacoes}) ativas. Remova esses elementos para excluir o sorteio.`;
   
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,12 +64,34 @@ const SorteioCard: React.FC<SorteioCardProps> = ({
         >
           <Download className="w-4 h-4" />
         </button>
-        <button 
-          onClick={handleDelete}
-          className="w-8 h-8 rounded-full bg-danger text-danger-foreground flex items-center justify-center hover:bg-danger/90 transition-colors"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {deleteBlocked ? (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    disabled
+                    onClick={handleDelete}
+                    className="w-8 h-8 rounded-full bg-danger/60 text-danger-foreground flex items-center justify-center opacity-80 cursor-not-allowed"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs border-danger/40 bg-danger/10 text-danger">
+                {deleteBlockedMessage}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <button
+            onClick={handleDelete}
+            className="w-8 h-8 rounded-full bg-danger text-danger-foreground flex items-center justify-center hover:bg-danger/90 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="flex justify-between items-start mb-4">

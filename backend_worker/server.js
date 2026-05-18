@@ -2423,14 +2423,33 @@ app.post('/api', checkBasicAuth, async (req, res) => {
         
         if (data.authenticated_role === 'admin') {
           result = await client.query(
-            `SELECT s.*, u.nome as owner_nome, u.email as owner_email
+            `SELECT
+               s.*,
+               u.nome as owner_nome,
+               u.email as owner_email,
+               (SELECT COUNT(*)::int FROM atribuicoes a WHERE a.sorteio_id = s.id) AS bloqueio_atribuicoes,
+               (
+                 (SELECT COUNT(*)::int FROM vendas v WHERE v.sorteio_id = s.id) +
+                 (SELECT COUNT(*)::int FROM cartelas c WHERE c.sorteio_id = s.id AND c.status = 'vendida') +
+                 (SELECT COUNT(*)::int FROM atribuicao_cartelas ac JOIN atribuicoes a2 ON a2.id = ac.atribuicao_id WHERE a2.sorteio_id = s.id AND ac.status = 'vendida')
+               ) AS bloqueio_vendas,
+               (SELECT COUNT(*)::int FROM cartelas_validadas cv WHERE cv.sorteio_id = s.id) AS bloqueio_validacoes
              FROM sorteios s
              JOIN usuarios u ON s.user_id = u.id
              ORDER BY s.created_at DESC`
           );
         } else {
           result = await client.query(
-            `SELECT DISTINCT s.* FROM sorteios s
+            `SELECT DISTINCT
+               s.*,
+               (SELECT COUNT(*)::int FROM atribuicoes a WHERE a.sorteio_id = s.id) AS bloqueio_atribuicoes,
+               (
+                 (SELECT COUNT(*)::int FROM vendas v WHERE v.sorteio_id = s.id) +
+                 (SELECT COUNT(*)::int FROM cartelas c WHERE c.sorteio_id = s.id AND c.status = 'vendida') +
+                 (SELECT COUNT(*)::int FROM atribuicao_cartelas ac JOIN atribuicoes a2 ON a2.id = ac.atribuicao_id WHERE a2.sorteio_id = s.id AND ac.status = 'vendida')
+               ) AS bloqueio_vendas,
+               (SELECT COUNT(*)::int FROM cartelas_validadas cv WHERE cv.sorteio_id = s.id) AS bloqueio_validacoes
+             FROM sorteios s
              LEFT JOIN sorteio_compartilhado sc ON sc.sorteio_id = s.id
              WHERE s.user_id = $1 OR sc.user_id = $1
              ORDER BY s.created_at DESC`,

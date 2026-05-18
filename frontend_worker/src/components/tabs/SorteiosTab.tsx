@@ -333,7 +333,10 @@ const SorteiosTab: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={confirmDelete}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
               className="bg-danger text-danger-foreground hover:bg-danger/90"
             >
               Excluir

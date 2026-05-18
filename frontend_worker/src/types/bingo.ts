@@ -14,6 +14,9 @@ export interface Sorteio {
   updated_at?: string;
   owner_nome?: string;
   owner_email?: string;
+  bloqueio_atribuicoes?: number;
+  bloqueio_vendas?: number;
+  bloqueio_validacoes?: number;
   vendas?: {
     cartelas_vendidas: number;
     total_arrecadado: number;
