@@ -140,6 +140,7 @@ export const exportCartelasPDF = async (cartelas: Cartela[], sorteio: Sorteio) =
   const atribuidas = cartelas.filter(c => c.status === 'ativa').length;
   const vendidas = cartelas.filter(c => c.status === 'vendida').length;
   const devolvidas = cartelas.filter(c => c.status === 'devolvida').length;
+  const extraviadas = cartelas.filter(c => c.status === 'extraviada').length;
   
   doc.setFontSize(10);
   doc.text(`Total: ${cartelas.length}`, 14, 50);
@@ -147,21 +148,90 @@ export const exportCartelasPDF = async (cartelas: Cartela[], sorteio: Sorteio) =
   doc.text(`Atribuídas: ${atribuidas}`, 95, 50);
   doc.text(`Vendidas: ${vendidas}`, 135, 50);
   doc.text(`Devolvidas: ${devolvidas}`, 170, 50);
+  doc.text(`Extraviadas: ${extraviadas}`, 14, 56);
   
-  // Table
-  const tableData = cartelas.map(cartela => [
-    formatarNumeroCartela(cartela.numero),
-    getStatusLabel(cartela.status),
-    cartela.vendedor_nome || '-'
-  ]);
-  
+  const statusOrder: Cartela['status'][] = ['disponivel', 'ativa', 'vendida', 'devolvida', 'extraviada'];
+
+  const byStatus = statusOrder
+    .map((status) => {
+      const numeros = cartelas.filter(c => c.status === status).map(c => c.numero);
+      return {
+        status,
+        count: numeros.length,
+        ranges: formatCartelaRanges(numeros),
+      };
+    })
+    .filter(item => item.count > 0);
+
+  const byVendedorStatusMap = new Map<string, { vendedor: string; status: Cartela['status']; numeros: number[] }>();
+  for (const cartela of cartelas) {
+    const vendedor = (cartela.vendedor_nome || '-').trim() || '-';
+    const key = `${vendedor}||${cartela.status}`;
+    const current = byVendedorStatusMap.get(key);
+    if (current) {
+      current.numeros.push(cartela.numero);
+    } else {
+      byVendedorStatusMap.set(key, { vendedor, status: cartela.status, numeros: [cartela.numero] });
+    }
+  }
+
+  const byVendedorStatus = Array.from(byVendedorStatusMap.values())
+    .sort((a, b) => {
+      if (a.vendedor === b.vendedor) {
+        return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
+      }
+      return a.vendedor.localeCompare(b.vendedor, 'pt-BR');
+    })
+    .map((item) => ({
+      vendedor: item.vendedor,
+      status: item.status,
+      count: item.numeros.length,
+      ranges: formatCartelaRanges(item.numeros),
+    }));
+
   autoTable(doc, {
     startY: 60,
-    head: [['Número', 'Status', 'Vendedor']],
-    body: tableData,
-    styles: { fontSize: 9, cellPadding: 3 },
+    head: [['Status', 'Qtd', 'Faixas de cartelas']],
+    body: byStatus.map(item => [
+      getStatusLabel(item.status),
+      String(item.count),
+      item.ranges,
+    ]),
+    styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
     headStyles: { fillColor: [59, 130, 246], textColor: 255 },
     alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { cellWidth: 34 },
+      1: { cellWidth: 16, halign: 'right' },
+      2: { cellWidth: 'auto' },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  const nextY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 60;
+  doc.setFontSize(12);
+  doc.setTextColor(59, 130, 246);
+  doc.text('Detalhamento compacto por vendedor e status', 14, nextY + 12);
+
+  autoTable(doc, {
+    startY: nextY + 16,
+    head: [['Vendedor', 'Status', 'Qtd', 'Faixas de cartelas']],
+    body: byVendedorStatus.map(item => [
+      item.vendedor,
+      getStatusLabel(item.status),
+      String(item.count),
+      item.ranges,
+    ]),
+    styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak' },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 40 },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 14, halign: 'right' },
+      3: { cellWidth: 'auto' },
+    },
+    margin: { left: 14, right: 14 },
   });
   
   doc.save(`cartelas-${safeNome}-${new Date().toISOString().split('T')[0]}.pdf`);

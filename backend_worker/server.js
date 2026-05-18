@@ -1373,10 +1373,15 @@ async function ensureAtribuicoesHistoricoSchema(client) {
 function addTextLine(doc, text, options = {}) {
   const lineHeight = options.lineHeight || 15;
   const bottom = options.bottom || 48;
+  const left = options.left || 40;
+  const right = options.right || 40;
   if (doc.y + lineHeight > doc.page.height - bottom) {
     doc.addPage();
   }
-  doc.text(text, { lineBreak: false });
+  doc.text(text, left, doc.y, {
+    width: doc.page.width - left - right,
+    lineBreak: true,
+  });
   doc.moveDown(0.7);
 }
 
@@ -1429,6 +1434,46 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
     doc.moveDown(0.5);
   };
 
+  const ensureSectionSpace = (heightNeeded = 20) => {
+    if (doc.y + heightNeeded > doc.page.height - 50) {
+      doc.addPage();
+      return true;
+    }
+    return false;
+  };
+
+  const drawMetricCards = (items, opts = {}) => {
+    const columns = opts.columns || 2;
+    const cardGap = 12;
+    const cardHeight = 52;
+    const rows = Math.ceil(items.length / columns);
+    const cardWidth = (contentWidth - (columns - 1) * cardGap) / columns;
+    ensureSectionSpace(rows * (cardHeight + cardGap) + 8);
+
+    let startY = doc.y;
+    items.forEach((item, idx) => {
+      const row = Math.floor(idx / columns);
+      const col = idx % columns;
+      const x = pageLeft + (col * (cardWidth + cardGap));
+      const y = startY + (row * (cardHeight + cardGap));
+
+      doc
+        .roundedRect(x, y, cardWidth, cardHeight, 8)
+        .fillAndStroke('#F8FAFC', '#E2E8F0');
+
+      doc.fontSize(9).fillColor('#475569').font('Helvetica').text(item.label, x + 10, y + 9, {
+        width: cardWidth - 20,
+        align: 'left',
+      });
+      doc.fontSize(15).fillColor('#0F172A').font('Helvetica-Bold').text(String(item.value), x + 10, y + 24, {
+        width: cardWidth - 20,
+        align: 'left',
+      });
+    });
+
+    doc.y = startY + (rows * (cardHeight + cardGap));
+  };
+
   const truncate = (value, size) => {
     const str = String(value ?? '-');
     if (str.length <= size) return str;
@@ -1446,13 +1491,7 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
     return lineY + 6;
   };
 
-  const ensureSpace = (heightNeeded = 20) => {
-    if (doc.y + heightNeeded > doc.page.height - 50) {
-      doc.addPage();
-      return true;
-    }
-    return false;
-  };
+  const ensureSpace = ensureSectionSpace;
 
   doc.fontSize(24).fillColor('#1E40AF').font('Helvetica-Bold').text('Relatorio Completo', { align: 'center' });
   doc.moveDown(0.5);
@@ -1463,23 +1502,27 @@ async function generateRelatorioCompletoPdfFile(filePath, { sorteio, vendedores,
 
   doc.fontSize(13).fillColor('#111827').font('Helvetica-Bold').text('Resumo Geral');
   doc.moveDown(0.6);
-  addTextLine(doc, `Premio: ${sorteio.premio || '-'}`);
-  addTextLine(doc, `Valor por cartela: ${formatBRL(sorteio.valor_cartela)}`);
-  addTextLine(doc, `Total de cartelas: ${cartelas.length}`);
-  addTextLine(doc, `Cartelas vendidas: ${cartelasVendidas}`);
-  addTextLine(doc, `Total de vendedores: ${vendedores.length}`);
-  addTextLine(doc, `Total de vendas: ${vendas.length}`);
-  addTextLine(doc, `Receita total: ${formatBRL(totalVendas)}`);
-  addTextLine(doc, `Valor recebido: ${formatBRL(totalPago)}`);
-  addTextLine(doc, `Valor pendente: ${formatBRL(totalVendas - totalPago)}`);
+  drawMetricCards([
+    { label: 'Prêmio principal', value: sorteio.premio || '-' },
+    { label: 'Valor por cartela', value: formatBRL(sorteio.valor_cartela) },
+    { label: 'Total de cartelas', value: cartelas.length },
+    { label: 'Cartelas vendidas', value: cartelasVendidas },
+    { label: 'Total de vendedores', value: vendedores.length },
+    { label: 'Total de vendas', value: vendas.length },
+    { label: 'Receita total', value: formatBRL(totalVendas) },
+    { label: 'Valor recebido', value: formatBRL(totalPago) },
+    { label: 'Valor pendente', value: formatBRL(totalVendas - totalPago) },
+  ]);
   drawDivider();
 
   doc.fontSize(13).fillColor('#111827').font('Helvetica-Bold').text('Vendas por Forma de Pagamento');
   doc.moveDown(0.6);
-  addTextLine(doc, `Dinheiro: ${formatBRL(paymentSummary.dinheiro)}`);
-  addTextLine(doc, `PIX: ${formatBRL(paymentSummary.pix)}`);
-  addTextLine(doc, `Cartao: ${formatBRL(paymentSummary.cartao)}`);
-  addTextLine(doc, `Transferencia: ${formatBRL(paymentSummary.transferencia)}`);
+  drawMetricCards([
+    { label: 'Dinheiro', value: formatBRL(paymentSummary.dinheiro) },
+    { label: 'PIX', value: formatBRL(paymentSummary.pix) },
+    { label: 'Cartão', value: formatBRL(paymentSummary.cartao) },
+    { label: 'Transferência', value: formatBRL(paymentSummary.transferencia) },
+  ]);
 
   doc.addPage();
   doc.fontSize(16).fillColor('#1E40AF').font('Helvetica-Bold').text('Vendas');
