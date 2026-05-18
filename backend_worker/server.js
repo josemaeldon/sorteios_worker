@@ -2555,6 +2555,34 @@ app.post('/api', checkBasicAuth, async (req, res) => {
       }
 
       case 'deleteSorteio': {
+        const [atribuicoesCountResult, cartelasVendidasCountResult, cartelasValidadasCountResult] = await Promise.all([
+          client.query('SELECT COUNT(*)::int AS total FROM atribuicoes WHERE sorteio_id = $1', [data.id]),
+          client.query(
+            `SELECT (
+               (SELECT COUNT(*) FROM cartelas WHERE sorteio_id = $1 AND status = 'vendida') +
+               (SELECT COUNT(*) FROM vendas WHERE sorteio_id = $1) +
+               (SELECT COUNT(*) FROM atribuicao_cartelas ac JOIN atribuicoes a ON a.id = ac.atribuicao_id WHERE a.sorteio_id = $1 AND ac.status = 'vendida')
+             )::int AS total`,
+            [data.id]
+          ),
+          client.query('SELECT COUNT(*)::int AS total FROM cartelas_validadas WHERE sorteio_id = $1', [data.id]),
+        ]);
+
+        const totalAtribuicoes = Number(atribuicoesCountResult.rows[0]?.total || 0);
+        const totalCartelasVendidas = Number(cartelasVendidasCountResult.rows[0]?.total || 0);
+        const totalCartelasValidadas = Number(cartelasValidadasCountResult.rows[0]?.total || 0);
+
+        if (totalAtribuicoes > 0 || totalCartelasVendidas > 0 || totalCartelasValidadas > 0) {
+          return res.status(400).json({
+            error: 'Não é possível excluir este sorteio porque existem Atribuições, Cartelas vendidas ou Cartelas com validação ativas. Remova esses elementos antes de excluir o sorteio.',
+            bloqueios: {
+              atribuicoes: totalAtribuicoes,
+              cartelas_vendidas: totalCartelasVendidas,
+              cartelas_validadas: totalCartelasValidadas,
+            },
+          });
+        }
+
         // Limpar em ordem de dependências (tabelas que referenciam outras primeiro)
         
         // 1. Limpar cartelas em Minha Loja

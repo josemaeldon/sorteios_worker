@@ -39,6 +39,7 @@ const SorteiosTab: React.FC = () => {
   const [editingSorteioId, setEditingSorteioId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingSorteioId, setDeletingSorteioId] = useState<string | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState('');
 
   // Filtros locais
   const [busca, setBusca] = useState('');
@@ -107,6 +108,7 @@ const SorteiosTab: React.FC = () => {
 
   const handleDelete = (id: string) => {
     setDeletingSorteioId(id);
+    setDeleteErrorMessage('');
     setDeleteDialogOpen(true);
   };
 
@@ -142,8 +144,10 @@ const SorteiosTab: React.FC = () => {
       await deleteSorteio(deletingSorteioId);
       setDeleteDialogOpen(false);
       setDeletingSorteioId(null);
-    } catch {
-      // A mensagem detalhada já é exibida pelo contexto.
+      setDeleteErrorMessage('');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Não foi possível excluir este sorteio.';
+      setDeleteErrorMessage(message);
     }
   };
 
@@ -155,6 +159,14 @@ const SorteiosTab: React.FC = () => {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingSorteioId(null);
+  };
+
+  const handleDeleteDialogChange = (open: boolean) => {
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setDeleteErrorMessage('');
+      setDeletingSorteioId(null);
+    }
   };
 
   const renderCards = (lista: Sorteio[]) => (
@@ -304,7 +316,7 @@ const SorteiosTab: React.FC = () => {
         editingId={editingSorteioId}
       />
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Sorteio</AlertDialogTitle>
@@ -312,6 +324,11 @@ const SorteiosTab: React.FC = () => {
               Tem certeza que deseja excluir este sorteio? Esta ação não pode ser desfeita.
               Todos os vendedores, atribuições e vendas relacionados serão perdidos.
             </AlertDialogDescription>
+            {deleteErrorMessage && (
+              <AlertDialogDescription className="mt-2 rounded-md border border-danger/40 bg-danger/10 p-3 text-danger">
+                {deleteErrorMessage}
+              </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

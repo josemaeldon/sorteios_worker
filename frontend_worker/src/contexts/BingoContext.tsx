@@ -344,11 +344,15 @@ export const BingoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     } catch (error: unknown) {
       console.error('Error deleting sorteio:', error);
-      toast({
-        title: "Erro ao excluir sorteio",
-        description: getErrorMessage(error),
-        variant: "destructive"
-      });
+      const message = getErrorMessage(error);
+      const isDeleteBlockedByBusinessRule = message.toLowerCase().includes('não é possível excluir este sorteio');
+      if (!isDeleteBlockedByBusinessRule) {
+        toast({
+          title: "Erro ao excluir sorteio",
+          description: message,
+          variant: "destructive"
+        });
+      }
       throw error;
     } finally {
       setIsLoading(false);
